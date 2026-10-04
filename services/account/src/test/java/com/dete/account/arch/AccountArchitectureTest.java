@@ -1,0 +1,41 @@
+package com.dete.account.arch;
+
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+
+import com.tngtech.archunit.core.importer.ImportOption;
+import com.tngtech.archunit.junit.AnalyzeClasses;
+import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchRule;
+import org.springframework.web.bind.annotation.RestController;
+
+@AnalyzeClasses(packages = "com.dete.account", importOptions = ImportOption.DoNotIncludeTests.class)
+public class AccountArchitectureTest {
+
+  @ArchTest
+  static final ArchRule controllers_must_reside_in_controller_package =
+      classes()
+          .that()
+          .haveSimpleNameEndingWith("Controller")
+          .should()
+          .resideInAPackage("..controller..")
+          .andShould()
+          .beAnnotatedWith(RestController.class);
+
+  @ArchTest
+  static final ArchRule controllers_should_not_depend_on_repositories_directly =
+      noClasses()
+          .that()
+          .resideInAPackage("..controller..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAPackage("..repository..");
+
+  @ArchTest
+  static final ArchRule repositories_must_reside_in_repository_package =
+      classes()
+          .that()
+          .haveSimpleNameEndingWith("Repository")
+          .should()
+          .resideInAPackage("..repository..");
+}

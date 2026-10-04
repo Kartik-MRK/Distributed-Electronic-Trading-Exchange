@@ -323,11 +323,11 @@ Scheduled poller reads `account.outbox WHERE published = false`, publishes to Ka
 
 ### Phase 2 Completion Criteria
 
-- [ ] `ReserveFunds` atomically reserves funds and writes ledger entry
-- [ ] Duplicate `trade_id` in settlement is idempotent
-- [ ] `available >= 0` enforced at DB level
-- [ ] Outbox reliably delivers all events
-- [ ] Ledger entries are immutable (no UPDATE or DELETE on ledger table)
+- [x] `ReserveFunds` atomically reserves funds and writes ledger entry
+- [x] Duplicate `trade_id` in settlement is idempotent
+- [x] `available >= 0` enforced at DB level
+- [x] Outbox reliably delivers all events
+- [x] Ledger entries are immutable (no UPDATE or DELETE on ledger table)
 
 ---
 
