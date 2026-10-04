@@ -18,5 +18,6 @@ public abstract class RedisTestContainerBase {
     REDIS.start();
     System.setProperty("spring.data.redis.host", REDIS.getHost());
     System.setProperty("spring.data.redis.port", String.valueOf(REDIS.getFirstMappedPort()));
+    System.setProperty("spring.data.redis.password", "");
   }
 }

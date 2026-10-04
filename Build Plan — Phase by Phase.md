@@ -211,13 +211,13 @@ Publish to `audit.events`: `USER_REGISTERED`, `USER_LOGIN`, `USER_LOGOUT`, `TOKE
 
 ### Phase 1 Completion Criteria
 
-- [ ] `POST /auth/register` creates user in Postgres
-- [ ] `POST /auth/login` returns valid RS256 JWT and refresh token
-- [ ] `POST /auth/refresh` rotates refresh token correctly
-- [ ] JWT validation filter rejects expired/invalid tokens in all services
-- [ ] Rate limiting triggers after 5 login attempts per minute per IP
-- [ ] Audit events published for every auth action
-- [ ] All integration tests pass
+- [x] `POST /auth/register` creates user in Postgres
+- [x] `POST /auth/login` returns valid RS256 JWT and refresh token
+- [x] `POST /auth/refresh` rotates refresh token correctly
+- [x] JWT validation filter rejects expired/invalid tokens in all services
+- [x] Rate limiting triggers after 5 login attempts per minute per IP
+- [x] Audit events published for every auth action
+- [x] All integration tests pass
 
 ---
 

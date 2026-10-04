@@ -47,5 +47,6 @@ public abstract class FullStackTestBase {
     System.setProperty("spring.kafka.bootstrap-servers", KAFKA.getBootstrapServers());
     System.setProperty("spring.data.redis.host", REDIS.getHost());
     System.setProperty("spring.data.redis.port", String.valueOf(REDIS.getFirstMappedPort()));
+    System.setProperty("spring.data.redis.password", "");
   }
 }

@@ -57,8 +57,8 @@ subprojects {
             exceptionFormat = TestExceptionFormat.FULL
             showStandardStreams = false
         }
-        // Allow parallel test execution
-        maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2).coerceAtLeast(1)
+        // Run test forks sequentially to keep memory usage bounded with Testcontainers
+        maxParallelForks = 1
         // Give Testcontainers room and configure modern Docker API version
         jvmArgs("-Xmx512m", "-Dapi.version=1.44")
         systemProperty("api.version", "1.44")
