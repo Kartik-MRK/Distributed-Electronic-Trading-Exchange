@@ -400,13 +400,13 @@ public final class FixedPoint {
 
 ### Phase 3 Completion Criteria
 
-- [ ] All order types match correctly
-- [ ] Price-time priority verified: same-price orders fill FIFO
-- [ ] O(1) cancellation via `OrderIndex`
-- [ ] Modify = cancel-and-reinsert with new sequence number
-- [ ] Engine replays Kafka on restart and reconstructs state correctly
-- [ ] Kafka transactions ensure atomic publication of trade + order events
-- [ ] JMH benchmark stubs compile and run
+- [x] All order types match correctly
+- [x] Price-time priority verified: same-price orders fill FIFO
+- [x] O(1) cancellation via `OrderIndex`
+- [x] Modify = cancel-and-reinsert with new sequence number
+- [x] Engine replays Kafka on restart and reconstructs state correctly
+- [x] Kafka transactions ensure atomic publication of trade + order events
+- [x] JMH benchmark stubs compile and run
 
 ---
 

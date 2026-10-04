@@ -1,5 +1,7 @@
 package com.dete.common.test;
 
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -16,6 +18,10 @@ public abstract class KafkaTestContainerBase {
 
   static {
     KAFKA.start();
-    System.setProperty("spring.kafka.bootstrap-servers", KAFKA.getBootstrapServers());
+  }
+
+  @DynamicPropertySource
+  static void registerDynamicProperties(DynamicPropertyRegistry registry) {
+    registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
   }
 }

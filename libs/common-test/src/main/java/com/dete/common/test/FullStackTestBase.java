@@ -1,6 +1,8 @@
 package com.dete.common.test;
 
 import com.redis.testcontainers.RedisContainer;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -37,16 +39,19 @@ public abstract class FullStackTestBase {
     POSTGRES.start();
     KAFKA.start();
     REDIS.start();
+  }
 
-    System.setProperty("spring.datasource.url", POSTGRES.getJdbcUrl());
-    System.setProperty("spring.datasource.username", POSTGRES.getUsername());
-    System.setProperty("spring.datasource.password", POSTGRES.getPassword());
-    System.setProperty("spring.flyway.url", POSTGRES.getJdbcUrl());
-    System.setProperty("spring.flyway.user", POSTGRES.getUsername());
-    System.setProperty("spring.flyway.password", POSTGRES.getPassword());
-    System.setProperty("spring.kafka.bootstrap-servers", KAFKA.getBootstrapServers());
-    System.setProperty("spring.data.redis.host", REDIS.getHost());
-    System.setProperty("spring.data.redis.port", String.valueOf(REDIS.getFirstMappedPort()));
-    System.setProperty("spring.data.redis.password", "");
+  @DynamicPropertySource
+  static void registerDynamicProperties(DynamicPropertyRegistry registry) {
+    registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+    registry.add("spring.datasource.username", POSTGRES::getUsername);
+    registry.add("spring.datasource.password", POSTGRES::getPassword);
+    registry.add("spring.flyway.url", POSTGRES::getJdbcUrl);
+    registry.add("spring.flyway.user", POSTGRES::getUsername);
+    registry.add("spring.flyway.password", POSTGRES::getPassword);
+    registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
+    registry.add("spring.data.redis.host", REDIS::getHost);
+    registry.add("spring.data.redis.port", () -> String.valueOf(REDIS.getFirstMappedPort()));
+    registry.add("spring.data.redis.password", () -> "");
   }
 }

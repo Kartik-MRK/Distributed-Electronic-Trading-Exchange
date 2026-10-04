@@ -48,3 +48,5 @@ benchmarks/scratch/
 
 # Test reports
 */build/reports/
+**/.jqwik-database/
+.jqwik-database

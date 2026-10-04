@@ -1,5 +1,7 @@
 package com.dete.common.test;
 
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -24,12 +26,15 @@ public abstract class PostgresTestContainerBase {
 
   static {
     POSTGRES.start();
-    // Expose as system properties so Spring datasource auto-configuration picks them up
-    System.setProperty("spring.datasource.url", POSTGRES.getJdbcUrl());
-    System.setProperty("spring.datasource.username", POSTGRES.getUsername());
-    System.setProperty("spring.datasource.password", POSTGRES.getPassword());
-    System.setProperty("spring.flyway.url", POSTGRES.getJdbcUrl());
-    System.setProperty("spring.flyway.user", POSTGRES.getUsername());
-    System.setProperty("spring.flyway.password", POSTGRES.getPassword());
+  }
+
+  @DynamicPropertySource
+  static void registerDynamicProperties(DynamicPropertyRegistry registry) {
+    registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+    registry.add("spring.datasource.username", POSTGRES::getUsername);
+    registry.add("spring.datasource.password", POSTGRES::getPassword);
+    registry.add("spring.flyway.url", POSTGRES::getJdbcUrl);
+    registry.add("spring.flyway.user", POSTGRES::getUsername);
+    registry.add("spring.flyway.password", POSTGRES::getPassword);
   }
 }

@@ -1,6 +1,8 @@
 package com.dete.common.test;
 
 import com.redis.testcontainers.RedisContainer;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
@@ -16,8 +18,12 @@ public abstract class RedisTestContainerBase {
 
   static {
     REDIS.start();
-    System.setProperty("spring.data.redis.host", REDIS.getHost());
-    System.setProperty("spring.data.redis.port", String.valueOf(REDIS.getFirstMappedPort()));
-    System.setProperty("spring.data.redis.password", "");
+  }
+
+  @DynamicPropertySource
+  static void registerDynamicProperties(DynamicPropertyRegistry registry) {
+    registry.add("spring.data.redis.host", REDIS::getHost);
+    registry.add("spring.data.redis.port", () -> String.valueOf(REDIS.getFirstMappedPort()));
+    registry.add("spring.data.redis.password", () -> "");
   }
 }

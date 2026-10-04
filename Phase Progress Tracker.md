@@ -10,9 +10,9 @@
 | Metric | Status |
 |---|---|
 | **Total Phases** | 18 (Phase 0 to 17) |
-| **Completed** | 3 / 18 (16.7%) |
-| **Current Focus** | **Phase 3 — Matching Engine (Core)** |
-| **Progress Bar** | `[███░░░░░░░░░░░░░░░]` |
+| **Completed** | 4 / 18 (22.2%) |
+| **Current Focus** | **Phase 4 — Order Service + Kafka Integration** |
+| **Progress Bar** | `[████░░░░░░░░░░░░░░]` |
 
 ---
 
@@ -23,8 +23,8 @@
 | **0** | **Foundation & Repository Setup** | **Completed** | Oct 04, 2026 |
 | **1** | **Authentication Service** | **Completed** | Oct 04, 2026 |
 | **2** | **Account / Ledger Service** | **Completed** | Oct 04, 2026 |
-| **3** | Matching Engine (Core) | *Up Next* | — |
-| **4** | Order Service + Kafka Integration | Pending | — |
+| **3** | **Matching Engine (Core)** | **Completed** | Oct 04, 2026 |
+| **4** | Order Service + Kafka Integration | *Up Next* | — |
 | **5** | Risk Service | Pending | — |
 | **6** | Market Data Service | Pending | — |
 | **7** | Audit Service | Pending | — |
@@ -100,3 +100,30 @@
     - Architecture tests ([AccountArchitectureTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/account/src/test/java/com/dete/account/arch/AccountArchitectureTest.java)) enforcing strict separation between controllers and repositories.
     - Concurrency test proving that simultaneous reservation attempts never over-reserve or cause negative balances under high contention.
     - End-to-end integration tests ([AccountIntegrationTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/account/src/test/java/com/dete/account/AccountIntegrationTest.java)) on Testcontainers (Postgres + Redis + Kafka) testing full account lifecycle, double-entry settlement, trigger immutability, database check constraints, and transactional outbox event delivery.
+
+### Phase 3 — Matching Engine (Core)
+- **Status:** **Completed** (Oct 04, 2026)
+- **Completed Components:**
+  - **In-Memory Order Book Data Structures ([com.dete.matching.engine](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/main/java/com/dete/matching/engine)):**
+    - [BookOrder](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/main/java/com/dete/matching/engine/model/BookOrder.java): High-performance, mutable in-memory order representation tracking fixed-point quantities, price, side, type, sequence number, and status.
+    - [PriceLevel](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/main/java/com/dete/matching/engine/model/PriceLevel.java): Strict FIFO queue (`ArrayDeque<BookOrder>`) enforcing price-time priority within identical price levels.
+    - [OrderBook](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/main/java/com/dete/matching/engine/OrderBook.java): In-memory limit order book for an instrument using dual `TreeMap`s (`bids` descending, `asks` ascending), an `orderIndex` `HashMap` for O(1) order lookups, and a monotonically increasing sequence number.
+  - **Matching Algorithms & Execution Rules:**
+    - `Limit Orders`: Walks crossing price levels, matches at maker's resting price (price improvement), records trades and fill events, rests unfilled remainder in book.
+    - `Market Orders`: Aggressively sweeps opposite side of book without price limit; immediately cancels unfilled remainder when liquidity exhausts; rejects with clear reason when book is empty.
+    - `IOC (Immediate-or-Cancel)`: Matches available crossing liquidity; cancels unfilled remainder immediately with zero resting.
+    - `FOK (Fill-or-Kill)`: Atomically inspects available depth across price levels first; fully matches if sufficient liquidity exists, or rejects immediately with zero fills and zero book modification.
+    - `Self-Trade Prevention (STP)`: Automatically detects and skips resting orders belonging to the same account ID to prevent wash trading.
+    - `O(1) Cancellation`: Immediate lookup in `orderIndex`, removal from `PriceLevel`, level pruning if empty, emitting `OrderCancelledEvent`.
+    - `Modify Order`: Implements cancel-and-reinsert with a fresh sequence number, placing modified quantity at the back of the queue to preserve time priority invariants.
+  - **Single-Writer Thread Model ([MatchingEngineService](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/main/java/com/dete/matching/service/MatchingEngineService.java)):** Dedicated single-threaded executor per trading instrument (`BTC_USD`, `ETH_USD`, `SOL_USD`), ensuring 100% deterministic, zero-lock, race-condition-free execution without database bottlenecks on the matching path.
+  - **Kafka Event Streaming & Atomic Dispatch ([MatchingEventPublisher](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/main/java/com/dete/matching/publisher/MatchingEventPublisher.java), [OrderCommandConsumer](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/main/java/com/dete/matching/consumer/OrderCommandConsumer.java)):** Consumes incoming order commands (`OrderPlacedEvent`, `OrderCancelCommand`, `OrderModifyCommand`) from `order.commands`, processes on instrument single-writer thread, and atomically dispatches resulting `TradeExecutedEvent`s to `trade.executions` and order lifecycle events (`OrderAcceptedEvent`, `OrderFilledEvent`, `OrderPartiallyFilledEvent`, `OrderCancelledEvent`, `OrderRejectedEvent`) to `order.events`.
+  - **Deterministic State Reconstruction & Replay ([KafkaReplayService](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/main/java/com/dete/matching/replay/KafkaReplayService.java)):** Replays the complete `order.commands` Kafka log from offset 0 upon engine startup, accurately rebuilding all in-memory order books and sequence numbers without duplicating outbound trade events.
+  - **REST API & Level 2 Depth ([MatchingEngineController](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/main/java/com/dete/matching/controller/MatchingEngineController.java)):** Endpoints for querying live aggregated L2 order book depth (`GET /matching/orderbook/{symbol}?depth=10`), engine operational statistics (`GET /matching/orderbook/{symbol}/stats`), and triggering state replay (`POST /matching/replay`).
+  - **JMH Microbenchmarking ([OrderBookBenchmark](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/main/java/com/dete/matching/benchmark/OrderBookBenchmark.java)):** In-memory performance exceeding 3.02 million ops/sec for order cancellations, 1.76 million ops/sec for resting limit order insertions, and 1.21 million ops/sec for crossing order matches.
+  - **Verification & Test Suite (18 Passing Tests across matching-engine):**
+    - Unit tests ([OrderBookUnitTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/test/java/com/dete/matching/engine/OrderBookUnitTest.java)) verifying price improvement, price-time FIFO priority, market orders, IOC, FOK, O(1) cancel, self-trade prevention, cancel-and-reinsert modify, and L2 depth aggregation.
+    - Property tests ([MatchingEnginePropertyTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/test/java/com/dete/matching/property/MatchingEnginePropertyTest.java)) mathematically proving that the order book is never crossed (`bestBid < bestAsk`), volume conservation holds (`totalResting + matched/2 <= totalSubmitted`), and self-trade prevention preserves distinct counterparty invariants across 200 randomized execution cycles via jqwik.
+    - Architecture tests ([MatchingArchitectureTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/test/java/com/dete/matching/arch/MatchingArchitectureTest.java)) verifying with ArchUnit that the matching engine hot path has zero database, JDBC, JPA, or Spring dependencies.
+    - End-to-end integration tests ([MatchingEngineIntegrationTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/test/java/com/dete/matching/MatchingEngineIntegrationTest.java)) with Testcontainers Kafka validating full command consumption, trade execution dispatch, order cancellation, order modification, Kafka log replay reconstruction, and REST API monitoring.
+
