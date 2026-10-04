@@ -1,0 +1,94 @@
+[versions]
+java                = "21"
+spring-boot         = "3.3.4"
+spring-dependency   = "1.1.6"
+kafka               = "3.7.1"
+jooq                = "3.19.13"
+flyway              = "10.19.0"
+resilience4j        = "2.2.0"
+otel-agent          = "2.8.0"
+otel-spring         = "2.8.0"
+testcontainers      = "1.20.2"
+jmh                 = "1.37"
+micrometer          = "1.13.5"
+protobuf            = "3.25.5"
+grpc                = "1.66.0"
+jjwt                = "0.12.6"
+logstash-logback    = "8.0"
+archunit            = "1.3.0"
+jqwik               = "1.9.1"
+spotless            = "7.0.2"
+jackson             = "2.17.2"
+junit               = "5.10.3"
+
+[libraries]
+# Spring Boot
+spring-boot-starter-web             = { module = "org.springframework.boot:spring-boot-starter-web" }
+spring-boot-starter-webflux         = { module = "org.springframework.boot:spring-boot-starter-webflux" }
+spring-boot-starter-security        = { module = "org.springframework.boot:spring-boot-starter-security" }
+spring-boot-starter-actuator        = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+spring-boot-starter-data-redis      = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
+spring-boot-starter-validation      = { module = "org.springframework.boot:spring-boot-starter-validation" }
+spring-boot-starter-test            = { module = "org.springframework.boot:spring-boot-starter-test" }
+spring-cloud-gateway                = { module = "org.springframework.cloud:spring-cloud-starter-gateway" }
+
+# Kafka
+kafka-clients                       = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka" }
+spring-kafka                        = { module = "org.springframework.kafka:spring-kafka" }
+spring-kafka-test                   = { module = "org.springframework.kafka:spring-kafka-test" }
+
+# Database
+jooq                                = { module = "org.jooq:jooq", version.ref = "jooq" }
+jooq-codegen                        = { module = "org.jooq:jooq-codegen", version.ref = "jooq" }
+flyway-core                         = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
+flyway-postgres                     = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flyway" }
+postgresql                          = { module = "org.postgresql:postgresql" }
+hikari                              = { module = "com.zaxxer:HikariCP" }
+
+# Redis
+lettuce-core                        = { module = "io.lettuce:lettuce-core" }
+
+# gRPC / Protobuf
+grpc-stub                           = { module = "io.grpc:grpc-stub", version.ref = "grpc" }
+grpc-protobuf                       = { module = "io.grpc:grpc-protobuf", version.ref = "grpc" }
+grpc-netty                          = { module = "io.grpc:grpc-netty-shaded", version.ref = "grpc" }
+grpc-services                       = { module = "io.grpc:grpc-services", version.ref = "grpc" }
+protobuf-java                       = { module = "com.google.protobuf:protobuf-java", version.ref = "protobuf" }
+javax-annotation                    = { module = "javax.annotation:javax.annotation-api", version = "1.3.2" }
+
+# Resilience4j
+resilience4j-spring-boot3           = { module = "io.github.resilience4j:resilience4j-spring-boot3", version.ref = "resilience4j" }
+resilience4j-reactor                = { module = "io.github.resilience4j:resilience4j-reactor", version.ref = "resilience4j" }
+resilience4j-micrometer             = { module = "io.github.resilience4j:resilience4j-micrometer", version.ref = "resilience4j" }
+
+# JWT
+jjwt-api                            = { module = "io.jsonwebtoken:jjwt-api", version.ref = "jjwt" }
+jjwt-impl                           = { module = "io.jsonwebtoken:jjwt-impl", version.ref = "jjwt" }
+jjwt-jackson                        = { module = "io.jsonwebtoken:jjwt-jackson", version.ref = "jjwt" }
+
+# Observability
+micrometer-prometheus               = { module = "io.micrometer:micrometer-registry-prometheus", version.ref = "micrometer" }
+otel-spring-boot                    = { module = "io.opentelemetry.instrumentation:opentelemetry-spring-boot-starter", version.ref = "otel-spring" }
+logstash-logback-encoder            = { module = "net.logstash.logback:logstash-logback-encoder", version.ref = "logstash-logback" }
+
+# Testing
+testcontainers-bom                  = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
+testcontainers-core                 = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
+testcontainers-junit5               = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers" }
+testcontainers-kafka                = { module = "org.testcontainers:kafka", version.ref = "testcontainers" }
+testcontainers-postgresql           = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
+testcontainers-redis                = { module = "com.redis:testcontainers-redis", version = "2.2.2" }
+archunit-junit5                     = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+jqwik                               = { module = "net.jqwik:jqwik", version.ref = "jqwik" }
+jmh-core                            = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
+jmh-generator                       = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
+junit-jupiter                       = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+
+# Misc
+jackson-databind                    = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+jackson-datatype-jsr310             = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jsr310", version.ref = "jackson" }
+
+[plugins]
+spring-boot                         = { id = "org.springframework.boot", version.ref = "spring-boot" }
+spring-dependency-management        = { id = "io.spring.dependency-management", version.ref = "spring-dependency" }
+spotless                            = { id = "com.diffplug.spotless", version.ref = "spotless" }

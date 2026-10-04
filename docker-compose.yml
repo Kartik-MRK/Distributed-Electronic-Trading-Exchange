@@ -1,0 +1,4 @@
+# DETE - Root Docker Compose convenience wrapper
+# Delegates to infra/docker-compose.yml
+include:
+  - infra/docker-compose.yml

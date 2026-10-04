@@ -1,4 +1,4 @@
-﻿# DETE — Phase-by-Phase Build Plan
+# DETE — Phase-by-Phase Build Plan
 
 > **Purpose:** This document is the authoritative step-by-step reference for building the Distributed Electronic Trading Exchange end-to-end. Each phase defines exactly what must be built, how it fits together, and what the completion criteria are. Phases are sequential; later phases depend on earlier ones. Read the phase description fully before starting any task within it.
 
@@ -134,11 +134,11 @@ trade.executions.DLQ    ledger.events.DLQ
 
 ### Phase 0 Completion Criteria
 
-- [ ] `./gradlew build` compiles all modules with zero errors
-- [ ] `docker compose up` starts all infrastructure cleanly
-- [ ] All Kafka topics are created and visible in Kafka UI
-- [ ] `common-domain`, `common-events`, `common-test` importable by other modules
-- [ ] A trivial Kafka producer/consumer test in `common-test` passes with Testcontainers
+- [x] `./gradlew build` compiles all modules with zero errors
+- [x] `docker compose up` starts all infrastructure cleanly
+- [x] All Kafka topics are created and visible in Kafka UI
+- [x] `common-domain`, `common-events`, `common-test` importable by other modules
+- [x] A trivial Kafka producer/consumer test in `common-test` passes with Testcontainers
 
 ---
 

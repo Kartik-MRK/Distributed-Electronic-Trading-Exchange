@@ -1,0 +1,76 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: 'local'
+    project: 'dete'
+
+scrape_configs:
+  # Spring Boot Actuator endpoints — add each service as it is built
+  - job_name: 'gateway'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8081']
+        labels:
+          service: 'gateway'
+
+  - job_name: 'auth'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8082']
+        labels:
+          service: 'auth'
+
+  - job_name: 'order'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8083']
+        labels:
+          service: 'order'
+
+  - job_name: 'risk'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8084']
+        labels:
+          service: 'risk'
+
+  - job_name: 'account'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8085']
+        labels:
+          service: 'account'
+
+  - job_name: 'matching-engine'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8086']
+        labels:
+          service: 'matching-engine'
+
+  - job_name: 'market-data'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8087']
+        labels:
+          service: 'market-data'
+
+  - job_name: 'audit'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8088']
+        labels:
+          service: 'audit'
+
+  - job_name: 'simulator'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8089']
+        labels:
+          service: 'simulator'
+
+  # Kafka JMX metrics (optional, add JMX exporter later)
+  - job_name: 'prometheus-self'
+    static_configs:
+      - targets: ['localhost:9090']
