@@ -77,6 +77,11 @@ public class MarketDataService {
     return tape.getRecentTrades(limit);
   }
 
+  public List<com.dete.marketdata.model.MarketDataTradeRecord> getReplayTrades(
+      Instrument instrument, java.time.Instant from, java.time.Instant to, int limit) {
+    return tradeRepository.findByInstrumentAndWindow(instrument, from, to, limit);
+  }
+
   public List<Candle> getCandles(Instrument instrument, Interval interval, int limit) {
     return ohlcvManager.getCandles(instrument, interval, limit);
   }

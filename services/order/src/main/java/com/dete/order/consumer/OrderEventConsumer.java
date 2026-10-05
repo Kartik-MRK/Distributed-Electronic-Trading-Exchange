@@ -88,9 +88,19 @@ public class OrderEventConsumer {
 
   private void routeToDlq(ConsumerRecord<String, String> record, String errorMessage) {
     try {
-      kafkaTemplate.send(TOPIC_ORDER_EVENTS_DLQ, record.key(), record.value());
+      org.apache.kafka.clients.producer.ProducerRecord<String, String> dlqRecord =
+          new org.apache.kafka.clients.producer.ProducerRecord<>(
+              TOPIC_ORDER_EVENTS_DLQ, record.key(), record.value());
+      dlqRecord.headers().add("X-Original-Topic", record.topic().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      dlqRecord.headers().add("X-Original-Partition", String.valueOf(record.partition()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      dlqRecord.headers().add("X-Original-Offset", String.valueOf(record.offset()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      dlqRecord.headers().add("X-Exception-Message", (errorMessage != null ? errorMessage : "unknown").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      dlqRecord.headers().add("X-Failed-At", java.time.Instant.now().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      dlqRecord.headers().add("X-Retry-Count", "3".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+      kafkaTemplate.send(dlqRecord);
       log.info(
-          "Sent failed message to DLQ topic {} (offset={}, error={})",
+          "Sent failed message to DLQ topic {} with metadata headers (offset={}, error={})",
           TOPIC_ORDER_EVENTS_DLQ,
           record.offset(),
           errorMessage);

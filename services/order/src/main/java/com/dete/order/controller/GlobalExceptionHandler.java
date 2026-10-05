@@ -1,11 +1,14 @@
 package com.dete.order.controller;
 
 import com.dete.order.dto.ErrorResponse;
+import com.dete.order.exception.AccountServiceUnavailableException;
 import com.dete.order.exception.InsufficientFundsException;
 import com.dete.order.exception.InvalidOrderException;
 import com.dete.order.exception.OrderNotCancellableException;
 import com.dete.order.exception.OrderNotFoundException;
 import com.dete.order.exception.PreTradeRiskException;
+import com.dete.order.exception.RiskServiceUnavailableException;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +34,38 @@ public class GlobalExceptionHandler {
             .collect(Collectors.joining(", "));
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(ErrorResponse.of(HttpStatus.BAD_REQUEST.value(), "Validation Failed", errors));
+  }
+
+  @ExceptionHandler(RiskServiceUnavailableException.class)
+  public ResponseEntity<ErrorResponse> handleRiskUnavailable(RiskServiceUnavailableException ex) {
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        .body(
+            ErrorResponse.of(
+                HttpStatus.SERVICE_UNAVAILABLE.value(),
+                "RISK_SERVICE_UNAVAILABLE",
+                ex.getMessage()));
+  }
+
+  @ExceptionHandler(AccountServiceUnavailableException.class)
+  public ResponseEntity<ErrorResponse> handleAccountUnavailable(
+      AccountServiceUnavailableException ex) {
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        .body(
+            ErrorResponse.of(
+                HttpStatus.SERVICE_UNAVAILABLE.value(),
+                "ACCOUNT_SERVICE_UNAVAILABLE",
+                ex.getMessage()));
+  }
+
+  @ExceptionHandler(CallNotPermittedException.class)
+  public ResponseEntity<ErrorResponse> handleCallNotPermitted(CallNotPermittedException ex) {
+    String name = ex.getCausingCircuitBreakerName();
+    String error =
+        "accountService".equalsIgnoreCase(name)
+            ? "ACCOUNT_SERVICE_UNAVAILABLE"
+            : "RISK_SERVICE_UNAVAILABLE";
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        .body(ErrorResponse.of(HttpStatus.SERVICE_UNAVAILABLE.value(), error, ex.getMessage()));
   }
 
   @ExceptionHandler({InvalidOrderException.class, PreTradeRiskException.class})

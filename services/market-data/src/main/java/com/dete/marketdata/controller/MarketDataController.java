@@ -47,6 +47,21 @@ public class MarketDataController {
     return ResponseEntity.ok(trades);
   }
 
+  @GetMapping("/{instrument}/replay")
+  public ResponseEntity<List<com.dete.marketdata.model.MarketDataTradeRecord>> getReplay(
+      @PathVariable String instrument,
+      @RequestParam(required = false) Long from,
+      @RequestParam(required = false) Long to,
+      @RequestParam(defaultValue = "500") int limit) {
+    Instrument inst = resolveInstrument(instrument);
+    java.time.Instant toInstant = to != null ? java.time.Instant.ofEpochMilli(to) : java.time.Instant.now();
+    java.time.Instant fromInstant =
+        from != null ? java.time.Instant.ofEpochMilli(from) : toInstant.minusSeconds(3600);
+    List<com.dete.marketdata.model.MarketDataTradeRecord> trades =
+        marketDataService.getReplayTrades(inst, fromInstant, toInstant, limit);
+    return ResponseEntity.ok(trades);
+  }
+
   @GetMapping("/{instrument}/candles")
   public ResponseEntity<List<Candle>> getCandles(
       @PathVariable String instrument,

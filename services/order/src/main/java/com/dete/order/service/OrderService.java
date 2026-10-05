@@ -40,6 +40,26 @@ public class OrderService {
   private final PreTradeRiskValidator riskValidator;
   private final IdempotencyService idempotencyService;
   private final ObjectMapper objectMapper;
+  private final com.dete.order.metrics.OrderMetrics orderMetrics;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public OrderService(
+      OrderRepository orderRepository,
+      OrderOutboxRepository outboxRepository,
+      AccountClient accountClient,
+      PreTradeRiskValidator riskValidator,
+      IdempotencyService idempotencyService,
+      ObjectMapper objectMapper,
+      @org.springframework.beans.factory.annotation.Autowired(required = false)
+          com.dete.order.metrics.OrderMetrics orderMetrics) {
+    this.orderRepository = orderRepository;
+    this.outboxRepository = outboxRepository;
+    this.accountClient = accountClient;
+    this.riskValidator = riskValidator;
+    this.idempotencyService = idempotencyService;
+    this.objectMapper = objectMapper;
+    this.orderMetrics = orderMetrics;
+  }
 
   public OrderService(
       OrderRepository orderRepository,
@@ -48,12 +68,14 @@ public class OrderService {
       PreTradeRiskValidator riskValidator,
       IdempotencyService idempotencyService,
       ObjectMapper objectMapper) {
-    this.orderRepository = orderRepository;
-    this.outboxRepository = outboxRepository;
-    this.accountClient = accountClient;
-    this.riskValidator = riskValidator;
-    this.idempotencyService = idempotencyService;
-    this.objectMapper = objectMapper;
+    this(
+        orderRepository,
+        outboxRepository,
+        accountClient,
+        riskValidator,
+        idempotencyService,
+        objectMapper,
+        null);
   }
 
   @Transactional
@@ -133,6 +155,10 @@ public class OrderService {
 
     OrderResponse response = OrderResponse.fromRecord(order);
     idempotencyService.cacheOrder(idempotencyKey, response);
+
+    if (orderMetrics != null) {
+      orderMetrics.recordOrderPlaced(request.instrument(), request.side(), request.orderType());
+    }
 
     log.info(
         "Successfully placed order {} for account {} on {} [side={}, qty={}]",
@@ -289,6 +315,10 @@ public class OrderService {
               orderRepository.updateStatusAndFills(
                   orderId, OrderStatus.REJECTED, null, null, reason);
               log.warn("Updated order {} status to REJECTED (reason: {})", orderId, reason);
+
+              if (orderMetrics != null) {
+                orderMetrics.recordOrderRejected(reason);
+              }
 
               // Release reserved funds
               releaseRemainingFunds(order);

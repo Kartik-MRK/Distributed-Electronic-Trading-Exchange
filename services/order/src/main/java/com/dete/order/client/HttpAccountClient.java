@@ -1,5 +1,6 @@
 package com.dete.order.client;
 
+import com.dete.order.exception.AccountServiceUnavailableException;
 import com.dete.order.exception.InsufficientFundsException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import java.util.Map;
@@ -92,14 +93,14 @@ public class HttpAccountClient implements AccountClient {
       throw (InsufficientFundsException) t;
     }
     log.error("Circuit breaker triggered for account reservation: {}", t.getMessage());
-    throw new IllegalStateException(
-        "Account service is temporarily unavailable: " + t.getMessage(), t);
+    throw new AccountServiceUnavailableException(
+        "ACCOUNT_SERVICE_UNAVAILABLE: " + t.getMessage(), t);
   }
 
   public boolean releaseFundsFallback(
       UUID accountId, UUID orderId, String asset, long amount, Throwable t) {
     log.error("Circuit breaker triggered for account release: {}", t.getMessage());
-    throw new IllegalStateException(
-        "Account service is temporarily unavailable: " + t.getMessage(), t);
+    throw new AccountServiceUnavailableException(
+        "ACCOUNT_SERVICE_UNAVAILABLE: " + t.getMessage(), t);
   }
 }

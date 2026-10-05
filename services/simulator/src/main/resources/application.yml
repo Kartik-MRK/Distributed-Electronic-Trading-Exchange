@@ -1,0 +1,52 @@
+server:
+  port: 8089
+
+spring:
+  application:
+    name: simulator-service
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+simulator:
+  enabled: ${SIMULATOR_ENABLED:true}
+  seed-demo: ${SIMULATOR_SEED_DEMO:true}
+  auth-url: ${AUTH_SERVICE_URL:http://localhost:8081}
+  account-url: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
+  order-url: ${ORDER_SERVICE_URL:http://localhost:8083}
+  drift-interval-seconds: 10
+  trade-interval-seconds: 3
+  refresh-interval-seconds: 4
+  instruments:
+    - symbol: BTC-USD
+      initial-mid: 65000.0
+      spread-bps: 20
+      levels: 15
+      order-size-min: 0.001
+      order-size-max: 0.05
+    - symbol: ETH-USD
+      initial-mid: 3500.0
+      spread-bps: 20
+      levels: 15
+      order-size-min: 0.01
+      order-size-max: 0.5
+    - symbol: SOL-USD
+      initial-mid: 150.0
+      spread-bps: 25
+      levels: 15
+      order-size-min: 0.1
+      order-size-max: 5.0

@@ -34,6 +34,8 @@ dependencies {
 
     // Observability
     implementation(libs.micrometer.prometheus)
+    implementation(libs.micrometer.tracing.bridge.otel)
+    implementation(libs.logstash.logback.encoder)
 
     // Testing
     testImplementation(project(":libs:common-test"))

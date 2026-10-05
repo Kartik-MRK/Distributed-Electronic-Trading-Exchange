@@ -62,20 +62,30 @@ resilience4j:
         sliding-window-size: 10
         minimum-number-of-calls: 5
         failure-rate-threshold: 50
-        wait-duration-in-open-state: 5000ms
+        wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 3
+        register-health-indicator: true
       accountService:
         sliding-window-size: 10
         minimum-number-of-calls: 5
         failure-rate-threshold: 50
-        wait-duration-in-open-state: 5000ms
+        wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 3
+        register-health-indicator: true
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus
+        include: health,info,prometheus,metrics
   endpoint:
     health:
       show-details: always
+    prometheus:
+      enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}

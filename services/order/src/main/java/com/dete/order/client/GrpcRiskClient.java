@@ -5,6 +5,7 @@ import com.dete.common.domain.risk.ValidateOrderResponse;
 import com.dete.order.dto.CreateOrderRequest;
 import com.dete.order.exception.InvalidOrderException;
 import com.dete.order.exception.PreTradeRiskException;
+import com.dete.order.exception.RiskServiceUnavailableException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.grpc.CallOptions;
@@ -116,8 +117,8 @@ public class GrpcRiskClient implements PreTradeRiskValidator {
         "Risk Service unavailable or circuit breaker OPEN for account {}. Failing closed: {}",
         accountId,
         t.getMessage());
-    throw new PreTradeRiskException(
-        "Pre-trade risk check unavailable (fail closed): " + t.getMessage());
+    throw new RiskServiceUnavailableException(
+        "RISK_SERVICE_UNAVAILABLE: Pre-trade risk check unavailable (fail closed): " + t.getMessage(), t);
   }
 
   @PreDestroy

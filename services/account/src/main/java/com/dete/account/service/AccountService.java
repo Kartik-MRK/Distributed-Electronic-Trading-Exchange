@@ -49,6 +49,26 @@ public class AccountService {
   private final SettlementRepository settlementRepository;
   private final OutboxRepository outboxRepository;
   private final ObjectMapper objectMapper;
+  private final com.dete.account.metrics.AccountMetrics accountMetrics;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public AccountService(
+      AccountRepository accountRepository,
+      BalanceRepository balanceRepository,
+      LedgerRepository ledgerRepository,
+      SettlementRepository settlementRepository,
+      OutboxRepository outboxRepository,
+      ObjectMapper objectMapper,
+      @org.springframework.beans.factory.annotation.Autowired(required = false)
+          com.dete.account.metrics.AccountMetrics accountMetrics) {
+    this.accountRepository = accountRepository;
+    this.balanceRepository = balanceRepository;
+    this.ledgerRepository = ledgerRepository;
+    this.settlementRepository = settlementRepository;
+    this.outboxRepository = outboxRepository;
+    this.objectMapper = objectMapper;
+    this.accountMetrics = accountMetrics;
+  }
 
   public AccountService(
       AccountRepository accountRepository,
@@ -57,12 +77,14 @@ public class AccountService {
       SettlementRepository settlementRepository,
       OutboxRepository outboxRepository,
       ObjectMapper objectMapper) {
-    this.accountRepository = accountRepository;
-    this.balanceRepository = balanceRepository;
-    this.ledgerRepository = ledgerRepository;
-    this.settlementRepository = settlementRepository;
-    this.outboxRepository = outboxRepository;
-    this.objectMapper = objectMapper;
+    this(
+        accountRepository,
+        balanceRepository,
+        ledgerRepository,
+        settlementRepository,
+        outboxRepository,
+        objectMapper,
+        null);
   }
 
   @Transactional
@@ -85,6 +107,10 @@ public class AccountService {
     LedgerEntry entry =
         LedgerEntry.createNew(accountId, asset, LedgerEntryType.DEPOSIT, amount, ref, seq);
     ledgerRepository.save(entry);
+
+    if (accountMetrics != null) {
+      accountMetrics.recordLedgerEntry("DEPOSIT");
+    }
 
     log.info("Deposited {} {} for account {}", amount, asset, accountId);
     Balance balance =
@@ -141,6 +167,10 @@ public class AccountService {
     LedgerEntry entry =
         LedgerEntry.createNew(accountId, asset, LedgerEntryType.RESERVE, amount, orderId, seq);
     ledgerRepository.save(entry);
+
+    if (accountMetrics != null) {
+      accountMetrics.recordLedgerEntry("RESERVE");
+    }
 
     // Write BalanceReservedEvent to transactional outbox
     BalanceReservedEvent event =
@@ -201,6 +231,10 @@ public class AccountService {
     LedgerEntry entry =
         LedgerEntry.createNew(accountId, asset, LedgerEntryType.RELEASE, amount, orderId, seq);
     ledgerRepository.save(entry);
+
+    if (accountMetrics != null) {
+      accountMetrics.recordLedgerEntry("RELEASE");
+    }
 
     // Write BalanceReleasedEvent to transactional outbox
     BalanceReleasedEvent event =
@@ -291,6 +325,10 @@ public class AccountService {
             quoteAmount,
             event.tradeId(),
             sellerSeq2));
+
+    if (accountMetrics != null) {
+      accountMetrics.recordLedgerEntry("SETTLE");
+    }
 
     // 4. Save settlement record
     Settlement settlement =

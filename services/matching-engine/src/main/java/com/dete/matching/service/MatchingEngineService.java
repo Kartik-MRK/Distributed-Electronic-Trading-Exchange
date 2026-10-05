@@ -32,8 +32,17 @@ public class MatchingEngineService {
 
   private final Map<Instrument, OrderBook> orderBooks = new EnumMap<>(Instrument.class);
   private final Map<Instrument, ExecutorService> dispatchers = new EnumMap<>(Instrument.class);
+  private final com.dete.matching.metrics.EngineMetrics engineMetrics;
 
   public MatchingEngineService() {
+    this(null);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public MatchingEngineService(
+      @org.springframework.beans.factory.annotation.Autowired(required = false)
+          com.dete.matching.metrics.EngineMetrics engineMetrics) {
+    this.engineMetrics = engineMetrics;
     for (Instrument instrument : Instrument.values()) {
       orderBooks.put(instrument, new OrderBook(instrument));
       dispatchers.put(
@@ -54,7 +63,20 @@ public class MatchingEngineService {
     OrderBook book = orderBooks.get(instrument);
     ExecutorService dispatcher = dispatchers.get(instrument);
 
-    return CompletableFuture.supplyAsync(() -> book.processOrder(event), dispatcher);
+    return CompletableFuture.supplyAsync(
+        () -> {
+          long start = System.nanoTime();
+          MatchResult result = book.processOrder(event);
+          long duration = System.nanoTime() - start;
+          if (engineMetrics != null) {
+            engineMetrics.recordMatchingLatency(instrument, duration);
+            if (result.hasTrades()) {
+              engineMetrics.recordTradeExecuted(instrument, result.trades().size());
+            }
+          }
+          return result;
+        },
+        dispatcher);
   }
 
   /** Dispatches an order cancellation command to the instrument's single-writer thread. */

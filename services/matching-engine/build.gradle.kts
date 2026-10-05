@@ -19,6 +19,8 @@ dependencies {
     implementation(libs.spring.boot.starter.actuator)
     implementation(libs.spring.boot.starter.web)
     implementation(libs.micrometer.prometheus)
+    implementation(libs.micrometer.tracing.bridge.otel)
+    implementation(libs.logstash.logback.encoder)
     implementation(libs.spring.kafka)
 
     implementation(libs.jackson.databind)

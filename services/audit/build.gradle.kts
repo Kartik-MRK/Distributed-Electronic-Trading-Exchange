@@ -31,8 +31,10 @@ dependencies {
     // Kafka
     implementation(libs.spring.kafka)
 
-    // Metrics & JSON
+    // Metrics, Tracing, Logging & JSON
     implementation(libs.micrometer.prometheus)
+    implementation(libs.micrometer.tracing.bridge.otel)
+    implementation(libs.logstash.logback.encoder)
     implementation(libs.jackson.databind)
     implementation(libs.jackson.datatype.jsr310)
 

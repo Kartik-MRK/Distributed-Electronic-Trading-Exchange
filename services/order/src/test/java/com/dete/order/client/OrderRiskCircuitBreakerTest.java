@@ -233,8 +233,8 @@ class OrderRiskCircuitBreakerTest extends FullStackTestBase {
     // Make 5 consecutive failing calls (minimum-number-of-calls is 5)
     for (int i = 0; i < 5; i++) {
       assertThatThrownBy(() -> grpcRiskClient.validateOrder(request, UUID.randomUUID()))
-          .isInstanceOf(PreTradeRiskException.class)
-          .hasMessageContaining("fail closed");
+          .isInstanceOf(com.dete.order.exception.RiskServiceUnavailableException.class)
+          .hasMessageContaining("RISK_SERVICE_UNAVAILABLE");
     }
 
     // Circuit breaker must now be OPEN
@@ -242,7 +242,7 @@ class OrderRiskCircuitBreakerTest extends FullStackTestBase {
 
     // Subsequent calls while OPEN fail closed immediately via circuit breaker
     assertThatThrownBy(() -> grpcRiskClient.validateOrder(request, UUID.randomUUID()))
-        .isInstanceOf(PreTradeRiskException.class)
-        .hasMessageContaining("fail closed");
+        .isInstanceOf(com.dete.order.exception.RiskServiceUnavailableException.class)
+        .hasMessageContaining("RISK_SERVICE_UNAVAILABLE");
   }
 }

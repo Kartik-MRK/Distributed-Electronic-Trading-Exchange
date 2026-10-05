@@ -1,5 +1,5 @@
 server:
-  port: ${PORT:8085}
+  port: ${PORT:8087}
 
 spring:
   application:
@@ -46,6 +46,15 @@ management:
   metrics:
     tags:
       application: market-data-service
+    export:
+      prometheus:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
 
 marketdata:
   tape:

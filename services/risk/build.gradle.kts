@@ -32,6 +32,8 @@ dependencies {
     implementation(libs.resilience4j.spring.boot3)
     implementation(libs.resilience4j.micrometer)
     implementation(libs.micrometer.prometheus)
+    implementation(libs.micrometer.tracing.bridge.otel)
+    implementation(libs.logstash.logback.encoder)
 
     // JSON
     implementation(libs.jackson.databind)
