@@ -1,0 +1,54 @@
+server:
+  port: ${PORT:8085}
+
+spring:
+  application:
+    name: market-data-service
+  main:
+    allow-bean-definition-overriding: true
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/dete?currentSchema=market_data
+    username: ${DB_USER:dete}
+    password: ${DB_PASSWORD:dete_secret}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      schema: market_data
+  flyway:
+    enabled: true
+    schemas:
+      - market_data
+    default-schema: market_data
+    locations:
+      - classpath:db/migration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: market-data-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: market-data-service
+
+marketdata:
+  tape:
+    capacity: 500
+  candles:
+    max-history: 1000

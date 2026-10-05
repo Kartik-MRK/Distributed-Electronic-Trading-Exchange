@@ -10,9 +10,9 @@
 | Metric | Status |
 |---|---|
 | **Total Phases** | 18 (Phase 0 to 17) |
-| **Completed** | 4 / 18 (22.2%) |
-| **Current Focus** | **Phase 4 — Order Service + Kafka Integration** |
-| **Progress Bar** | `[████░░░░░░░░░░░░░░]` |
+| **Completed** | 8 / 18 (44.4%) |
+| **Current Focus** | **Phase 8 — Gateway Service** |
+| **Progress Bar** | `[████████░░░░░░░░░░]` |
 
 ---
 
@@ -24,11 +24,11 @@
 | **1** | **Authentication Service** | **Completed** | Oct 04, 2026 |
 | **2** | **Account / Ledger Service** | **Completed** | Oct 04, 2026 |
 | **3** | **Matching Engine (Core)** | **Completed** | Oct 04, 2026 |
-| **4** | Order Service + Kafka Integration | *Up Next* | — |
-| **5** | Risk Service | Pending | — |
-| **6** | Market Data Service | Pending | — |
-| **7** | Audit Service | Pending | — |
-| **8** | Gateway Service | Pending | — |
+| **4** | **Order Service + Kafka Integration** | **Completed** | Oct 04, 2026 |
+| **5** | **Risk Service** | **Completed** | Oct 04, 2026 |
+| **6** | **Market Data Service** | **Completed** | Oct 05, 2026 |
+| **7** | **Audit Service** | **Completed** | Oct 05, 2026 |
+| **8** | Gateway Service | *Up Next* | — |
 | **9** | Frontend Phase A (Trading Terminal) | Pending | — |
 | **10** | Observability Stack | Pending | — |
 | **11** | Simulator / Market-Maker Bot Service | Pending | — |
@@ -127,3 +127,99 @@
     - Architecture tests ([MatchingArchitectureTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/test/java/com/dete/matching/arch/MatchingArchitectureTest.java)) verifying with ArchUnit that the matching engine hot path has zero database, JDBC, JPA, or Spring dependencies.
     - End-to-end integration tests ([MatchingEngineIntegrationTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/test/java/com/dete/matching/MatchingEngineIntegrationTest.java)) with Testcontainers Kafka validating full command consumption, trade execution dispatch, order cancellation, order modification, Kafka log replay reconstruction, and REST API monitoring.
 
+### Phase 4 — Order Service + Kafka Integration
+- **Status:** **Completed** (Oct 04, 2026)
+- **Completed Components:**
+  - **Database Persistence & Outbox Migrations ([services/order/src/main/resources/db/migration/V1__create_order_schema.sql](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/main/resources/db/migration/V1__create_order_schema.sql)):** PostgreSQL `order_svc.orders` and `order_svc.outbox` tables with UUID primary keys, b-tree indexes on `(account_id, status)` and `created_at DESC`, unique constraint on `idempotency_key`, and partial index on unpublished outbox messages (`WHERE published = false`).
+  - **Two-Tier Distributed Idempotency ([IdempotencyService](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/main/java/com/dete/order/service/IdempotencyService.java)):** Fast-path Redis cache (TTL=24h) checking incoming `Idempotency-Key` headers, paired with database unique constraint fallback to guarantee identical responses on duplicate submissions with zero duplicate balance reservations or database insertions.
+  - **Pre-Trade Risk Checks & Synchronous Fund Reservation ([DefaultPreTradeRiskValidator](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/main/java/com/dete/order/client/DefaultPreTradeRiskValidator.java), [HttpAccountClient](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/main/java/com/dete/order/client/HttpAccountClient.java)):** Pre-trade validation enforcing strictly positive prices/quantities, instrument size limits (100 BTC, 1,000 ETH, 10,000 SOL), and single-order notional limits ($5,000,000 USD). Synchronous balance reservations with Account Service before order placement with Resilience4j circuit breaker integration (`riskService`, `accountService`).
+  - **Transactional Outbox Dispatcher ([OrderOutboxPublisher](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/main/java/com/dete/order/service/OrderOutboxPublisher.java), [OrderOutboxRepository](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/main/java/com/dete/order/repository/OrderOutboxRepository.java)):** Scheduled polling worker querying unpublished outbox records using `FOR UPDATE SKIP LOCKED` and reliably publishing `OrderPlacedEvent`, `OrderCancelCommand`, and `OrderModifyCommand` to Kafka topic `order.commands`.
+  - **Order Events Kafka Consumer ([OrderEventConsumer](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/main/java/com/dete/order/consumer/OrderEventConsumer.java)):** Consumes `order.events` to drive order lifecycle state transitions (`ACCEPTED`, `PARTIALLY_FILLED`, `FILLED`, `CANCELLED`, `REJECTED`). Automatically triggers fund releases via Account Service when orders are cancelled or rejected.
+  - **Dead-Letter Queue (DLQ) & Admin Reprocessing ([OrderEventConsumer](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/main/java/com/dete/order/consumer/OrderEventConsumer.java), [DlqAdminController](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/main/java/com/dete/order/controller/DlqAdminController.java)):** Automatic error routing for unparseable or poisoned messages to `order.events.DLQ`, paired with administrative endpoints `GET /admin/dlq/messages` (peeking DLQ) and `POST /admin/dlq/reprocess` (reprocessing back to main topic).
+  - **REST API Endpoints ([OrderController](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/main/java/com/dete/order/controller/OrderController.java)):** Complete endpoints: `POST /orders`, `DELETE /orders/{orderId}`, `PUT /orders/{orderId}`, `GET /orders/{orderId}`, `GET /orders` (active orders), `GET /orders/history` (paginated history), and `/admin/dlq/**`.
+  - **Verification & Test Suite (27 Passing Tests across order service):**
+    - Unit tests ([OrderServiceUnitTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/test/java/com/dete/order/service/OrderServiceUnitTest.java), [PreTradeRiskValidatorTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/test/java/com/dete/order/client/PreTradeRiskValidatorTest.java), [IdempotencyServiceTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/test/java/com/dete/order/service/IdempotencyServiceTest.java)) verifying placement, fund calculations, idempotency caching, cancellation, modification, and risk thresholds.
+    - ArchUnit tests ([OrderArchitectureTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/test/java/com/dete/order/arch/OrderArchitectureTest.java)) enforcing layer boundary separation (controllers in `controller`, repositories in `repository`, controllers decoupled from repositories).
+    - Resilience4j Circuit Breaker & Fail-Closed tests ([OrderRiskCircuitBreakerTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/test/java/com/dete/order/client/OrderRiskCircuitBreakerTest.java)) proving that when Risk Service is down or breaker is OPEN, orders are strictly rejected with `PreTradeRiskException` and circuit breaker transitions to OPEN.
+    - End-to-end integration tests ([OrderIntegrationTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/test/java/com/dete/order/OrderIntegrationTest.java)) on Testcontainers (Postgres, Kafka, Redis) validating order placement, fund reservations, outbox polling & Kafka dispatch, duplicate idempotency deduplication, order event transitions, cancellation fund release, order modification, and DLQ routing/reprocessing.
+
+### Phase 5 — Risk Service
+- **Status:** **Completed** (Oct 04, 2026)
+- **Completed Components:**
+  - **gRPC Contract & Wire Protocol ([RiskGrpcContracts](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/risk/src/main/java/com/dete/risk/grpc/RiskGrpcContracts.java), [ValidateOrderRequest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/libs/common-domain/src/main/java/com/dete/common/domain/risk/ValidateOrderRequest.java), [ValidateOrderResponse](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/libs/common-domain/src/main/java/com/dete/common/domain/risk/ValidateOrderResponse.java)):** Defined `ValidateOrder` RPC over standard HTTP/2 Netty framing using streaming JSON marshallers without requiring external `protoc` binaries on Windows.
+  - **Six Pre-Trade Risk Rules ([RiskRuleEvaluator](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/risk/src/main/java/com/dete/risk/engine/RiskRuleEvaluator.java)):**
+    - `Rule 1: Max Order Size`: Rejects orders exceeding configured instrument thresholds (100 BTC, 1,000 ETH, 10,000 SOL).
+    - `Rule 2: Max Order Notional`: Enforces $5,000,000 USD limit calculated via 64-bit fixed-point arithmetic (`FixedPoint.multiply(price, quantity)`).
+    - `Rule 3: Max Concurrent Open Orders`: Rejects orders when an account reaches 50 concurrent active open orders, automatically adjusting on fills and cancels.
+    - `Rule 4: Price Deviation Band`: Rejects BUY limit orders priced > +10% above the last trade price and SELL limit orders priced < -10% below the last trade price.
+    - `Rule 5: Market Order Guard`: Requires a live reference trade price to exist before permitting market execution, and enforces market order quantities <= 50% of the instrument's maximum order size.
+    - `Rule 6: Self-Trade Prevention Check`: Tracks resting order price levels per account and side; rejects incoming orders that would cross or immediately execute against the account's own resting orders.
+  - **Real-Time In-Memory State & Kafka Tracking ([RiskTradeEventConsumer](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/risk/src/main/java/com/dete/risk/consumer/RiskTradeEventConsumer.java), [RiskOrderEventConsumer](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/risk/src/main/java/com/dete/risk/consumer/RiskOrderEventConsumer.java), [AccountRiskState](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/risk/src/main/java/com/dete/risk/model/AccountRiskState.java)):**
+    - Consumes `trade.executions` to maintain up-to-the-millisecond last trade prices per instrument.
+    - Consumes `order.events` to clean up terminal states (`ORDER_FILLED`, `ORDER_CANCELLED`, `ORDER_REJECTED`), decrementing open orders and releasing resting prices.
+  - **gRPC Server Lifecycle ([RiskGrpcServer](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/risk/src/main/java/com/dete/risk/grpc/RiskGrpcServer.java), [RiskGrpcService](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/risk/src/main/java/com/dete/risk/grpc/RiskGrpcService.java)):** Manages Netty gRPC server lifecycle cleanly integrated into Spring Boot `SmartLifecycle` (port 9095).
+  - **Order Service Client with Fail-Closed Circuit Breaking ([GrpcRiskClient](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/main/java/com/dete/order/client/GrpcRiskClient.java)):**
+    - Replaces local checks with high-performance gRPC pre-trade risk call before fund reservation.
+    - Wrapped with Resilience4j `@CircuitBreaker(name = "riskService", fallbackMethod = "riskFallback")`.
+    - Enforces **Fail Closed** invariant: any connection failure, gRPC deadline, or OPEN circuit breaker state strictly throws `PreTradeRiskException` to reject the order (never bypass risk).
+    - Circuit breaker state and failure counters exported via Actuator Prometheus metrics (`/actuator/metrics`).
+  - **REST & Monitoring API ([RiskController](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/risk/src/main/java/com/dete/risk/controller/RiskController.java)):** Endpoints for querying reference prices (`GET /risk/instruments`), active rule limits (`GET /risk/rules`), account risk statistics (`GET /risk/accounts/{id}`), and standalone validation testing (`POST /risk/validate`).
+  - **Verification & Test Suite (26 Passing Tests across risk service):**
+    - Unit tests ([RiskRuleEvaluatorTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/risk/src/test/java/com/dete/risk/RiskRuleEvaluatorTest.java)) thoroughly validating all 6 rules with positive and negative test cases.
+### Phase 6 — Market Data Service
+- **Status:** **Completed** (Oct 05, 2026)
+- **Completed Components:**
+  - **Materialized In-Memory CQRS State Models ([com.dete.marketdata.model](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/main/java/com/dete/marketdata/model)):**
+    - [OrderBookView](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/main/java/com/dete/marketdata/model/OrderBookView.java): High-performance, thread-safe in-memory L2 order book representation maintaining sorted bids (descending) and asks (ascending), order index for fast partial fill/cancellation lookups, and sequence number tracking.
+    - [TradeTape](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/main/java/com/dete/marketdata/model/TradeTape.java): Thread-safe, bounded ring buffer maintaining the last 500 trades per instrument with FIFO eviction and newest-first pagination.
+    - [OHLCVManager](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/main/java/com/dete/marketdata/service/OHLCVManager.java): Multi-interval rolling OHLCV candle aggregator supporting all 5 intervals (`1m`, `5m`, `15m`, `1h`, `1d`), tracking open, high, low, close, volume, and trade count, with automatic window rollover and historical caching.
+    - `LastTradedPrice`: Real-time atomic fixed-point execution price tracking per instrument.
+  - **Historical Trade Storage for Replay ([V1__create_market_data_schema.sql](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/main/resources/db/migration/V1__create_market_data_schema.sql), [MarketDataTradeRepository](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/main/java/com/dete/marketdata/repository/MarketDataTradeRepository.java)):**
+    - PostgreSQL `market_data.trades` table with UUID primary keys and B-tree indexes on `(instrument, executed_at DESC)` and `(instrument, sequence_number DESC)`.
+    - Idempotent batch insertion (`ON CONFLICT (trade_id) DO NOTHING`) and queries by time window or sequence number range for the Phase 12 Replay Viewer.
+  - **Kafka Ingestion Pipeline ([com.dete.marketdata.consumer](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/main/java/com/dete/marketdata/consumer)):**
+    - [TradeExecutionConsumer](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/main/java/com/dete/marketdata/consumer/TradeExecutionConsumer.java): Listens to `trade.executions`, updates tape, candles, last price, persists to DB, and streams over WebSocket.
+    - [OrderEventConsumer](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/main/java/com/dete/marketdata/consumer/OrderEventConsumer.java): Listens to `order.events` and `order.commands`, materializes placed/filled/cancelled order transitions into the L2 order book, and routes private user updates.
+    - [MarketDataSnapshotConsumer](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/main/java/com/dete/marketdata/consumer/MarketDataSnapshotConsumer.java): Listens to `market-data` for periodic full snapshots from the Matching Engine for authoritative resync.
+  - **Matching Engine Periodic Snapshot Publishing ([OrderBookSnapshotPublisher](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/matching-engine/src/main/java/com/dete/matching/publisher/OrderBookSnapshotPublisher.java)):**
+    - Scheduled component in Matching Engine periodically publishing full 50-level L2 snapshots (`OrderBookSnapshotEvent`) to topic `market-data`.
+  - **Real-Time WebSocket & STOMP Streaming ([WebSocketConfig](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/main/java/com/dete/marketdata/config/WebSocketConfig.java), [MarketDataWebSocketBroadcaster](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/main/java/com/dete/marketdata/service/MarketDataWebSocketBroadcaster.java)):**
+    - Endpoint `/ws` with SockJS fallback and STOMP message broker on `/topic`.
+    - Channels: `/topic/orderbook.{instrument}`, `/topic/trades.{instrument}`, `/topic/candles.{instrument}.{interval}`, and private user channel `/topic/orders.{accountId}`.
+  - **REST API Endpoints ([MarketDataController](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/main/java/com/dete/marketdata/controller/MarketDataController.java)):**
+    - `GET /market-data/{instrument}/orderbook?depth=20`: Current L2 order book snapshot.
+    - `GET /market-data/{instrument}/trades?limit=100`: Recent trade tape.
+    - `GET /market-data/{instrument}/candles?interval=1m&limit=100`: OHLCV candlestick series.
+    - `GET /market-data/instruments`: List of all trading instruments with live prices.
+    - `GET /market-data/{instrument}/price`: Last traded price.
+  - **Verification & Test Suite (15 Passing Tests across market-data):**
+    - Unit tests ([OrderBookViewTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/test/java/com/dete/marketdata/model/OrderBookViewTest.java), [OHLCVManagerTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/test/java/com/dete/marketdata/service/OHLCVManagerTest.java), [TradeTapeTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/test/java/com/dete/marketdata/model/TradeTapeTest.java)) verifying price level sorting, depth limits, partial/full fills, cancellations, multi-interval candle aggregation, window rollovers, and tape capacity.
+    - Architecture tests ([MarketDataArchitectureTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/test/java/com/dete/marketdata/arch/MarketDataArchitectureTest.java)) verifying package conventions and Spring annotations with ArchUnit.
+    - End-to-end integration tests ([MarketDataIntegrationTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/market-data/src/test/java/com/dete/marketdata/MarketDataIntegrationTest.java)) on Testcontainers (Postgres, Kafka, Redis) validating live Kafka ingestion, DB persistence, REST queries, and real-time WebSocket STOMP subscriptions.
+
+### Phase 7 — Audit Service
+- **Status:** **Completed** (Oct 05, 2026)
+- **Completed Components:**
+  - **Database Persistence & Immutability Trigger ([V1__create_audit_schema.sql](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/audit/src/main/resources/db/migration/V1__create_audit_schema.sql)):**
+    - PostgreSQL schema `audit` and table `audit.audit_log` storing `entry_id`, `event_id`, `event_type`, `subject_type`, `subject_id`, `actor_id`, `instrument`, `payload` (JSONB), `trace_id`, `event_time`, and `ingested_at`.
+    - Dedicated B-Tree indexes on `(subject_id, event_time DESC)`, `(event_type, event_time DESC)`, `(instrument, event_time DESC)`, `(trace_id, event_time DESC)`, and `(event_time DESC)`.
+    - **Database-Level Immutability Enforcement:** Dedicated PL/pgSQL trigger `trg_audit_immutable` attached `BEFORE UPDATE OR DELETE ON audit.audit_log`, strictly throwing an exception to prohibit any modification or deletion for compliance.
+  - **Kafka Consumer Pipeline ([AuditKafkaConsumer](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/audit/src/main/java/com/dete/audit/consumer/AuditKafkaConsumer.java)):**
+    - Consumes topic `audit.events` with group ID `audit-service-group` and manual immediate acknowledgment (`AckMode.MANUAL_IMMEDIATE`).
+    - Deserializes `AuditEvent` envelopes and passes to service layer.
+    - Handles poison pills gracefully by logging and committing offsets.
+  - **Idempotent Audit Log Repository & Service ([AuditLogRepository](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/audit/src/main/java/com/dete/audit/repository/AuditLogRepository.java), [AuditService](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/audit/src/main/java/com/dete/audit/service/AuditService.java)):**
+    - `insert`: Atomically inserts into `audit.audit_log` using `ON CONFLICT (event_id) DO NOTHING` to guarantee idempotency on retried Kafka messages.
+    - `findByEventId`: Fetches single audit record with full JSON payload.
+    - `findByCriteria`: Dynamic parameterized SQL query supporting any combination of filters (`subjectId`, `instrument`, `eventType`, `traceId`, `from`, `to`, `limit`, `offset`).
+  - **Admin REST API ([AuditAdminController](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/audit/src/main/java/com/dete/audit/controller/AuditAdminController.java)):**
+    - `GET /admin/audit`: Filtered audit log query endpoint.
+    - `GET /admin/audit/entries/{eventId}`: Detailed entry lookup returning 200 OK or 404 Not Found.
+  - **Security Filter Chain ([SecurityConfig](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/audit/src/main/java/com/dete/audit/config/SecurityConfig.java)):**
+    - Stateless Spring Security filter chain with RS256 `JwtAuthenticationFilter`.
+    - Enforces `ROLE_ADMIN` on `/admin/audit` and `/admin/audit/**`.
+    - Returns 401 Unauthorized for unauthenticated requests and 403 Forbidden for non-admin tokens.
+  - **Verification & Test Suite (15 Passing Tests across audit service):**
+    - Unit tests ([AuditServiceUnitTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/audit/src/test/java/com/dete/audit/service/AuditServiceUnitTest.java), [AuditAdminControllerUnitTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/audit/src/test/java/com/dete/audit/controller/AuditAdminControllerUnitTest.java)) verifying argument validation, idempotency detection, and controller responses.
+    - Architecture tests ([AuditArchitectureTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/audit/src/test/java/com/dete/audit/arch/AuditArchitectureTest.java)) enforcing ArchUnit package and annotation conventions.
+    - End-to-end integration tests ([AuditIntegrationTest](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/audit/src/test/java/com/dete/audit/AuditIntegrationTest.java)) on Testcontainers (Postgres, Kafka, Redis) validating Kafka ingestion, idempotency deduplication, trigger-level immutability blocking `UPDATE` and `DELETE`, security role validation (401/403/200), and multi-criteria query filtering.

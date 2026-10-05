@@ -49,17 +49,36 @@ public record FixedPoint(@JsonValue long scaledValue) implements Comparable<Fixe
   }
 
   /**
+   * Multiply two raw scaled values. Uses 128-bit intermediate to avoid overflow.
+   *
+   * <p>a * b / SCALE — e.g., price * quantity / SCALE = notional value.
+   */
+  public static long multiply(long a, long b) {
+    return java.math.BigInteger.valueOf(a)
+        .multiply(java.math.BigInteger.valueOf(b))
+        .divide(java.math.BigInteger.valueOf(SCALE))
+        .longValueExact();
+  }
+
+  /**
+   * Divide two raw scaled values. Uses 128-bit intermediate to avoid precision loss.
+   *
+   * <p>(a * SCALE) / b
+   */
+  public static long divide(long a, long b) {
+    return java.math.BigInteger.valueOf(a)
+        .multiply(java.math.BigInteger.valueOf(SCALE))
+        .divide(java.math.BigInteger.valueOf(b))
+        .longValueExact();
+  }
+
+  /**
    * Multiply two fixed-point values. Uses 128-bit intermediate to avoid overflow.
    *
    * <p>a * b / SCALE — e.g., price * quantity / SCALE = notional value.
    */
   public FixedPoint multiply(FixedPoint other) {
-    // Use BigInteger for intermediate to avoid long overflow on large values
-    java.math.BigInteger result =
-        java.math.BigInteger.valueOf(this.scaledValue)
-            .multiply(java.math.BigInteger.valueOf(other.scaledValue))
-            .divide(java.math.BigInteger.valueOf(SCALE));
-    return new FixedPoint(result.longValueExact());
+    return new FixedPoint(multiply(this.scaledValue, other.scaledValue));
   }
 
   public boolean isPositive() {
