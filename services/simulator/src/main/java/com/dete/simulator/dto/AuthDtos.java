@@ -1,10 +1,13 @@
 package com.dete.simulator.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.UUID;
 
 public class AuthDtos {
 
-  public record LoginRequest(String username, String password) {}
+  public record LoginRequest(
+      @JsonProperty("identifier") String username,
+      String password) {}
 
   public record RegisterRequest(String username, String email, String password) {}
 
