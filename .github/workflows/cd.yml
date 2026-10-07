@@ -1,0 +1,97 @@
+name: DETE CD — Continuous Deployment to Oracle Cloud
+
+on:
+  push:
+    branches: [ master, main ]
+    paths:
+      - 'services/**'
+      - 'libs/**'
+      - 'frontend/**'
+      - 'infra/**'
+      - 'scripts/**'
+      - '.github/workflows/cd.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to K3s Cluster (Oracle VPS)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Deploy on Oracle Cloud VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }}
+          username: ${{ secrets.ORACLE_VPS_USER || 'ubuntu' }}
+          key: ${{ secrets.ORACLE_VPS_SSH_KEY }}
+          timeout: 600s
+          command_timeout: 600s
+          script: |
+            set -e
+            echo "=========================================================="
+            echo " Starting DETE Automated Deployment on K3s Cluster"
+            echo " Commit: ${{ github.sha }}"
+            echo "=========================================================="
+
+            cd /home/ubuntu/dete
+            git fetch origin master
+            git reset --hard origin/master
+
+            echo "--> Compiling Spring Boot Executable JARs..."
+            ./gradlew bootJar -x test --no-daemon --max-workers=2
+
+            echo "--> Packaging Container Images..."
+            chmod +x ./scripts/*.sh
+            ./scripts/package_images.sh
+
+            echo "--> Importing Images to K3s containerd..."
+            ./scripts/import_images_to_k3s.sh
+
+            echo "--> Upgrading Helm Release 'dete'..."
+            helm upgrade --install dete ./infra/helm/dete -n dete
+
+            echo "--> Rolling out Deployment Updates..."
+            kubectl rollout restart deployment account audit auth gateway market-data matching-engine order risk simulator frontend -n dete
+
+            echo "--> Verifying Rollout Status..."
+            kubectl rollout status deployment/gateway -n dete --timeout=180s
+            kubectl rollout status deployment/order -n dete --timeout=180s
+            kubectl rollout status deployment/frontend -n dete --timeout=180s
+            kubectl rollout status deployment/account -n dete --timeout=180s
+
+            echo "All microservices successfully deployed and running."
+
+  smoke-test:
+    name: Automated Smoke & Integration Verification
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Execute Live Smoke Tests on Oracle VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }}
+          username: ${{ secrets.ORACLE_VPS_USER || 'ubuntu' }}
+          key: ${{ secrets.ORACLE_VPS_SSH_KEY }}
+          timeout: 120s
+          script: |
+            set -e
+            echo "--> Running DETE Smoke Tests..."
+            python3 /home/ubuntu/dete/scripts/smoke_test.py
+
+      - name: Post Deployment Summary
+        if: always()
+        run: |
+          echo "### 🚀 DETE Deployment Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Host**: \`${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trading Web UI**: http://${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }}/" >> $GITHUB_STEP_SUMMARY
+          echo "- **Grafana Telemetry**: http://${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }}/grafana/" >> $GITHUB_STEP_SUMMARY

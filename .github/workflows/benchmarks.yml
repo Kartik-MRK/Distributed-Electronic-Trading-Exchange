@@ -1,0 +1,37 @@
+name: DETE Benchmarks — Performance Regression Check
+
+on:
+  schedule:
+    # Run every night at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  performance-regression:
+    name: Latency & Throughput Benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Run Benchmark Suite on Oracle VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }}
+          username: ${{ secrets.ORACLE_VPS_USER || 'ubuntu' }}
+          key: ${{ secrets.ORACLE_VPS_SSH_KEY }}
+          timeout: 300s
+          script: |
+            set -e
+            echo "=========================================================="
+            echo " Running DETE Performance Benchmark & Regression Check"
+            echo "=========================================================="
+
+            python3 /home/ubuntu/dete/scripts/run_benchmarks.py
+
+      - name: Benchmark Completion Notification
+        if: always()
+        run: |
+          echo "### ⚡ Nightly Benchmark Completed: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target Host**: \`${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Reference Baseline**: \`benchmarks/baseline.json\`" >> $GITHUB_STEP_SUMMARY

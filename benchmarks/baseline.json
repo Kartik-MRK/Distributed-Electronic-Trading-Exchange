@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "environment": "Oracle Cloud ARM64 Ampere A1 (2 vCPU, 12 GB RAM)",
+  "baseline_date": "2026-10-07",
+  "sla_thresholds": {
+    "health_check_max_latency_ms": 50.0,
+    "auth_login_max_latency_ms": 2000.0,
+    "order_placement_p50_max_ms": 250.0,
+    "order_placement_p95_max_ms": 350.0,
+    "order_placement_p99_max_ms": 400.0,
+    "max_allowed_regression_pct": 20.0
+  },
+  "baseline_metrics": {
+    "total_orders": 20,
+    "success_rate_pct": 100.0,
+    "min_latency_ms": 90.85,
+    "avg_latency_ms": 200.06,
+    "p50_latency_ms": 211.18,
+    "p95_latency_ms": 296.35,
+    "p99_latency_ms": 296.35,
+    "max_latency_ms": 296.35
+  }
+}
