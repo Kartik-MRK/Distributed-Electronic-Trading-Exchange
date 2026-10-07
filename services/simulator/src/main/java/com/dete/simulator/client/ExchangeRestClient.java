@@ -24,6 +24,7 @@ public class ExchangeRestClient {
   private final SimulatorProperties properties;
   private final RestClient restClient;
 
+  @org.springframework.beans.factory.annotation.Autowired
   public ExchangeRestClient(SimulatorProperties properties) {
     this.properties = properties;
     this.restClient = RestClient.builder().build();
