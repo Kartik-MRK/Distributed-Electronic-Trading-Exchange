@@ -31,7 +31,7 @@ public class MarketDataController {
     this.marketDataService = marketDataService;
   }
 
-  @GetMapping("/{instrument}/orderbook")
+  @GetMapping(value = {"/{instrument}/orderbook", "/depth/{instrument}", "/{instrument}/depth"})
   public ResponseEntity<OrderBookSnapshotResponse> getOrderBook(
       @PathVariable String instrument, @RequestParam(defaultValue = "20") int depth) {
     Instrument inst = resolveInstrument(instrument);
