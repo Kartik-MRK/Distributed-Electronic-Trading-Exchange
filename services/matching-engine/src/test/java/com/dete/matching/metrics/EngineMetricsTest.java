@@ -26,11 +26,7 @@ class EngineMetricsTest {
     engineMetrics.recordTradeExecuted(Instrument.BTC_USD, 3);
 
     double count =
-        registry
-            .get("trades_executed_total")
-            .tag("instrument", "BTC-USD")
-            .counter()
-            .count();
+        registry.get("trades_executed_total").tag("instrument", "BTC-USD").counter().count();
 
     assertThat(count).isEqualTo(3.0);
   }
@@ -42,19 +38,11 @@ class EngineMetricsTest {
     engineMetrics.recordOrderE2eLatency(Instrument.ETH_USD, 1_200_000L); // 1.2 milliseconds
 
     assertThat(
-            registry
-                .get("matching_latency_seconds")
-                .tag("instrument", "ETH-USD")
-                .timer()
-                .count())
+            registry.get("matching_latency_seconds").tag("instrument", "ETH-USD").timer().count())
         .isEqualTo(1);
 
     assertThat(
-            registry
-                .get("order_e2e_latency_seconds")
-                .tag("instrument", "ETH-USD")
-                .timer()
-                .count())
+            registry.get("order_e2e_latency_seconds").tag("instrument", "ETH-USD").timer().count())
         .isEqualTo(1);
   }
 

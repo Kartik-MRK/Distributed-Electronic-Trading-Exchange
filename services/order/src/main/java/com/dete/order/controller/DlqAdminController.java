@@ -30,9 +30,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Administrative DLQ management endpoint allowing operations and regulatory compliance teams
- * to inspect poisoned/failed Kafka records with failure metadata headers and replay them back
- * to production topics.
+ * Administrative DLQ management endpoint allowing operations and regulatory compliance teams to
+ * inspect poisoned/failed Kafka records with failure metadata headers and replay them back to
+ * production topics.
  */
 @RestController
 @RequestMapping("/admin/dlq")
@@ -60,10 +60,7 @@ public class DlqAdminController {
 
   @GetMapping("/topics")
   public ResponseEntity<Map<String, Object>> getKnownDlqTopics() {
-    return ResponseEntity.ok(
-        Map.of(
-            "topics", KNOWN_DLQ_TOPICS,
-            "count", KNOWN_DLQ_TOPICS.size()));
+    return ResponseEntity.ok(Map.of("topics", KNOWN_DLQ_TOPICS, "count", KNOWN_DLQ_TOPICS.size()));
   }
 
   @GetMapping("/messages")
@@ -74,8 +71,7 @@ public class DlqAdminController {
 
   @GetMapping("/{topic}")
   public ResponseEntity<Map<String, Object>> peekDlqTopic(
-      @PathVariable String topic,
-      @RequestParam(defaultValue = "20") int maxMessages) {
+      @PathVariable String topic, @RequestParam(defaultValue = "20") int maxMessages) {
     String dlqTopic = topic.endsWith(".DLQ") ? topic : topic + ".DLQ";
     return peekTopicMessages(dlqTopic, maxMessages);
   }
@@ -126,13 +122,14 @@ public class DlqAdminController {
   public ResponseEntity<Map<String, Object>> reprocessDlqMessages(
       @RequestParam(defaultValue = "10") int maxMessages) {
     return reprocessTopicMessages(
-        OrderEventConsumer.TOPIC_ORDER_EVENTS_DLQ, OrderEventConsumer.TOPIC_ORDER_EVENTS, maxMessages);
+        OrderEventConsumer.TOPIC_ORDER_EVENTS_DLQ,
+        OrderEventConsumer.TOPIC_ORDER_EVENTS,
+        maxMessages);
   }
 
   @PostMapping("/{topic}/reprocess")
   public ResponseEntity<Map<String, Object>> reprocessDlqTopic(
-      @PathVariable String topic,
-      @RequestParam(defaultValue = "20") int maxMessages) {
+      @PathVariable String topic, @RequestParam(defaultValue = "20") int maxMessages) {
     String dlqTopic = topic.endsWith(".DLQ") ? topic : topic + ".DLQ";
     String targetTopic = topic.endsWith(".DLQ") ? topic.substring(0, topic.length() - 4) : topic;
     return reprocessTopicMessages(dlqTopic, targetTopic, maxMessages);

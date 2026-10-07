@@ -51,11 +51,7 @@ class GatewayMetricsTest {
     gatewayMetrics.recordRateLimited("USER_RATE_LIMIT");
 
     double count =
-        registry
-            .get("gateway_rate_limited_total")
-            .tag("type", "USER_RATE_LIMIT")
-            .counter()
-            .count();
+        registry.get("gateway_rate_limited_total").tag("type", "USER_RATE_LIMIT").counter().count();
 
     assertThat(count).isEqualTo(1.0);
   }

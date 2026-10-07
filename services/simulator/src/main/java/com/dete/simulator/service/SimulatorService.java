@@ -33,11 +33,12 @@ public class SimulatorService {
   private final AtomicBoolean initialized = new AtomicBoolean(false);
 
   private final ScheduledExecutorService initExecutor =
-      Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread t = new Thread(r, "simulator-init");
-        t.setDaemon(true);
-        return t;
-      });
+      Executors.newSingleThreadScheduledExecutor(
+          r -> {
+            Thread t = new Thread(r, "simulator-init");
+            t.setDaemon(true);
+            return t;
+          });
 
   public SimulatorService(
       SimulatorProperties properties,
@@ -91,44 +92,45 @@ public class SimulatorService {
     }
   }
 
-  @Scheduled(
-      fixedDelayString = "${simulator.drift-interval-seconds:10}000",
-      initialDelay = 10000)
+  @Scheduled(fixedDelayString = "${simulator.drift-interval-seconds:10}000", initialDelay = 10000)
   public void scheduledPriceDrift() {
     if (!running.get() || !initialized.get()) return;
     for (InstrumentBot bot : bots.values()) {
       try {
         bot.driftMidPrice();
       } catch (Exception e) {
-        log.debug("Error during mid price drift for {}: {}", bot.getInstrument().symbol(), e.getMessage());
+        log.debug(
+            "Error during mid price drift for {}: {}",
+            bot.getInstrument().symbol(),
+            e.getMessage());
       }
     }
   }
 
-  @Scheduled(
-      fixedDelayString = "${simulator.trade-interval-seconds:3}000",
-      initialDelay = 12000)
+  @Scheduled(fixedDelayString = "${simulator.trade-interval-seconds:3}000", initialDelay = 12000)
   public void scheduledTradeFill() {
     if (!running.get() || !initialized.get()) return;
     for (InstrumentBot bot : bots.values()) {
       try {
         bot.generateFill();
       } catch (Exception e) {
-        log.debug("Error during trade generation for {}: {}", bot.getInstrument().symbol(), e.getMessage());
+        log.debug(
+            "Error during trade generation for {}: {}",
+            bot.getInstrument().symbol(),
+            e.getMessage());
       }
     }
   }
 
-  @Scheduled(
-      fixedDelayString = "${simulator.refresh-interval-seconds:4}000",
-      initialDelay = 15000)
+  @Scheduled(fixedDelayString = "${simulator.refresh-interval-seconds:4}000", initialDelay = 15000)
   public void scheduledOrderRefresh() {
     if (!running.get() || !initialized.get()) return;
     for (InstrumentBot bot : bots.values()) {
       try {
         bot.refreshOrders();
       } catch (Exception e) {
-        log.debug("Error during order refresh for {}: {}", bot.getInstrument().symbol(), e.getMessage());
+        log.debug(
+            "Error during order refresh for {}: {}", bot.getInstrument().symbol(), e.getMessage());
       }
     }
   }

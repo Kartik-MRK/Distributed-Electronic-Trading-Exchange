@@ -39,11 +39,14 @@ class BotAccountManagerTest {
     UUID demoId = UUID.randomUUID();
 
     when(restClient.login(eq("bot_maker"), any()))
-        .thenReturn(new AuthDtos.AuthResponse(makerId, "bot_maker", "maker-jwt", "refresh", "Bearer", 900));
+        .thenReturn(
+            new AuthDtos.AuthResponse(makerId, "bot_maker", "maker-jwt", "refresh", "Bearer", 900));
     when(restClient.login(eq("bot_taker"), any()))
-        .thenReturn(new AuthDtos.AuthResponse(takerId, "bot_taker", "taker-jwt", "refresh", "Bearer", 900));
+        .thenReturn(
+            new AuthDtos.AuthResponse(takerId, "bot_taker", "taker-jwt", "refresh", "Bearer", 900));
     when(restClient.login(eq("demo"), any()))
-        .thenReturn(new AuthDtos.AuthResponse(demoId, "demo", "demo-jwt", "refresh", "Bearer", 900));
+        .thenReturn(
+            new AuthDtos.AuthResponse(demoId, "demo", "demo-jwt", "refresh", "Bearer", 900));
 
     boolean success = manager.initialize();
 

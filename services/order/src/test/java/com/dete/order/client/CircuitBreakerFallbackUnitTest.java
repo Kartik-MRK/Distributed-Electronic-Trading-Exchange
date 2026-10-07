@@ -12,7 +12,6 @@ import com.dete.order.dto.CreateOrderRequest;
 import com.dete.order.dto.ErrorResponse;
 import com.dete.order.exception.AccountServiceUnavailableException;
 import com.dete.order.exception.InsufficientFundsException;
-import com.dete.order.exception.PreTradeRiskException;
 import com.dete.order.exception.RiskServiceUnavailableException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
@@ -46,31 +45,42 @@ class CircuitBreakerFallbackUnitTest {
   }
 
   @Test
-  @DisplayName("HttpAccountClient reserve fallback throws AccountServiceUnavailableException with ACCOUNT_SERVICE_UNAVAILABLE")
+  @DisplayName(
+      "HttpAccountClient reserve fallback throws AccountServiceUnavailableException with ACCOUNT_SERVICE_UNAVAILABLE")
   void testAccountReserveFallback() {
     UUID accountId = UUID.randomUUID();
     UUID orderId = UUID.randomUUID();
 
-    assertThatThrownBy(() ->
-        accountClient.reserveFundsFallback(accountId, orderId, "USDT", 1000L, new ConnectException("Connection refused")))
+    assertThatThrownBy(
+            () ->
+                accountClient.reserveFundsFallback(
+                    accountId, orderId, "USDT", 1000L, new ConnectException("Connection refused")))
         .isInstanceOf(AccountServiceUnavailableException.class)
         .hasMessageContaining("ACCOUNT_SERVICE_UNAVAILABLE");
   }
 
   @Test
-  @DisplayName("HttpAccountClient reserve fallback preserves InsufficientFundsException without masking")
+  @DisplayName(
+      "HttpAccountClient reserve fallback preserves InsufficientFundsException without masking")
   void testAccountReservePreservesInsufficientFunds() {
     UUID accountId = UUID.randomUUID();
     UUID orderId = UUID.randomUUID();
 
-    assertThatThrownBy(() ->
-        accountClient.reserveFundsFallback(accountId, orderId, "USDT", 1000L, new InsufficientFundsException("Not enough USD")))
+    assertThatThrownBy(
+            () ->
+                accountClient.reserveFundsFallback(
+                    accountId,
+                    orderId,
+                    "USDT",
+                    1000L,
+                    new InsufficientFundsException("Not enough USD")))
         .isInstanceOf(InsufficientFundsException.class)
         .hasMessageContaining("Not enough USD");
   }
 
   @Test
-  @DisplayName("GrpcRiskClient fallback throws RiskServiceUnavailableException with RISK_SERVICE_UNAVAILABLE")
+  @DisplayName(
+      "GrpcRiskClient fallback throws RiskServiceUnavailableException with RISK_SERVICE_UNAVAILABLE")
   void testRiskFallback() {
     CreateOrderRequest request =
         new CreateOrderRequest(
@@ -80,16 +90,20 @@ class CircuitBreakerFallbackUnitTest {
             65_000L * FixedPoint.SCALE,
             1L * FixedPoint.SCALE);
 
-    assertThatThrownBy(() ->
-        riskClient.riskFallback(request, UUID.randomUUID(), new ConnectException("Risk service offline")))
+    assertThatThrownBy(
+            () ->
+                riskClient.riskFallback(
+                    request, UUID.randomUUID(), new ConnectException("Risk service offline")))
         .isInstanceOf(RiskServiceUnavailableException.class)
         .hasMessageContaining("RISK_SERVICE_UNAVAILABLE");
   }
 
   @Test
-  @DisplayName("GlobalExceptionHandler maps RiskServiceUnavailableException to 503 with code RISK_SERVICE_UNAVAILABLE")
+  @DisplayName(
+      "GlobalExceptionHandler maps RiskServiceUnavailableException to 503 with code RISK_SERVICE_UNAVAILABLE")
   void testExceptionHandlerRiskUnavailable() {
-    RiskServiceUnavailableException ex = new RiskServiceUnavailableException("Connection timed out");
+    RiskServiceUnavailableException ex =
+        new RiskServiceUnavailableException("Connection timed out");
     ResponseEntity<ErrorResponse> response = exceptionHandler.handleRiskUnavailable(ex);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
@@ -98,9 +112,11 @@ class CircuitBreakerFallbackUnitTest {
   }
 
   @Test
-  @DisplayName("GlobalExceptionHandler maps AccountServiceUnavailableException to 503 with code ACCOUNT_SERVICE_UNAVAILABLE")
+  @DisplayName(
+      "GlobalExceptionHandler maps AccountServiceUnavailableException to 503 with code ACCOUNT_SERVICE_UNAVAILABLE")
   void testExceptionHandlerAccountUnavailable() {
-    AccountServiceUnavailableException ex = new AccountServiceUnavailableException("Service unreachable");
+    AccountServiceUnavailableException ex =
+        new AccountServiceUnavailableException("Service unreachable");
     ResponseEntity<ErrorResponse> response = exceptionHandler.handleAccountUnavailable(ex);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
@@ -109,7 +125,8 @@ class CircuitBreakerFallbackUnitTest {
   }
 
   @Test
-  @DisplayName("GlobalExceptionHandler maps CallNotPermittedException for open circuit breakers to 503")
+  @DisplayName(
+      "GlobalExceptionHandler maps CallNotPermittedException for open circuit breakers to 503")
   void testExceptionHandlerCallNotPermitted() {
     CircuitBreaker cb = CircuitBreaker.ofDefaults("riskService");
     CallNotPermittedException ex = CallNotPermittedException.createCallNotPermittedException(cb);

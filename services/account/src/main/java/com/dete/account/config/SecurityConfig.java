@@ -3,7 +3,6 @@ package com.dete.account.config;
 import com.dete.common.security.JwtAuthenticationFilter;
 import com.dete.common.security.JwtTokenValidator;
 import jakarta.servlet.http.HttpServletResponse;
-import java.security.KeyPairGenerator;
 import java.security.PublicKey;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -23,11 +22,13 @@ public class SecurityConfig {
   @Bean
   @ConditionalOnMissingBean
   public PublicKey rsaPublicKey(
-      @org.springframework.beans.factory.annotation.Value("${security.jwt.public-key:}") String publicKeyB64) {
+      @org.springframework.beans.factory.annotation.Value("${security.jwt.public-key:}")
+          String publicKeyB64) {
     if (publicKeyB64 != null && !publicKeyB64.isBlank()) {
       return com.dete.common.security.RsaKeyUtils.parsePublicKey(publicKeyB64);
     }
-    return com.dete.common.security.RsaKeyUtils.parsePublicKey(com.dete.common.security.RsaKeyUtils.DEFAULT_PUBLIC_KEY);
+    return com.dete.common.security.RsaKeyUtils.parsePublicKey(
+        com.dete.common.security.RsaKeyUtils.DEFAULT_PUBLIC_KEY);
   }
 
   @Bean

@@ -34,9 +34,7 @@ class SimulatorControllerTest {
     when(simulatorService.isRunning()).thenReturn(true);
     when(simulatorService.isInitialized()).thenReturn(true);
     when(simulatorService.getBotStatuses())
-        .thenReturn(
-            List.of(
-                new SimulatorService.BotStatusDto("BTC-USD", 65000.0, 15, 15)));
+        .thenReturn(List.of(new SimulatorService.BotStatusDto("BTC-USD", 65000.0, 15, 15)));
 
     mockMvc
         .perform(get("/simulator/status"))

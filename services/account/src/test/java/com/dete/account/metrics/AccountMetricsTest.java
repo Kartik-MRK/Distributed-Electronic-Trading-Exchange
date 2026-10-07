@@ -27,18 +27,10 @@ class AccountMetricsTest {
     accountMetrics.recordLedgerEntry("SETTLE");
 
     double depositCount =
-        registry
-            .get("ledger_entries_total")
-            .tag("type", "DEPOSIT")
-            .counter()
-            .count();
+        registry.get("ledger_entries_total").tag("type", "DEPOSIT").counter().count();
 
     double settleCount =
-        registry
-            .get("ledger_entries_total")
-            .tag("type", "SETTLE")
-            .counter()
-            .count();
+        registry.get("ledger_entries_total").tag("type", "SETTLE").counter().count();
 
     assertThat(depositCount).isEqualTo(1.0);
     assertThat(settleCount).isEqualTo(2.0);

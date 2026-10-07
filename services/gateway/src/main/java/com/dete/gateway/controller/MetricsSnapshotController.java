@@ -2,7 +2,6 @@ package com.dete.gateway.controller;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -47,7 +46,8 @@ public class MetricsSnapshotController {
     serviceTargets.put("auth", new ServiceTarget("auth", 8081, authUrl));
     serviceTargets.put("account", new ServiceTarget("account", 8082, accountUrl));
     serviceTargets.put("order", new ServiceTarget("order", 8083, orderUrl));
-    serviceTargets.put("matching-engine", new ServiceTarget("matching-engine", 8084, matchingEngineUrl));
+    serviceTargets.put(
+        "matching-engine", new ServiceTarget("matching-engine", 8084, matchingEngineUrl));
     serviceTargets.put("risk", new ServiceTarget("risk", 8085, riskUrl));
     serviceTargets.put("audit", new ServiceTarget("audit", 8086, auditUrl));
     serviceTargets.put("market-data", new ServiceTarget("market-data", 8087, marketDataUrl));
@@ -73,9 +73,22 @@ public class MetricsSnapshotController {
                       "kafkaConsumerLag",
                           List.of(
                               Map.of("topic", "order.commands", "group", "engine-group", "lag", 0),
-                              Map.of("topic", "trade.executions", "group", "account-settlement-group", "lag", 0),
-                              Map.of("topic", "order.events", "group", "market-data-group", "lag", 0),
-                              Map.of("topic", "audit.events", "group", "audit-service-group", "lag", 0)),
+                              Map.of(
+                                  "topic",
+                                  "trade.executions",
+                                  "group",
+                                  "account-settlement-group",
+                                  "lag",
+                                  0),
+                              Map.of(
+                                  "topic", "order.events", "group", "market-data-group", "lag", 0),
+                              Map.of(
+                                  "topic",
+                                  "audit.events",
+                                  "group",
+                                  "audit-service-group",
+                                  "lag",
+                                  0)),
                       "servicesHealth", healthList,
                       "activeWebsocketConnections", 3,
                       "jvmMemory",
@@ -99,10 +112,11 @@ public class MetricsSnapshotController {
         .retrieve()
         .bodyToMono(Map.class)
         .timeout(Duration.ofMillis(800))
-        .map(body -> {
-          String status = body.get("status") != null ? body.get("status").toString() : "UP";
-          return Map.<String, Object>of("service", service, "status", status, "port", port);
-        })
+        .map(
+            body -> {
+              String status = body.get("status") != null ? body.get("status").toString() : "UP";
+              return Map.<String, Object>of("service", service, "status", status, "port", port);
+            })
         .onErrorReturn(Map.of("service", service, "status", "UNKNOWN", "port", port));
   }
 

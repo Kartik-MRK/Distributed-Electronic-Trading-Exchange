@@ -96,7 +96,9 @@ public class BulkheadGlobalFilter implements GlobalFilter, Ordered {
 
     if (!bulkhead.tryAcquirePermission()) {
       log.warn(
-          "Bulkhead capacity exhausted for service '{}'. Rejecting request to {}", serviceKey, path);
+          "Bulkhead capacity exhausted for service '{}'. Rejecting request to {}",
+          serviceKey,
+          path);
       exchange.getResponse().setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
       exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
       String body =

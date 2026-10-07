@@ -1,10 +1,7 @@
 package com.dete.order.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 import java.util.List;
 import java.util.Map;
@@ -19,6 +16,7 @@ class DlqAdminControllerTest {
 
   @SuppressWarnings("unchecked")
   private final KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
+
   private DlqAdminController controller;
 
   @BeforeEach
@@ -35,13 +33,13 @@ class DlqAdminControllerTest {
 
     @SuppressWarnings("unchecked")
     List<String> topics = (List<String>) response.getBody().get("topics");
-    assertThat(topics).containsExactlyInAnyOrder(
-        "order.commands.DLQ",
-        "order.events.DLQ",
-        "trade.executions.DLQ",
-        "ledger.events.DLQ",
-        "audit.events.DLQ"
-    );
+    assertThat(topics)
+        .containsExactlyInAnyOrder(
+            "order.commands.DLQ",
+            "order.events.DLQ",
+            "trade.executions.DLQ",
+            "ledger.events.DLQ",
+            "audit.events.DLQ");
   }
 
   @Test
@@ -49,6 +47,9 @@ class DlqAdminControllerTest {
   void testReprocessEmptyTopicGraceful() {
     // When topic is empty or broker not running, returns 200 with reprocessedCount 0 or 500 error
     ResponseEntity<Map<String, Object>> response = controller.reprocessDlqTopic("order.events", 5);
-    assertThat(response.getStatusCode().is2xxSuccessful() || response.getStatusCode().is5xxServerError()).isTrue();
+    assertThat(
+            response.getStatusCode().is2xxSuccessful()
+                || response.getStatusCode().is5xxServerError())
+        .isTrue();
   }
 }

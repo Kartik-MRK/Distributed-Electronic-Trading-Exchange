@@ -79,12 +79,18 @@ public class ExchangeRestClient {
       log.debug("Deposited {} {} to account {}", amountNanos, asset, accountId);
       return true;
     } catch (Exception e) {
-      log.warn("Deposit failed for account {} ({}, {}): {}", accountId, asset, amountNanos, e.getMessage());
+      log.warn(
+          "Deposit failed for account {} ({}, {}): {}",
+          accountId,
+          asset,
+          amountNanos,
+          e.getMessage());
       return false;
     }
   }
 
-  public OrderResponseDto placeOrder(String accessToken, CreateOrderDto orderRequest, UUID idempotencyKey) {
+  public OrderResponseDto placeOrder(
+      String accessToken, CreateOrderDto orderRequest, UUID idempotencyKey) {
     try {
       UUID key = idempotencyKey != null ? idempotencyKey : UUID.randomUUID();
       return restClient
@@ -97,8 +103,13 @@ public class ExchangeRestClient {
           .retrieve()
           .body(OrderResponseDto.class);
     } catch (Exception e) {
-      log.debug("Failed to place order ({} {} {} @ {}): {}",
-          orderRequest.side(), orderRequest.quantity(), orderRequest.instrument(), orderRequest.price(), e.getMessage());
+      log.debug(
+          "Failed to place order ({} {} {} @ {}): {}",
+          orderRequest.side(),
+          orderRequest.quantity(),
+          orderRequest.instrument(),
+          orderRequest.price(),
+          e.getMessage());
       return null;
     }
   }

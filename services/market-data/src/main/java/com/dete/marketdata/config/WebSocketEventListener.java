@@ -22,7 +22,9 @@ public class WebSocketEventListener {
   @EventListener
   public void handleWebSocketConnectListener(SessionConnectedEvent event) {
     marketDataMetrics.connectionEstablished();
-    log.info("New WebSocket connection established. Active: {}", marketDataMetrics.getActiveConnections());
+    log.info(
+        "New WebSocket connection established. Active: {}",
+        marketDataMetrics.getActiveConnections());
   }
 
   @EventListener

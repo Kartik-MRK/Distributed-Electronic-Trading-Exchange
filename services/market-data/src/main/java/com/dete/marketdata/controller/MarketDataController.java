@@ -54,7 +54,8 @@ public class MarketDataController {
       @RequestParam(required = false) Long to,
       @RequestParam(defaultValue = "500") int limit) {
     Instrument inst = resolveInstrument(instrument);
-    java.time.Instant toInstant = to != null ? java.time.Instant.ofEpochMilli(to) : java.time.Instant.now();
+    java.time.Instant toInstant =
+        to != null ? java.time.Instant.ofEpochMilli(to) : java.time.Instant.now();
     java.time.Instant fromInstant =
         from != null ? java.time.Instant.ofEpochMilli(from) : toInstant.minusSeconds(3600);
     List<com.dete.marketdata.model.MarketDataTradeRecord> trades =

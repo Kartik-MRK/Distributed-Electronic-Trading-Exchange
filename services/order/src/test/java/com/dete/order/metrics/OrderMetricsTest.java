@@ -46,11 +46,7 @@ class OrderMetricsTest {
     orderMetrics.recordOrderRejected("INSUFFICIENT_FUNDS");
 
     double count =
-        registry
-            .get("orders_rejected_total")
-            .tag("reason", "INSUFFICIENT_FUNDS")
-            .counter()
-            .count();
+        registry.get("orders_rejected_total").tag("reason", "INSUFFICIENT_FUNDS").counter().count();
 
     assertThat(count).isEqualTo(1.0);
   }

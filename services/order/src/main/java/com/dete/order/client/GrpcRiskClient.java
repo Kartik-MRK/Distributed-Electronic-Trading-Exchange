@@ -118,7 +118,9 @@ public class GrpcRiskClient implements PreTradeRiskValidator {
         accountId,
         t.getMessage());
     throw new RiskServiceUnavailableException(
-        "RISK_SERVICE_UNAVAILABLE: Pre-trade risk check unavailable (fail closed): " + t.getMessage(), t);
+        "RISK_SERVICE_UNAVAILABLE: Pre-trade risk check unavailable (fail closed): "
+            + t.getMessage(),
+        t);
   }
 
   @PreDestroy

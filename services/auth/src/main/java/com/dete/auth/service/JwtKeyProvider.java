@@ -1,10 +1,9 @@
 package com.dete.auth.service;
 
 import com.dete.auth.dto.JwksResponse;
+import com.dete.common.security.RsaKeyUtils;
 import java.math.BigInteger;
 import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.interfaces.RSAPublicKey;
@@ -12,7 +11,6 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import com.dete.common.security.RsaKeyUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -27,7 +25,10 @@ public class JwtKeyProvider {
       @Value("${auth.jwt.private-key:}") String privateKeyB64,
       @Value("${auth.jwt.public-key:}") String publicKeyB64) {
     this.keyId = keyId;
-    if (privateKeyB64 != null && !privateKeyB64.isBlank() && publicKeyB64 != null && !publicKeyB64.isBlank()) {
+    if (privateKeyB64 != null
+        && !privateKeyB64.isBlank()
+        && publicKeyB64 != null
+        && !publicKeyB64.isBlank()) {
       PrivateKey priv = RsaKeyUtils.parsePrivateKey(privateKeyB64);
       PublicKey pub = RsaKeyUtils.parsePublicKey(publicKeyB64);
       this.keyPair = new KeyPair(pub, priv);

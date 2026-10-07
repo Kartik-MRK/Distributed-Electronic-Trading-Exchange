@@ -109,7 +109,8 @@ class BulkheadGlobalFilterTest {
     }
 
     // Account service request must still succeed immediately!
-    MockServerHttpRequest accountRequest = MockServerHttpRequest.get("/accounts/me/balances").build();
+    MockServerHttpRequest accountRequest =
+        MockServerHttpRequest.get("/accounts/me/balances").build();
     MockServerWebExchange accountExchange = MockServerWebExchange.from(accountRequest);
 
     AtomicBoolean accountChainCalled = new AtomicBoolean(false);

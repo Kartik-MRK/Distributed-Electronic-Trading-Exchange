@@ -47,7 +47,10 @@ public class OrderMetrics {
             breakerName,
             name -> {
               AtomicInteger stateHolder = new AtomicInteger(state);
-              registry.gauge("circuit_breaker_state", io.micrometer.core.instrument.Tags.of("name", name), stateHolder);
+              registry.gauge(
+                  "circuit_breaker_state",
+                  io.micrometer.core.instrument.Tags.of("name", name),
+                  stateHolder);
               return stateHolder;
             })
         .set(state);

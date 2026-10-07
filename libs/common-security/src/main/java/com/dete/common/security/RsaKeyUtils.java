@@ -7,9 +7,7 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
-/**
- * Utility for parsing and providing standard RS256 keys across DETE microservices.
- */
+/** Utility for parsing and providing standard RS256 keys across DETE microservices. */
 public final class RsaKeyUtils {
 
   public static final String DEFAULT_PUBLIC_KEY =

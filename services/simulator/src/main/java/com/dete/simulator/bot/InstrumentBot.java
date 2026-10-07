@@ -10,7 +10,6 @@ import com.dete.simulator.dto.CreateOrderDto;
 import com.dete.simulator.dto.OrderResponseDto;
 import com.dete.simulator.service.BotAccountManager;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
@@ -60,9 +59,7 @@ public class InstrumentBot {
     return restingAskOrderIds.size();
   }
 
-  /**
-   * Initializes order book depth with N levels of bids and asks.
-   */
+  /** Initializes order book depth with N levels of bids and asks. */
   public void populateOrderBook() {
     String makerToken = accountManager.getMakerToken();
     if (makerToken == null) {
@@ -84,13 +81,15 @@ public class InstrumentBot {
       placeMakerOrder(makerToken, OrderSide.SELL, askPrice, restingAskOrderIds);
     }
 
-    log.info("Populated order book for {} with {} bids and {} asks around mid {}",
-        instrument.symbol(), restingBidOrderIds.size(), restingAskOrderIds.size(), String.format("%.2f", currentMidPrice));
+    log.info(
+        "Populated order book for {} with {} bids and {} asks around mid {}",
+        instrument.symbol(),
+        restingBidOrderIds.size(),
+        restingAskOrderIds.size(),
+        String.format("%.2f", currentMidPrice));
   }
 
-  /**
-   * Drifts mid-price randomly within [-0.3%, +0.3%] every cycle.
-   */
+  /** Drifts mid-price randomly within [-0.3%, +0.3%] every cycle. */
   public void driftMidPrice() {
     double delta = (random.nextDouble() * 0.006) - 0.003; // [-0.3%, +0.3%]
 
@@ -102,13 +101,14 @@ public class InstrumentBot {
     }
 
     currentMidPrice = currentMidPrice * (1.0 + delta);
-    log.debug("Drifted mid-price for {} to {} (delta: {}%)",
-        instrument.symbol(), String.format("%.2f", currentMidPrice), String.format("%.3f", delta * 100));
+    log.debug(
+        "Drifted mid-price for {} to {} (delta: {}%)",
+        instrument.symbol(),
+        String.format("%.2f", currentMidPrice),
+        String.format("%.3f", delta * 100));
   }
 
-  /**
-   * Refreshes resting orders, cancels stale quotes, and replenishes depth at the new mid price.
-   */
+  /** Refreshes resting orders, cancels stale quotes, and replenishes depth at the new mid price. */
   public void refreshOrders() {
     String makerToken = accountManager.getMakerToken();
     if (makerToken == null) return;
@@ -133,36 +133,36 @@ public class InstrumentBot {
     }
   }
 
-  /**
-   * Places a small market / crossing order from the Taker bot to generate trade executions.
-   */
+  /** Places a small market / crossing order from the Taker bot to generate trade executions. */
   public void generateFill() {
     String takerToken = accountManager.getTakerToken();
     if (takerToken == null) return;
 
     OrderSide side = random.nextBoolean() ? OrderSide.BUY : OrderSide.SELL;
     double sizeRange = config.getOrderSizeMax() - config.getOrderSizeMin();
-    double quantity = config.getOrderSizeMin() + (random.nextDouble() * Math.max(0.0001, sizeRange * 0.3));
+    double quantity =
+        config.getOrderSizeMin() + (random.nextDouble() * Math.max(0.0001, sizeRange * 0.3));
     long quantityNanos = Math.round(quantity * FixedPoint.SCALE);
 
     double halfSpreadPercent = (config.getSpreadBps() / 10000.0) / 2.0;
     // Crossing price to ensure immediate execution with price improvement
-    double crossingPrice = (side == OrderSide.BUY)
-        ? currentMidPrice * (1.0 + halfSpreadPercent * 2.0)
-        : currentMidPrice * (1.0 - halfSpreadPercent * 2.0);
+    double crossingPrice =
+        (side == OrderSide.BUY)
+            ? currentMidPrice * (1.0 + halfSpreadPercent * 2.0)
+            : currentMidPrice * (1.0 - halfSpreadPercent * 2.0);
     long priceNanos = Math.round(crossingPrice * FixedPoint.SCALE);
 
-    CreateOrderDto orderRequest = new CreateOrderDto(
-        instrument,
-        side,
-        OrderType.LIMIT,
-        priceNanos,
-        quantityNanos);
+    CreateOrderDto orderRequest =
+        new CreateOrderDto(instrument, side, OrderType.LIMIT, priceNanos, quantityNanos);
 
     OrderResponseDto response = restClient.placeOrder(takerToken, orderRequest, UUID.randomUUID());
     if (response != null) {
-      log.debug("Generated simulated fill: {} {} {} @ {}",
-          side, String.format("%.4f", quantity), instrument.symbol(), String.format("%.2f", crossingPrice));
+      log.debug(
+          "Generated simulated fill: {} {} {} @ {}",
+          side,
+          String.format("%.4f", quantity),
+          instrument.symbol(),
+          String.format("%.2f", crossingPrice));
     }
   }
 
@@ -173,12 +173,8 @@ public class InstrumentBot {
     long priceNanos = Math.round(price * FixedPoint.SCALE);
     long quantityNanos = Math.round(quantity * FixedPoint.SCALE);
 
-    CreateOrderDto request = new CreateOrderDto(
-        instrument,
-        side,
-        OrderType.LIMIT,
-        priceNanos,
-        quantityNanos);
+    CreateOrderDto request =
+        new CreateOrderDto(instrument, side, OrderType.LIMIT, priceNanos, quantityNanos);
 
     OrderResponseDto response = restClient.placeOrder(token, request, UUID.randomUUID());
     if (response != null && response.orderId() != null) {

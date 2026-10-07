@@ -8,10 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.dete.common.domain.enums.Instrument;
-import com.dete.common.domain.enums.OrderSide;
 import com.dete.common.domain.enums.OrderStatus;
-import com.dete.common.domain.enums.OrderType;
 import com.dete.simulator.client.ExchangeRestClient;
 import com.dete.simulator.config.SimulatorProperties;
 import com.dete.simulator.dto.CreateOrderDto;
