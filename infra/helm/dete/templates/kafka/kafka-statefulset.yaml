@@ -22,7 +22,7 @@ spec:
           command:
             - "sh"
             - "-c"
-            - "unset KAFKA_PORT; exec /etc/confluent/docker/run"
+            - "rm -f /var/lib/kafka/data/meta.properties; unset KAFKA_PORT; exec /etc/confluent/docker/run"
           ports:
             - containerPort: 9092
               name: kafka
