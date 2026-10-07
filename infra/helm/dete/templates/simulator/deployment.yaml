@@ -25,13 +25,17 @@ spec:
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: "docker"
-            - name: GATEWAY_URL
-              value: "http://gateway:8080"
-            - name: AUTH_URL
+            - name: AUTH_SERVICE_URL
               value: "http://auth:8081"
-            - name: ACCOUNT_URL
+            - name: ACCOUNT_SERVICE_URL
               value: "http://account:8082"
-            - name: ORDER_URL
+            - name: ORDER_SERVICE_URL
+              value: "http://order:8083"
+            - name: SIMULATOR_AUTH_URL
+              value: "http://auth:8081"
+            - name: SIMULATOR_ACCOUNT_URL
+              value: "http://account:8082"
+            - name: SIMULATOR_ORDER_URL
               value: "http://order:8083"
           resources:
             {{- toYaml .Values.simulator.resources | nindent 12 }}
