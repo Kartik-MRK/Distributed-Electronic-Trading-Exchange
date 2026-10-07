@@ -39,12 +39,16 @@ spec:
               value: "PLAINTEXT://kafka:9092"
             - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
               value: "1"
+            - name: KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS
+              value: "25"
             - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
               value: "1"
             - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
               value: "1"
             - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
-              value: "false"
+              value: "true"
+            - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
+              value: "0"
             - name: KAFKA_NUM_PARTITIONS
               value: "3"
           resources:
