@@ -34,3 +34,11 @@ tasks.register<JavaExec>("jmh") {
         "-t", "1"
     )
 }
+
+tasks.register<JavaExec>("loadSim") {
+    description = "Runs the local exchange multi-threaded load simulator on bare metal"
+    group = "benchmark"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.dete.benchmark.LocalExchangeLoadSimulator")
+}
+
