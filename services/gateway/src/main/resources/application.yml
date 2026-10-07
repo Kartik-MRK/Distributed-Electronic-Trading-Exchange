@@ -39,7 +39,7 @@ spring:
         - id: order-service
           uri: ${ORDER_SERVICE_URL:http://localhost:8083}
           predicates:
-            - Path=/orders/**
+            - Path=/orders, /orders/**
           filters:
             - name: CircuitBreaker
               args:
@@ -48,7 +48,7 @@ spring:
         - id: account-service
           uri: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
           predicates:
-            - Path=/accounts/**
+            - Path=/accounts, /accounts/**
           filters:
             - name: CircuitBreaker
               args:
@@ -57,7 +57,7 @@ spring:
         - id: market-data-service
           uri: ${MARKET_DATA_SERVICE_URL:http://localhost:8087}
           predicates:
-            - Path=/market-data/**
+            - Path=/market-data, /market-data/**
           filters:
             - name: CircuitBreaker
               args:
@@ -66,7 +66,7 @@ spring:
         - id: audit-service
           uri: ${AUDIT_SERVICE_URL:http://localhost:8086}
           predicates:
-            - Path=/admin/audit/**
+            - Path=/admin/audit, /admin/audit/**
           filters:
             - name: CircuitBreaker
               args:

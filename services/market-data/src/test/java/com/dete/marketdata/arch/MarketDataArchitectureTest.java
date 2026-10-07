@@ -52,4 +52,27 @@ public class MarketDataArchitectureTest {
           .resideInAPackage("..service..")
           .andShould()
           .beAnnotatedWith(Service.class);
+
+  @ArchTest
+  static final ArchRule noJavaUtilLogging =
+      com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses()
+          .should()
+          .dependOnClassesThat()
+          .resideInAPackage("java.util.logging..")
+          .because("Use SLF4J for logging across all components");
+
+  @ArchTest
+  static final ArchRule marketDataMustNotImportOtherServiceInternals =
+      com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses()
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "com.dete.order..",
+              "com.dete.account..",
+              "com.dete.matching..",
+              "com.dete.risk..",
+              "com.dete.audit..",
+              "com.dete.auth..",
+              "com.dete.gateway..")
+          .because("Services must only communicate via com.dete.common-* modules");
 }

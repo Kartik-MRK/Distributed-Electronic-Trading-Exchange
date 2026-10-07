@@ -10,7 +10,9 @@ import com.dete.common.events.trade.TradeExecutedEvent;
 import com.dete.matching.engine.OrderBook;
 import com.dete.matching.engine.model.MatchResult;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import net.jqwik.api.Arbitraries;
 import net.jqwik.api.Arbitrary;
@@ -64,12 +66,17 @@ class MatchingEnginePropertyTest {
     long totalSubmittedVolume = 0;
     long totalMatchedVolume = 0;
 
+    Map<UUID, GeneratedOrder> submittedOrders = new HashMap<>();
+
     for (GeneratedOrder o : orders) {
       totalSubmittedVolume += o.quantity();
+      UUID orderId = UUID.randomUUID();
+      submittedOrders.put(orderId, o);
+
       OrderPlacedEvent event =
           new OrderPlacedEvent(
               UUID.randomUUID(),
-              UUID.randomUUID(),
+              orderId,
               o.accountId(),
               Instrument.BTC_USD,
               o.side(),
@@ -85,6 +92,20 @@ class MatchingEnginePropertyTest {
       for (TradeExecutedEvent trade : result.trades()) {
         assertThat(trade.price()).isPositive();
         assertThat(trade.quantity()).isPositive();
+
+        GeneratedOrder buyOrder = submittedOrders.get(trade.buyOrderId());
+        GeneratedOrder sellOrder = submittedOrders.get(trade.sellOrderId());
+        if (buyOrder != null && sellOrder != null) {
+          // Fill price invariant: fill price must never exceed buyer's limit price, nor be below
+          // seller's limit price
+          assertThat(trade.price())
+              .as("Fill price %d must be <= buyer price %d", trade.price(), buyOrder.price())
+              .isLessThanOrEqualTo(buyOrder.price());
+          assertThat(trade.price())
+              .as("Fill price %d must be >= seller price %d", trade.price(), sellOrder.price())
+              .isGreaterThanOrEqualTo(sellOrder.price());
+        }
+
         totalMatchedVolume += trade.quantity() * 2;
       }
     }

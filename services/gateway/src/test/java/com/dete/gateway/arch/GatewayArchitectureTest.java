@@ -33,4 +33,27 @@ public class GatewayArchitectureTest {
           .resideInAPackage("..filter..")
           .andShould()
           .implement(GlobalFilter.class);
+
+  @ArchTest
+  static final ArchRule noJavaUtilLogging =
+      com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses()
+          .should()
+          .dependOnClassesThat()
+          .resideInAPackage("java.util.logging..")
+          .because("Use SLF4J for logging across all components");
+
+  @ArchTest
+  static final ArchRule gatewayMustNotImportOtherServiceInternals =
+      com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses()
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "com.dete.order..",
+              "com.dete.account..",
+              "com.dete.matching..",
+              "com.dete.risk..",
+              "com.dete.marketdata..",
+              "com.dete.audit..",
+              "com.dete.auth..")
+          .because("Services must only communicate via com.dete.common-* modules");
 }

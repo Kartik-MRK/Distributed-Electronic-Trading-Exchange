@@ -97,6 +97,24 @@ public class BalanceRepository {
     return jdbcTemplate.update(sql, amount, accountId, asset, amount);
   }
 
+  public java.util.Map<String, Long> sumTotalBalancesByAsset() {
+    String sql =
+        """
+        SELECT asset, COALESCE(SUM(available + reserved), 0) AS total_balance
+        FROM account.balances
+        GROUP BY asset
+        """;
+    return jdbcTemplate.query(
+        sql,
+        rs -> {
+          java.util.Map<String, Long> map = new java.util.HashMap<>();
+          while (rs.next()) {
+            map.put(rs.getString("asset"), rs.getLong("total_balance"));
+          }
+          return map;
+        });
+  }
+
   private static Balance mapRow(ResultSet rs, int rowNum) throws SQLException {
     return new Balance(
         rs.getObject("account_id", UUID.class),

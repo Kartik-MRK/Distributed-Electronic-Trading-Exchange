@@ -38,4 +38,27 @@ public class MatchingArchitectureTest {
           .resideInAnyPackage("com.dete..", "java..", "org.slf4j..")
           .because(
               "Engine models must be pure high-performance data structures independent of framework annotations");
+
+  @ArchTest
+  public static final ArchRule noJavaUtilLogging =
+      noClasses()
+          .should()
+          .dependOnClassesThat()
+          .resideInAPackage("java.util.logging..")
+          .because("Use SLF4J for logging across all components");
+
+  @ArchTest
+  public static final ArchRule matchingEngineMustNotImportOtherServiceInternals =
+      noClasses()
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "com.dete.order..",
+              "com.dete.account..",
+              "com.dete.risk..",
+              "com.dete.marketdata..",
+              "com.dete.audit..",
+              "com.dete.auth..",
+              "com.dete.gateway..")
+          .because("Services must only communicate via com.dete.common-* modules");
 }

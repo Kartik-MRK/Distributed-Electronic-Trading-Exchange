@@ -69,6 +69,29 @@ public class LedgerRepository {
     return count != null ? count : 0L;
   }
 
+  public java.util.Map<String, Long> sumNetLedgerByAsset() {
+    String sql =
+        """
+        SELECT asset,
+               COALESCE(SUM(CASE
+                 WHEN entry_type IN ('DEPOSIT', 'CREDIT') THEN amount
+                 WHEN entry_type IN ('WITHDRAWAL', 'DEBIT', 'FEE') THEN -amount
+                 ELSE 0
+               END), 0) AS net_ledger
+        FROM account.ledger_entries
+        GROUP BY asset
+        """;
+    return jdbcTemplate.query(
+        sql,
+        rs -> {
+          java.util.Map<String, Long> map = new java.util.HashMap<>();
+          while (rs.next()) {
+            map.put(rs.getString("asset"), rs.getLong("net_ledger"));
+          }
+          return map;
+        });
+  }
+
   private static LedgerEntry mapRow(ResultSet rs, int rowNum) throws SQLException {
     return new LedgerEntry(
         rs.getLong("entry_id"),

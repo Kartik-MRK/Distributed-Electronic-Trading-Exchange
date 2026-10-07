@@ -38,4 +38,27 @@ public class AuthArchitectureTest {
           .haveSimpleNameEndingWith("Repository")
           .should()
           .resideInAPackage("..repository..");
+
+  @ArchTest
+  static final ArchRule noJavaUtilLogging =
+      noClasses()
+          .should()
+          .dependOnClassesThat()
+          .resideInAPackage("java.util.logging..")
+          .because("Use SLF4J for logging across all components");
+
+  @ArchTest
+  static final ArchRule authMustNotImportOtherServiceInternals =
+      noClasses()
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "com.dete.order..",
+              "com.dete.account..",
+              "com.dete.matching..",
+              "com.dete.risk..",
+              "com.dete.marketdata..",
+              "com.dete.audit..",
+              "com.dete.gateway..")
+          .because("Services must only communicate via com.dete.common-* modules");
 }
