@@ -53,17 +53,15 @@ spec:
             - name: kafka-data
               mountPath: /var/lib/kafka/data
           readinessProbe:
-            exec:
-              command: ["kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 9092
             initialDelaySeconds: 20
             periodSeconds: 10
-            timeoutSeconds: 5
-          livenessProbe:
-            exec:
-              command: ["kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
-            initialDelaySeconds: 30
-            periodSeconds: 15
-            timeoutSeconds: 5
   volumeClaimTemplates:
     - metadata:
         name: kafka-data
