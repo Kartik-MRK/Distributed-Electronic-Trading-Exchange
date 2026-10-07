@@ -10,9 +10,9 @@
 | Metric | Status |
 |---|---|
 | **Total Phases** | 18 (Phase 0 to 17) |
-| **Completed** | 14 / 18 (77.8%) |
-| **Current Focus** | **Phase 14 — Deployment: Docker & K3s (Helm)** |
-| **Progress Bar** | `[██████████████░░░░]` |
+| **Completed** | 15 / 18 (83.3%) |
+| **Current Focus** | **Phase 15 — CI/CD Pipeline** |
+| **Progress Bar** | `[███████████████░░░]` |
 
 ---
 
@@ -34,8 +34,8 @@
 | **11** | **Simulator / Market-Maker Bot Service** | **Completed** | Oct 05, 2026 |
 | **12** | **Frontend Phase B (Dashboard & Replay)** | **Completed** | Oct 05, 2026 |
 | **13** | **Resilience & Fault Tolerance** | **Completed** | Oct 05, 2026 |
-| **14** | Deployment — Docker & K3s | *Up Next* | — |
-| **15** | CI/CD Pipeline | Pending | — |
+| **14** | **Deployment — Docker & K3s (Helm)** | **Completed** | Oct 07, 2026 |
+| **15** | CI/CD Pipeline | *Up Next* | — |
 | **16** | Performance Engineering | Pending | — |
 | **17** | Hardening & Polish | Pending | — |
 
@@ -438,6 +438,32 @@
     - [CircuitBreakerFallbackUnitTest.java](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/services/order/src/test/java/com/dete/order/client/CircuitBreakerFallbackUnitTest.java): Verified `RISK_SERVICE_UNAVAILABLE` and `ACCOUNT_SERVICE_UNAVAILABLE` exception throwing, preservation of `InsufficientFundsException`, and `GlobalExceptionHandler` 503 response mappings (6/6 tests passed).
     - Full mono-repo test class compilation (`.\gradlew.bat testClasses`) succeeded across all 13 modules in 53s.
 
-
-
-
+### Phase 14 — Deployment: Docker & K3s (Helm)
+- **Status:** **Completed** (Oct 07, 2026)
+- **Completed Components:**
+  - **Clean-Slate Oracle Cloud ARM64 Infrastructure Setup:**
+    - Configured remote Linux VPS node (`oraclevps`, 141.148.223.82, Ubuntu 22.04 LTS, Ampere Neoverse-N1 2 OCPUs, 12 GB RAM, 200 GB NVMe).
+    - Installed OpenJDK 21 LTS, Node.js 20, Docker engine, K3s Kubernetes cluster (`v1.36.5+k3s1`), and Helm (`v3.22.0`).
+    - Configured swap allocation and host `iptables` ingress rules (ports 80, 443, 3000, 8080, 3001, 9090).
+  - **Production Image Build & Containerd Import:**
+    - Fast ARM64 multi-project host build (`./gradlew bootJar -x test --max-workers=2`) producing optimized Spring Boot executable jars.
+    - Built lightweight Alpine/Jammy Docker containers for all 10 custom applications: `auth`, `account`, `order`, `matching-engine`, `risk`, `market-data`, `audit`, `gateway`, `simulator`, and Next.js `frontend`.
+    - Imported container images directly into K3s containerd local cache (`sudo k3s ctr images import`).
+  - **Helm Orchestration in `dete` Namespace:**
+    - Deployed unified Helm chart release `dete` managing 16 total pods (10 application pods + Postgres 16, Redis 7, Kafka 7.6.2, ZooKeeper, Prometheus, and Grafana).
+    - All 16 pods reached **1/1 Running** status.
+    - Extreme resource efficiency achieved: **4.5 GiB used out of 11.4 GiB RAM (6.9 GiB free/available)**, 0 bytes swap used, ~13% disk used.
+  - **Kafka Partition & Topic Synchronization:**
+    - Stabilized Kafka 7.6.2 broker and ZooKeeper coordination with clean PVC persistent volumes.
+    - Automated topic generation via `kafka-init-topics` provisioning all 14 operational and DLQ topics with identical cluster IDs.
+  - **RS256 Deterministic JWT Security Alignment:**
+    - Standardized RSA 2048-bit keypair utility ([RsaKeyUtils.java](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/libs/common-security/src/main/java/com/dete/common/security/RsaKeyUtils.java)) across all microservices, allowing seamless asymmetric JWT token verification across the API Gateway, Order, Account, Market Data, and Audit boundaries.
+  - **Host Nginx Reverse Proxy (Unified Port 80):**
+    - Configured host Nginx server on port 80 routing `/` to Next.js Trading Terminal (`frontend:3000`), `/auth`, `/orders`, `/accounts`, `/market-data` to API Gateway (`gateway:8080`), `/ws/` for live WebSockets, and `/grafana/` for telemetry dashboards.
+  - **End-to-End Live Verification & Trading Benchmark:**
+    - Created executable verification suite ([scripts/test_exchange_live.py](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/scripts/test_exchange_live.py)).
+    - **Health Checks:** 9/9 services UP in 1-30ms.
+    - **Prometheus Scrape:** 9/9 active scrape targets UP.
+    - **Live Trading Benchmark:** 20/20 orders placed and matched across Gateway; 10 trades settled into double-entry ledger.
+      - **Latency Percentiles:** Min: 90.85 ms, Avg: 200.06 ms, **P50: 211.18 ms, P95: 296.35 ms, P99: 296.35 ms**.
+    - Full metrics and infrastructure report published in [benchmarks/vps_deployment_results.md](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/benchmarks/vps_deployment_results.md).
