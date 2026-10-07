@@ -20,6 +20,10 @@ public class JwtKeyProvider {
   private final String keyId;
   private final KeyPair keyPair;
 
+  public JwtKeyProvider(String keyId) {
+    this(keyId, null, null);
+  }
+
   public JwtKeyProvider(
       @Value("${auth.jwt.key-id:dete-auth-key-1}") String keyId,
       @Value("${auth.jwt.private-key:}") String privateKeyB64,

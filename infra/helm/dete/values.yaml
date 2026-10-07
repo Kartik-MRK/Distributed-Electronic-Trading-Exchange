@@ -105,6 +105,7 @@ matchingEngine:
   image: dete/matching-engine:latest
   replicaCount: 1
   port: 8084
+  jvmArgs: "-XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:+ParallelRefProcEnabled -Xms256m -Xmx512m"
   resources:
     requests:
       cpu: 80m

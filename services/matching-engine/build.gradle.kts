@@ -37,6 +37,10 @@ dependencies {
     testImplementation(libs.archunit.junit5)
 }
 
+tasks.named<Jar>("jar") {
+    enabled = true
+}
+
 tasks.register<JavaExec>("jmhBenchmark") {
     description = "Runs the in-memory matching engine JMH microbenchmark"
     group = "benchmark"
@@ -44,3 +48,4 @@ tasks.register<JavaExec>("jmhBenchmark") {
     mainClass.set("org.openjdk.jmh.Main")
     args = listOf(".*OrderBookBenchmark.*", "-f", "1", "-wi", "1", "-i", "2", "-t", "1")
 }
+

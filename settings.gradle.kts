@@ -20,3 +20,6 @@ include(
     "services:audit",
     "services:simulator"
 )
+
+// Performance Benchmarks
+include("benchmarks")

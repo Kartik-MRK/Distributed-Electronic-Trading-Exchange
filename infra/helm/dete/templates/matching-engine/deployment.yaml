@@ -31,6 +31,8 @@ spec:
               value: "kafka:9092"
             - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
               value: "kafka:9092"
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ .Values.matchingEngine.jvmArgs | default "-XX:+UseG1GC -XX:MaxGCPauseMillis=20 -Xms256m -Xmx512m" | quote }}
           resources:
             {{- toYaml .Values.matchingEngine.resources | nindent 12 }}
           startupProbe:

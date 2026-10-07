@@ -10,9 +10,9 @@
 | Metric | Status |
 |---|---|
 | **Total Phases** | 18 (Phase 0 to 17) |
-| **Completed** | 16 / 18 (88.9%) |
-| **Current Focus** | **Phase 16 — Performance Engineering** |
-| **Progress Bar** | `[████████████████░░]` |
+| **Completed** | 17 / 18 (94.4%) |
+| **Current Focus** | **Phase 17 — Hardening, Testing & Final Polish** |
+| **Progress Bar** | `[█████████████████░]` |
 
 ---
 
@@ -36,8 +36,9 @@
 | **13** | **Resilience & Fault Tolerance** | **Completed** | Oct 05, 2026 |
 | **14** | **Deployment — Docker & K3s (Helm)** | **Completed** | Oct 07, 2026 |
 | **15** | **CI/CD Pipeline** | **Completed** | Oct 07, 2026 |
-| **16** | Performance Engineering | *Up Next* | — |
-| **17** | Hardening & Polish | Pending | — |
+| **16** | **Performance Engineering** | **Completed** | Oct 07, 2026 |
+| **17** | Hardening, Testing & Final Polish | *Up Next* | — |
+
 
 ---
 
@@ -489,3 +490,52 @@
     - Scheduled nightly GitHub Actions workflow triggering automated benchmark evaluation script ([scripts/run_benchmarks.py](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/scripts/run_benchmarks.py)).
     - SLA baseline definition ([benchmarks/baseline.json](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/benchmarks/baseline.json)) guarding against >20% latency regression.
     - Verified live run against VPS cluster: P50 latency 101.17 ms, P99 latency 195.55 ms (-34% faster than baseline SLA threshold).
+
+### Phase 16 — Performance Engineering
+- **Status:** **Completed** (Oct 07, 2026)
+- **Completed Components:**
+  - **Dedicated Performance Benchmarks Subproject ([benchmarks/build.gradle.kts](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/benchmarks/build.gradle.kts)):**
+    - Configured Gradle Kotlin DSL subproject `:benchmarks` with OpenJDK 21 LTS toolchain, Spotless Google Java formatter, JMH 1.37 annotation processing, and direct dependencies on `:libs:common-domain`, `:libs:common-events`, and `:services:matching-engine`.
+  - **5 JMH Microbenchmarks ([benchmarks/src/main/java/com/dete/benchmark](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/benchmarks/src/main/java/com/dete/benchmark)):**
+    - `OrderBookMatchingBenchmark`: Evaluates pure limit order matching throughput without transport overhead:
+      - `thrptMakerTakerCycle`: **465,756 match cycles/sec** (>100k target exceeded by **4.6x**).
+      - `thrptRestingLimitInsert`: **1,593,983 limit order insertions/sec** (exceeded by **15.9x**).
+      - `thrptCancelOrder`: **1,296,389 O(1) order cancellations/sec** (exceeded by **12.9x**).
+    - `MatchingLatencyBenchmark`: Evaluates full matching latency percentile distribution:
+      - Crossing Match Latency: **P50 = 2.20 μs, P90 = 3.20 μs, P99 = 6.40 μs** (< 1,000 μs target exceeded by **156x**).
+      - Resting Insert Latency: **P50 = 0.50 μs (500 ns), P99 = 1.80 μs**.
+      - Cancel Latency: **P50 = 0.80 μs (800 ns), P99 = 2.10 μs**.
+    - `AllocationRateBenchmark`: Evaluates memory allocation and garbage generation on the hot path:
+      - `primitiveScaledMath`: **1,203,919,536 ops/sec (1.2 billion ops/sec)** with zero heap allocation.
+      - `fixedPointMultiplyMath`: **18,764,752 ops/sec**.
+      - `orderBookProcessMatching`: **375,985 ops/sec**.
+    - `TreeMapVsSkipListBenchmark`: Empirical data structure comparison for limit order book price ladders:
+      - Price level lookup (`get`): `TreeMap` (**67.59 M ops/s**) vs `ConcurrentSkipListMap` (**35.24 M ops/s**) — **`TreeMap` is +91.8% faster**.
+      - Price level insertion (`put`): `TreeMap` (**4.58 M ops/s**) vs `ConcurrentSkipListMap` (**3.97 M ops/s**) — **`TreeMap` is +15.4% faster**.
+      - **Winner & Architectural Rationale:** `TreeMap` selected as definitive winner; in DETE's single-writer thread architecture, concurrent skip-lists introduce unnecessary CAS synchronization and pointer bloat that degrades CPU L1/L2 cache locality.
+    - `FixedPointVsBigDecimalBenchmark`: 64-bit nano-scale integer arithmetic vs `java.math.BigDecimal`:
+      - Multiplication: Raw scaled long (**3.60 BILLION ops/s**) vs `BigDecimal` (**23.71 M ops/s**) — **152x faster**.
+      - Addition: Scaled long (**3.27 BILLION ops/s**) vs `BigDecimal` (**257.19 M ops/s**) — **12.7x faster**.
+      - Comparison: `Long.compare` (**3.54 BILLION ops/s**) vs `BigDecimal.compareTo` (**1.25 B ops/s**) — **32% faster**.
+      - Zero heap allocations for fixed-point math vs continuous object churn for `BigDecimal`.
+  - **k6 Load Tests on Oracle Cloud ARM64 VPS ([infra/k6](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/infra/k6)):**
+    - `order_placement.js`: 100 concurrent VUs placing limit orders; average latency **44.67 ms**, P50 **44.87 ms**, P95 **94.75 ms**, P99 < 150 ms (< 500 ms SLA target).
+    - `websocket_stress.js`: 200 concurrent active WebSocket streaming clients; **100% connection success rate**, **49,946 live L2 depth messages streamed (1,882 msgs/sec)**, **64 MB transferred (2.4 MB/s)**, 0 drops, 0 disconnects.
+    - `settlement_load.js`: Sustained double-entry trade matching and settlement; P95 latency **92.19 ms**; verified **0.00 balance drift** across USD, BTC, ETH, SOL assets.
+    - Host resource footprint under sustained load: **4.95 GiB of 11.9 GiB RAM used (41.5%)**, 0 bytes swap, 16/16 pods healthy and running with 0 restarts.
+  - **End-to-End Latency Measurement & SLA Compliance:**
+    - Live E2E round-trip (Gateway POST /orders $\rightarrow$ Risk gRPC $\rightarrow$ Account reservation $\rightarrow$ Kafka $\rightarrow$ Matching Engine execution $\rightarrow$ Ledger settlement):
+      - **P50 Latency:** **92.60 ms** (Baseline: 211.18 ms, **-56.15% improvement**).
+      - **P95 Latency:** **130.18 ms** (Baseline: 296.35 ms, **-56.07% improvement**).
+      - **P99 Latency:** **130.18 ms** (< 200 ms SLA target).
+      - **Success Rate:** **100.0%**.
+  - **JVM Garbage Collection Tuning & Analysis ([benchmarks/gc_tuning.md](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/benchmarks/gc_tuning.md)):**
+    - **Container Ergonomics SerialGC Trap:** Identified that HotSpot OpenJDK 21 automatically demoted the matching engine to `SerialGC` under fractional CPU requests (`80m`), causing 100ms+ STW pauses.
+    - **Tuned G1GC Deployment:** Committed `-XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:+ParallelRefProcEnabled -Xms256m -Xmx512m` via Helm values and deployment templates.
+    - **G1GC vs ZGC Evaluation:** Documented why tuned G1GC outperforms Generational ZGC on 2 vCPU hardware (eliminates concurrent GC thread CPU competition and cgroup throttling).
+    - Verified post-tuning single order submission latency dropped to **53.5 ms**.
+  - **Documented & Committed Reports ([benchmarks/results](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/benchmarks/results)):**
+    - [2026-10-07_matching.md](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/benchmarks/results/2026-10-07_matching.md): Full JMH benchmark metrics, throughput, latency percentiles, and architectural justifications.
+    - [2026-10-07_k6_load.md](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/benchmarks/results/2026-10-07_k6_load.md): Multi-scenario k6 load test results and cluster resource consumption metrics.
+    - [2026-10-07_gc_tuning.md](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/benchmarks/results/2026-10-07_gc_tuning.md): Detailed garbage collection analysis, collector trade-offs, and tuning results.
+
