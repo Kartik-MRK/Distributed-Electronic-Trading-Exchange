@@ -20,14 +20,12 @@ public class SecurityConfig {
 
   @Bean
   @ConditionalOnMissingBean
-  public PublicKey rsaPublicKey() {
-    try {
-      KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
-      gen.initialize(2048);
-      return gen.generateKeyPair().getPublic();
-    } catch (Exception e) {
-      throw new IllegalStateException("Failed to initialize RSA public key", e);
+  public PublicKey rsaPublicKey(
+      @org.springframework.beans.factory.annotation.Value("${security.jwt.public-key:}") String publicKeyB64) {
+    if (publicKeyB64 != null && !publicKeyB64.isBlank()) {
+      return com.dete.common.security.RsaKeyUtils.parsePublicKey(publicKeyB64);
     }
+    return com.dete.common.security.RsaKeyUtils.parsePublicKey(com.dete.common.security.RsaKeyUtils.DEFAULT_PUBLIC_KEY);
   }
 
   @Bean
