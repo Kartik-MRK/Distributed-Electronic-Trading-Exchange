@@ -10,9 +10,9 @@
 | Metric | Status |
 |---|---|
 | **Total Phases** | 18 (Phase 0 to 17) |
-| **Completed** | 15 / 18 (83.3%) |
-| **Current Focus** | **Phase 15 — CI/CD Pipeline** |
-| **Progress Bar** | `[███████████████░░░]` |
+| **Completed** | 16 / 18 (88.9%) |
+| **Current Focus** | **Phase 16 — Performance Engineering** |
+| **Progress Bar** | `[████████████████░░]` |
 
 ---
 
@@ -35,8 +35,8 @@
 | **12** | **Frontend Phase B (Dashboard & Replay)** | **Completed** | Oct 05, 2026 |
 | **13** | **Resilience & Fault Tolerance** | **Completed** | Oct 05, 2026 |
 | **14** | **Deployment — Docker & K3s (Helm)** | **Completed** | Oct 07, 2026 |
-| **15** | CI/CD Pipeline | *Up Next* | — |
-| **16** | Performance Engineering | Pending | — |
+| **15** | **CI/CD Pipeline** | **Completed** | Oct 07, 2026 |
+| **16** | Performance Engineering | *Up Next* | — |
 | **17** | Hardening & Polish | Pending | — |
 
 ---
@@ -467,3 +467,25 @@
     - **Live Trading Benchmark:** 20/20 orders placed and matched across Gateway; 10 trades settled into double-entry ledger.
       - **Latency Percentiles:** Min: 90.85 ms, Avg: 200.06 ms, **P50: 211.18 ms, P95: 296.35 ms, P99: 296.35 ms**.
     - Full metrics and infrastructure report published in [benchmarks/vps_deployment_results.md](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/benchmarks/vps_deployment_results.md).
+
+### Phase 15 — CI/CD Pipeline
+- **Status:** **Completed** (Oct 07, 2026)
+- **Completed Components:**
+  - **Pull Request & Continuous Integration Pipeline ([.github/workflows/ci.yml](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/.github/workflows/ci.yml)):**
+    - **Code Quality & Formatting:** Gradle Spotless check enforcing Google Java format rules across all 13 modules.
+    - **Frontend Verification:** Next.js 14 type checking (`npm run type-check`) and ESLint validation (`npm run lint`).
+    - **Helm Chart Validation:** Automated `helm lint ./infra/helm/dete` chart analysis.
+    - **Compilation & Test Suite:** OpenJDK 21 compilation (`./gradlew compileJava testClasses`) and automated unit + ArchUnit architecture test suite execution.
+    - **Security & Vulnerability Scanning:** Automated Aquasecurity Trivy scanner analyzing repository filesystem dependencies for CVEs.
+  - **Continuous Deployment Pipeline ([.github/workflows/cd.yml](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/.github/workflows/cd.yml)):**
+    - Automated SSH connection to Oracle Cloud VPS (`oraclevps`, 141.148.223.82) triggered on push to `master`.
+    - Automated host compilation of Spring Boot microservice JARs (`./gradlew bootJar -x test`).
+    - Automated Docker container packaging ([scripts/package_images.sh](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/scripts/package_images.sh)) and containerd import ([scripts/import_images_to_k3s.sh](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/scripts/import_images_to_k3s.sh)).
+    - Zero-downtime Helm chart upgrade (`helm upgrade --install dete ./infra/helm/dete -n dete`) and Kubernetes deployment rollout verification (`kubectl rollout status`).
+  - **Automated Smoke Test Suite ([scripts/smoke_test.py](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/scripts/smoke_test.py)):**
+    - 7-step automated post-deploy verification: Gateway probe -> JWT auth -> Balance query -> Limit BUY -> Limit SELL -> L2 Order Book verification -> Post-trade balance settlement.
+    - Verified passing live with exit code 0.
+  - **Nightly Performance Regression Check ([.github/workflows/benchmarks.yml](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/.github/workflows/benchmarks.yml)):**
+    - Scheduled nightly GitHub Actions workflow triggering automated benchmark evaluation script ([scripts/run_benchmarks.py](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/scripts/run_benchmarks.py)).
+    - SLA baseline definition ([benchmarks/baseline.json](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/benchmarks/baseline.json)) guarding against >20% latency regression.
+    - Verified live run against VPS cluster: P50 latency 101.17 ms, P99 latency 195.55 ms (-34% faster than baseline SLA threshold).
