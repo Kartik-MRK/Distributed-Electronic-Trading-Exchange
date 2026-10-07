@@ -1,0 +1,16 @@
+# Production overrides for DETE Helm Chart
+global:
+  environment: prod
+  domain: dete.trading
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    kubernetes.io/tls-acme: "true"
+  host: dete.trading
+  tls:
+    - secretName: dete-tls-secret
+      hosts:
+        - dete.trading

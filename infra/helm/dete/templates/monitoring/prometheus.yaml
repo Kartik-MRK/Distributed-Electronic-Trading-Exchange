@@ -1,0 +1,113 @@
+{{- if .Values.monitoring.prometheus.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  labels:
+    {{- include "dete.labels" . | nindent 4 }}
+    app: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 5s
+      evaluation_interval: 5s
+
+    scrape_configs:
+      - job_name: 'gateway'
+        metrics_path: '/actuator/prometheus'
+        static_configs:
+          - targets: ['gateway:8080']
+
+      - job_name: 'auth'
+        metrics_path: '/actuator/prometheus'
+        static_configs:
+          - targets: ['auth:8081']
+
+      - job_name: 'account'
+        metrics_path: '/actuator/prometheus'
+        static_configs:
+          - targets: ['account:8082']
+
+      - job_name: 'order'
+        metrics_path: '/actuator/prometheus'
+        static_configs:
+          - targets: ['order:8083']
+
+      - job_name: 'matching-engine'
+        metrics_path: '/actuator/prometheus'
+        static_configs:
+          - targets: ['matching-engine:8084']
+
+      - job_name: 'risk'
+        metrics_path: '/actuator/prometheus'
+        static_configs:
+          - targets: ['risk:8085']
+
+      - job_name: 'audit'
+        metrics_path: '/actuator/prometheus'
+        static_configs:
+          - targets: ['audit:8086']
+
+      - job_name: 'market-data'
+        metrics_path: '/actuator/prometheus'
+        static_configs:
+          - targets: ['market-data:8087']
+
+      - job_name: 'simulator'
+        metrics_path: '/actuator/prometheus'
+        static_configs:
+          - targets: ['simulator:8089']
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  labels:
+    {{- include "dete.labels" . | nindent 4 }}
+    app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: {{ .Values.monitoring.prometheus.image }}
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+            - "--web.enable-lifecycle"
+          ports:
+            - containerPort: {{ .Values.monitoring.prometheus.port }}
+              name: http
+          resources:
+            {{- toYaml .Values.monitoring.prometheus.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  labels:
+    {{- include "dete.labels" . | nindent 4 }}
+    app: prometheus
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.monitoring.prometheus.port }}
+      targetPort: {{ .Values.monitoring.prometheus.port }}
+      name: http
+  selector:
+    app: prometheus
+{{- end }}

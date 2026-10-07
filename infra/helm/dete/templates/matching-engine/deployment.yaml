@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: matching-engine
+  labels:
+    {{- include "dete.labels" . | nindent 4 }}
+    app: matching-engine
+spec:
+  replicas: {{ .Values.matchingEngine.replicaCount }}
+  selector:
+    matchLabels:
+      app: matching-engine
+  template:
+    metadata:
+      labels:
+        app: matching-engine
+    spec:
+      containers:
+        - name: matching-engine
+          image: {{ .Values.matchingEngine.image }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.matchingEngine.port }}
+              name: http
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "docker"
+            - name: PORT
+              value: {{ .Values.matchingEngine.port | quote }}
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:9092"
+            - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:9092"
+          resources:
+            {{- toYaml .Values.matchingEngine.resources | nindent 12 }}
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: {{ .Values.matchingEngine.port }}
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: {{ .Values.matchingEngine.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: {{ .Values.matchingEngine.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: matching-engine
+  labels:
+    {{- include "dete.labels" . | nindent 4 }}
+    app: matching-engine
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.matchingEngine.port }}
+      targetPort: {{ .Values.matchingEngine.port }}
+      name: http
+  selector:
+    app: matching-engine

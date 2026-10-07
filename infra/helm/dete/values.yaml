@@ -1,0 +1,206 @@
+# Default values for DETE Helm Chart
+global:
+  environment: local
+  domain: localhost
+
+images:
+  pullPolicy: IfNotPresent
+  registry: ""
+
+secrets:
+  postgresUser: dete
+  postgresPassword: dete_local_secret
+  postgresDb: dete
+  redisPassword: dete_redis_secret
+  jwtSecret: "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+
+# Infrastructure Services
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  storageSize: 5Gi
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+redis:
+  enabled: true
+  image: redis:7-alpine
+  storageSize: 1Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+kafka:
+  enabled: true
+  image: confluentinc/cp-kafka:7.6.2
+  zookeeperImage: confluentinc/cp-zookeeper:7.6.2
+  storageSize: 5Gi
+  resources:
+    requests:
+      cpu: 300m
+      memory: 768Mi
+    limits:
+      cpu: 600m
+      memory: 1.2Gi
+
+# Application Microservices
+gateway:
+  image: dete/gateway:latest
+  replicaCount: 1
+  port: 8080
+  resources:
+    requests:
+      cpu: 150m
+      memory: 256Mi
+    limits:
+      cpu: 400m
+      memory: 384Mi
+
+auth:
+  image: dete/auth:latest
+  replicaCount: 1
+  port: 8081
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 300m
+      memory: 384Mi
+
+account:
+  image: dete/account:latest
+  replicaCount: 1
+  port: 8082
+  resources:
+    requests:
+      cpu: 200m
+      memory: 384Mi
+    limits:
+      cpu: 400m
+      memory: 512Mi
+
+order:
+  image: dete/order:latest
+  replicaCount: 1
+  port: 8083
+  resources:
+    requests:
+      cpu: 200m
+      memory: 384Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+matchingEngine:
+  image: dete/matching-engine:latest
+  replicaCount: 1
+  port: 8084
+  resources:
+    requests:
+      cpu: 400m
+      memory: 512Mi
+    limits:
+      cpu: 800m
+      memory: 768Mi
+
+risk:
+  image: dete/risk:latest
+  replicaCount: 1
+  port: 8085
+  grpcPort: 9095
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 300m
+      memory: 384Mi
+
+audit:
+  image: dete/audit:latest
+  replicaCount: 1
+  port: 8086
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 300m
+      memory: 384Mi
+
+marketData:
+  image: dete/market-data:latest
+  replicaCount: 1
+  port: 8087
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 400m
+      memory: 384Mi
+
+simulator:
+  image: dete/simulator:latest
+  replicaCount: 1
+  port: 8089
+  resources:
+    requests:
+      cpu: 150m
+      memory: 256Mi
+    limits:
+      cpu: 350m
+      memory: 384Mi
+
+frontend:
+  image: dete/frontend:latest
+  replicaCount: 1
+  port: 3000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+monitoring:
+  prometheus:
+    enabled: true
+    image: prom/prometheus:v2.54.1
+    port: 9090
+    resources:
+      requests:
+        cpu: 150m
+        memory: 256Mi
+      limits:
+        cpu: 300m
+        memory: 512Mi
+  grafana:
+    enabled: true
+    image: grafana/grafana:11.2.0
+    port: 3000
+    resources:
+      requests:
+        cpu: 100m
+        memory: 192Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations: {}
+  host: ""
+  tls: []

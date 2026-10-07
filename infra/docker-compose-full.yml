@@ -1,0 +1,414 @@
+version: '3.8'
+
+networks:
+  dete-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  kafka-data:
+  grafana-data:
+  prometheus-data:
+
+services:
+
+  # ==========================================
+  # Infrastructure Backing Stores & Brokers
+  # ==========================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: dete-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dete
+      POSTGRES_PASSWORD: dete_local_secret
+      POSTGRES_DB: dete
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - dete-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dete -d dete"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: dete-redis
+    restart: unless-stopped
+    command: redis-server --requirepass dete_redis_secret --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - dete-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "dete_redis_secret", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.2
+    container_name: dete-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - dete-net
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.2
+    container_name: dete-kafka
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_NUM_PARTITIONS: 3
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - dete-net
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 25s
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.2
+    container_name: dete-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        echo "Creating DETE Kafka topics..."
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic order.commands --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic order.events --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic trade.executions --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic market-data --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic ledger.events --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic audit.events --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic simulator.commands --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic order.commands.DLQ --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic order.events.DLQ --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic trade.executions.DLQ --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic ledger.events.DLQ --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic audit.events.DLQ --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic system.alerts --partitions 1 --replication-factor 1
+        echo "All DETE topics created."
+    networks:
+      - dete-net
+    restart: "no"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: dete-kafka-ui
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: dete-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
+    ports:
+      - "8088:8080"
+    networks:
+      - dete-net
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: dete-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus-data:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - dete-net
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: dete-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - dete-net
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: dete-jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    networks:
+      - dete-net
+
+  # ==========================================
+  # Microservices
+  # ==========================================
+
+  auth:
+    image: dete/auth:latest
+    container_name: dete-auth
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dete?currentSchema=auth
+      SPRING_DATASOURCE_USERNAME: dete
+      SPRING_DATASOURCE_PASSWORD: dete_local_secret
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: dete_redis_secret
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_SECRET: "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+    ports:
+      - "8081:8081"
+    networks:
+      - dete-net
+
+  account:
+    image: dete/account:latest
+    container_name: dete-account
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dete?currentSchema=account
+      SPRING_DATASOURCE_USERNAME: dete
+      SPRING_DATASOURCE_PASSWORD: dete_local_secret
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_SECRET: "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+    ports:
+      - "8082:8082"
+    networks:
+      - dete-net
+
+  risk:
+    image: dete/risk:latest
+    container_name: dete-risk
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dete?currentSchema=risk
+      SPRING_DATASOURCE_USERNAME: dete
+      SPRING_DATASOURCE_PASSWORD: dete_local_secret
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8085:8085"
+      - "9095:9095"
+    networks:
+      - dete-net
+
+  order:
+    image: dete/order:latest
+    container_name: dete-order
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      risk:
+        condition: service_started
+      account:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dete?currentSchema=order_svc
+      SPRING_DATASOURCE_USERNAME: dete
+      SPRING_DATASOURCE_PASSWORD: dete_local_secret
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: dete_redis_secret
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      RISK_GRPC_HOST: risk
+      RISK_GRPC_PORT: 9095
+      ACCOUNT_SERVICE_URL: http://account:8082
+      JWT_SECRET: "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+    ports:
+      - "8083:8083"
+    networks:
+      - dete-net
+
+  matching-engine:
+    image: dete/matching-engine:latest
+    container_name: dete-matching-engine
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      PORT: 8084
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8084:8084"
+    networks:
+      - dete-net
+
+  audit:
+    image: dete/audit:latest
+    container_name: dete-audit
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      PORT: 8086
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dete?currentSchema=audit
+      SPRING_DATASOURCE_USERNAME: dete
+      SPRING_DATASOURCE_PASSWORD: dete_local_secret
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8086:8086"
+    networks:
+      - dete-net
+
+  market-data:
+    image: dete/market-data:latest
+    container_name: dete-market-data
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      PORT: 8087
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dete?currentSchema=market_data
+      SPRING_DATASOURCE_USERNAME: dete
+      SPRING_DATASOURCE_PASSWORD: dete_local_secret
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8087:8087"
+    networks:
+      - dete-net
+
+  gateway:
+    image: dete/gateway:latest
+    container_name: dete-gateway
+    restart: unless-stopped
+    depends_on:
+      - auth
+      - account
+      - order
+      - matching-engine
+      - risk
+      - audit
+      - market-data
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      PORT: 8080
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: dete_redis_secret
+      JWT_SECRET: "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+      AUTH_SERVICE_URL: http://auth:8081
+      ORDER_SERVICE_URL: http://order:8083
+      ACCOUNT_SERVICE_URL: http://account:8082
+      MARKET_DATA_SERVICE_URL: http://market-data:8087
+      AUDIT_SERVICE_URL: http://audit:8086
+      MARKET_DATA_WS_URL: ws://market-data:8087
+      MATCHING_ENGINE_URL: http://matching-engine:8084
+      RISK_SERVICE_URL: http://risk:8085
+      SIMULATOR_URL: http://simulator:8089
+    ports:
+      - "8080:8080"
+    networks:
+      - dete-net
+
+  simulator:
+    image: dete/simulator:latest
+    container_name: dete-simulator
+    restart: unless-stopped
+    depends_on:
+      - gateway
+      - auth
+      - order
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      GATEWAY_URL: http://gateway:8080
+      AUTH_URL: http://auth:8081
+      ACCOUNT_URL: http://account:8082
+      ORDER_URL: http://order:8083
+    ports:
+      - "8089:8089"
+    networks:
+      - dete-net
+
+  frontend:
+    image: dete/frontend:latest
+    container_name: dete-frontend
+    restart: unless-stopped
+    depends_on:
+      - gateway
+    ports:
+      - "3000:3000"
+    networks:
+      - dete-net

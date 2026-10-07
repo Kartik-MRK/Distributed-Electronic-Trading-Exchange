@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simulator
+  labels:
+    {{- include "dete.labels" . | nindent 4 }}
+    app: simulator
+spec:
+  replicas: {{ .Values.simulator.replicaCount }}
+  selector:
+    matchLabels:
+      app: simulator
+  template:
+    metadata:
+      labels:
+        app: simulator
+    spec:
+      containers:
+        - name: simulator
+          image: {{ .Values.simulator.image }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.simulator.port }}
+              name: http
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "docker"
+            - name: GATEWAY_URL
+              value: "http://gateway:8080"
+            - name: AUTH_URL
+              value: "http://auth:8081"
+            - name: ACCOUNT_URL
+              value: "http://account:8082"
+            - name: ORDER_URL
+              value: "http://order:8083"
+          resources:
+            {{- toYaml .Values.simulator.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: {{ .Values.simulator.port }}
+            initialDelaySeconds: 20
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: {{ .Values.simulator.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: simulator
+  labels:
+    {{- include "dete.labels" . | nindent 4 }}
+    app: simulator
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.simulator.port }}
+      targetPort: {{ .Values.simulator.port }}
+      name: http
+  selector:
+    app: simulator
