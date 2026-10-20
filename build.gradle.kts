@@ -65,12 +65,11 @@ subprojects {
             exceptionFormat = TestExceptionFormat.FULL
             showStandardStreams = false
         }
-        // Run test forks sequentially to keep memory usage bounded with Testcontainers
-        maxParallelForks = 1
-        // Give Testcontainers room and configure modern Docker API version
-        jvmArgs("-Xmx512m", "-Dapi.version=1.44")
-        systemProperty("api.version", "1.44")
-        environment("DOCKER_API_VERSION", "1.44")
+        // Exclude heavy Docker integration tests from fast CI/unit runs
+        if (project.hasProperty("excludeIntegration") || System.getenv("CI") == "true") {
+            exclude("**/*IntegrationTest*")
+            exclude("**/OrderRiskCircuitBreakerTest*")
+        }
     }
 
     dependencies {

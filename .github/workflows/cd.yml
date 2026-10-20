@@ -26,15 +26,16 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Configure SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ORACLE_VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }} >> ~/.ssh/known_hosts
+
       - name: Deploy on Oracle Cloud VPS via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }}
-          username: ${{ secrets.ORACLE_VPS_USER || 'ubuntu' }}
-          key: ${{ secrets.ORACLE_VPS_SSH_KEY }}
-          timeout: 600s
-          command_timeout: 600s
-          script: |
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.ORACLE_VPS_USER || 'ubuntu' }}@${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }} bash -s << 'EOF'
             set -e
             echo "=========================================================="
             echo " Starting DETE Automated Deployment on K3s Cluster"
@@ -68,6 +69,7 @@ jobs:
             kubectl rollout status deployment/account -n dete --timeout=180s
 
             echo "All microservices successfully deployed and running."
+          EOF
 
   smoke-test:
     name: Automated Smoke & Integration Verification
@@ -77,17 +79,20 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Configure SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ORACLE_VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }} >> ~/.ssh/known_hosts
+
       - name: Execute Live Smoke Tests on Oracle VPS
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }}
-          username: ${{ secrets.ORACLE_VPS_USER || 'ubuntu' }}
-          key: ${{ secrets.ORACLE_VPS_SSH_KEY }}
-          timeout: 120s
-          script: |
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.ORACLE_VPS_USER || 'ubuntu' }}@${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }} bash -s << 'EOF'
             set -e
             echo "--> Running DETE Smoke Tests..."
             python3 /home/ubuntu/dete/scripts/smoke_test.py
+          EOF
 
       - name: Post Deployment Summary
         if: always()
