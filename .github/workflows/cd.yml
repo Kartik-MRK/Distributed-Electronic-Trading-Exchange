@@ -49,7 +49,17 @@ jobs:
         run: |
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           TARGET_USER="${VPS_USER:-ubuntu}"
-          ssh -v -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no "$TARGET_USER@$TARGET_HOST" bash -s << 'EOF'
+          echo "Connecting to $TARGET_USER@$TARGET_HOST..."
+          if ! ssh -v -o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa "$TARGET_USER@$TARGET_HOST" "echo SSH_CONNECTION_OK" > /tmp/ssh_debug.log 2>&1; then
+            echo "### ❌ SSH Connection Debug Log" >> $GITHUB_STEP_SUMMARY
+            echo '```text' >> $GITHUB_STEP_SUMMARY
+            cat /tmp/ssh_debug.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat /tmp/ssh_debug.log
+            exit 255
+          fi
+          echo "SSH connection established successfully!"
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no "$TARGET_USER@$TARGET_HOST" bash -s << 'EOF'
             set -e
             echo "=========================================================="
             echo " Starting DETE Automated Deployment on K3s Cluster"
