@@ -30,8 +30,15 @@ export function TradeHistoryTable({ trades }: TradeHistoryTableProps) {
   }
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
+    <div style={{ height: '100%', overflow: 'auto' }}>
+      <table
+        className="data-table"
+        style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          fontSize: '0.72rem',
+        }}
+      >
         <thead>
           <tr
             style={{
@@ -45,9 +52,13 @@ export function TradeHistoryTable({ trades }: TradeHistoryTableProps) {
             <th style={{ padding: '0 8px' }}>Time</th>
             <th style={{ padding: '0 8px' }}>Instrument</th>
             <th style={{ padding: '0 8px' }}>Side</th>
-            <th style={{ padding: '0 8px', textAlign: 'right' }}>Execution Price</th>
+            <th style={{ padding: '0 8px', textAlign: 'right' }}>
+              Execution Price
+            </th>
             <th style={{ padding: '0 8px', textAlign: 'right' }}>Quantity</th>
-            <th style={{ padding: '0 8px', textAlign: 'right' }}>Total Value</th>
+            <th style={{ padding: '0 8px', textAlign: 'right' }}>
+              Total Value
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -56,7 +67,9 @@ export function TradeHistoryTable({ trades }: TradeHistoryTableProps) {
             const timeStr = t.executedAt
               ? new Date(t.executedAt).toLocaleTimeString()
               : '--:--';
-            const val = (parseFloat(t.price) * parseFloat(t.quantity)).toFixed(2);
+            const val = (parseFloat(t.price) * parseFloat(t.quantity)).toFixed(
+              2,
+            );
 
             return (
               <tr
@@ -66,13 +79,31 @@ export function TradeHistoryTable({ trades }: TradeHistoryTableProps) {
                   height: 28,
                 }}
               >
-                <td className="font-mono" style={{ padding: '0 8px', color: 'var(--text-muted)', fontSize: '0.65rem' }}>
-                  {t.tradeId.length > 14 ? t.tradeId.substring(0, 14) + '...' : t.tradeId}
+                <td
+                  className="font-mono"
+                  style={{
+                    padding: '0 8px',
+                    color: 'var(--text-muted)',
+                    fontSize: '0.65rem',
+                  }}
+                >
+                  {t.tradeId.length > 14
+                    ? t.tradeId.substring(0, 14) + '...'
+                    : t.tradeId}
                 </td>
-                <td className="font-mono" style={{ padding: '0 8px', color: 'var(--text-secondary)' }}>
+                <td
+                  className="font-mono"
+                  style={{ padding: '0 8px', color: 'var(--text-secondary)' }}
+                >
                   {timeStr}
                 </td>
-                <td style={{ padding: '0 8px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                <td
+                  style={{
+                    padding: '0 8px',
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
+                  }}
+                >
                   {t.instrument.replace('_', '/')}
                 </td>
                 <td
@@ -84,13 +115,34 @@ export function TradeHistoryTable({ trades }: TradeHistoryTableProps) {
                 >
                   {t.takerSide}
                 </td>
-                <td className="font-mono" style={{ padding: '0 8px', textAlign: 'right', color: 'var(--text-primary)' }}>
+                <td
+                  className="font-mono"
+                  style={{
+                    padding: '0 8px',
+                    textAlign: 'right',
+                    color: 'var(--text-primary)',
+                  }}
+                >
                   ${t.price}
                 </td>
-                <td className="font-mono" style={{ padding: '0 8px', textAlign: 'right', color: 'var(--text-primary)' }}>
+                <td
+                  className="font-mono"
+                  style={{
+                    padding: '0 8px',
+                    textAlign: 'right',
+                    color: 'var(--text-primary)',
+                  }}
+                >
                   {t.quantity}
                 </td>
-                <td className="font-mono" style={{ padding: '0 8px', textAlign: 'right', color: 'var(--text-secondary)' }}>
+                <td
+                  className="font-mono"
+                  style={{
+                    padding: '0 8px',
+                    textAlign: 'right',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
                   ${val} USDT
                 </td>
               </tr>

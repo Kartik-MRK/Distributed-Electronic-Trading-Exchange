@@ -9,9 +9,15 @@ interface OpenOrdersTableProps {
   onCancelOrder: (orderId: string) => Promise<boolean>;
 }
 
-export function OpenOrdersTable({ orders, onCancelOrder }: OpenOrdersTableProps) {
+export function OpenOrdersTable({
+  orders,
+  onCancelOrder,
+}: OpenOrdersTableProps) {
   const openOrders = orders.filter(
-    (o) => o.status === 'SUBMITTED' || o.status === 'ACCEPTED' || o.status === 'PARTIALLY_FILLED'
+    (o) =>
+      o.status === 'SUBMITTED' ||
+      o.status === 'ACCEPTED' ||
+      o.status === 'PARTIALLY_FILLED',
   );
 
   if (openOrders.length === 0) {
@@ -35,8 +41,15 @@ export function OpenOrdersTable({ orders, onCancelOrder }: OpenOrdersTableProps)
   }
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
+    <div style={{ height: '100%', overflow: 'auto' }}>
+      <table
+        className="data-table"
+        style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          fontSize: '0.72rem',
+        }}
+      >
         <thead>
           <tr
             style={{
@@ -72,10 +85,19 @@ export function OpenOrdersTable({ orders, onCancelOrder }: OpenOrdersTableProps)
                   height: 28,
                 }}
               >
-                <td className="font-mono" style={{ padding: '0 8px', color: 'var(--text-secondary)' }}>
+                <td
+                  className="font-mono"
+                  style={{ padding: '0 8px', color: 'var(--text-secondary)' }}
+                >
                   {timeStr}
                 </td>
-                <td style={{ padding: '0 8px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                <td
+                  style={{
+                    padding: '0 8px',
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
+                  }}
+                >
                   {order.instrument.replace('_', '/')}
                 </td>
                 <td
@@ -87,22 +109,45 @@ export function OpenOrdersTable({ orders, onCancelOrder }: OpenOrdersTableProps)
                 >
                   {order.side}
                 </td>
-                <td style={{ padding: '0 8px', color: 'var(--text-secondary)' }}>
+                <td
+                  style={{ padding: '0 8px', color: 'var(--text-secondary)' }}
+                >
                   {order.type}
                 </td>
-                <td className="font-mono" style={{ padding: '0 8px', textAlign: 'right', color: 'var(--text-primary)' }}>
+                <td
+                  className="font-mono"
+                  style={{
+                    padding: '0 8px',
+                    textAlign: 'right',
+                    color: 'var(--text-primary)',
+                  }}
+                >
                   {order.price}
                 </td>
-                <td className="font-mono" style={{ padding: '0 8px', textAlign: 'right', color: 'var(--text-primary)' }}>
+                <td
+                  className="font-mono"
+                  style={{
+                    padding: '0 8px',
+                    textAlign: 'right',
+                    color: 'var(--text-primary)',
+                  }}
+                >
                   {order.quantity}
                 </td>
-                <td className="font-mono" style={{ padding: '0 8px', textAlign: 'right', color: 'var(--text-secondary)' }}>
+                <td
+                  className="font-mono"
+                  style={{
+                    padding: '0 8px',
+                    textAlign: 'right',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
                   {order.filledQuantity || '0.0000'}
                 </td>
                 <td style={{ padding: '0 8px' }}>
                   <span
                     style={{
-                      backgroundColor: 'rgba(0, 210, 255, 0.12)',
+                      backgroundColor: 'var(--bg-hover)',
                       color: 'var(--accent-cyan)',
                       padding: '2px 6px',
                       borderRadius: 4,
@@ -118,8 +163,8 @@ export function OpenOrdersTable({ orders, onCancelOrder }: OpenOrdersTableProps)
                     onClick={() => onCancelOrder(order.orderId)}
                     title="Cancel Order"
                     style={{
-                      background: 'rgba(255, 59, 105, 0.15)',
-                      border: '1px solid rgba(255, 59, 105, 0.3)',
+                      background: 'var(--ask-red-bg)',
+                      border: '1px solid var(--ask-red-bg)',
                       color: 'var(--ask-red)',
                       borderRadius: 4,
                       padding: '2px 8px',
@@ -132,12 +177,15 @@ export function OpenOrdersTable({ orders, onCancelOrder }: OpenOrdersTableProps)
                       transition: 'all 0.15s ease',
                     }}
                     onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--ask-red)';
+                      (e.currentTarget as HTMLElement).style.backgroundColor =
+                        'var(--ask-red)';
                       (e.currentTarget as HTMLElement).style.color = '#ffffff';
                     }}
                     onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255, 59, 105, 0.15)';
-                      (e.currentTarget as HTMLElement).style.color = 'var(--ask-red)';
+                      (e.currentTarget as HTMLElement).style.backgroundColor =
+                        'var(--ask-red-bg)';
+                      (e.currentTarget as HTMLElement).style.color =
+                        'var(--ask-red)';
                     }}
                   >
                     <X size={11} /> Cancel

@@ -14,7 +14,12 @@ export interface ToastItem {
 }
 
 interface ToastContextValue {
-  showToast: (type: ToastType, title: string, message?: string, duration?: number) => void;
+  showToast: (
+    type: ToastType,
+    title: string,
+    message?: string,
+    duration?: number,
+  ) => void;
   removeToast: (id: string) => void;
 }
 
@@ -38,7 +43,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         }, duration);
       }
     },
-    [removeToast]
+    [removeToast],
   );
 
   return (
@@ -55,7 +60,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           gap: 8,
           zIndex: 9999,
           maxWidth: 360,
-          width: '100%',
+          width: 'calc(100% - 40px)',
           pointerEvents: 'none',
         }}
       >
@@ -67,14 +72,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           const borderColor = isSuccess
             ? 'var(--bid-green)'
             : isError
-            ? 'var(--ask-red)'
-            : isWarning
-            ? 'var(--accent-amber)'
-            : 'var(--accent-cyan)';
+              ? 'var(--ask-red)'
+              : isWarning
+                ? 'var(--accent-amber)'
+                : 'var(--accent-cyan)';
 
           return (
             <div
               key={t.id}
+              role="status"
               style={{
                 pointerEvents: 'auto',
                 background: 'var(--bg-card)',
@@ -90,13 +96,21 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               }}
             >
               <div style={{ marginTop: 2 }}>
-                {isSuccess && <CheckCircle2 size={18} color="var(--bid-green)" />}
+                {isSuccess && (
+                  <CheckCircle2 size={18} color="var(--bid-green)" />
+                )}
                 {isError && <AlertCircle size={18} color="var(--ask-red)" />}
-                {isWarning && <AlertCircle size={18} color="var(--accent-amber)" />}
-                {t.type === 'info' && <Info size={18} color="var(--accent-cyan)" />}
+                {isWarning && (
+                  <AlertCircle size={18} color="var(--accent-amber)" />
+                )}
+                {t.type === 'info' && (
+                  <Info size={18} color="var(--accent-cyan)" />
+                )}
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{t.title}</div>
+                <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                  {t.title}
+                </div>
                 {t.message && (
                   <div
                     style={{
@@ -111,6 +125,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 )}
               </div>
               <button
+                aria-label="Dismiss notification"
                 onClick={() => removeToast(t.id)}
                 style={{
                   background: 'none',

@@ -1,6 +1,7 @@
 import { Client, IMessage, StompSubscription } from '@stomp/stompjs';
 
-export type ConnectionState = 'connected' | 'reconnecting' | 'disconnected';
+export type ConnectionState =
+  'connected' | 'reconnecting' | 'disconnected' | 'preview';
 
 export interface WSListener<T = unknown> {
   (data: T): void;
@@ -93,7 +94,11 @@ export class WebSocketManager {
     listeners.add(listener as WSListener);
 
     // If client is connected and not yet subscribed via STOMP, create subscription
-    if (this.client && this.client.connected && !this.topicSubscriptions.has(topic)) {
+    if (
+      this.client &&
+      this.client.connected &&
+      !this.topicSubscriptions.has(topic)
+    ) {
       const sub = this.client.subscribe(topic, (msg: IMessage) => {
         this.handleMessage(topic, msg);
       });
@@ -166,7 +171,7 @@ export class WebSocketManager {
     this.reconnectAttempts++;
     const delay = Math.min(
       this.baseReconnectDelay * Math.pow(1.5, this.reconnectAttempts),
-      this.maxReconnectDelay
+      this.maxReconnectDelay,
     );
     return delay;
   }
@@ -196,10 +201,12 @@ export class WebSocketManager {
   private startSimulationIfNeeded(): void {
     if (this.isSimulating) return;
     this.isSimulating = true;
-    this.updateState('connected'); // Present connected demo state
+    this.updateState('preview'); // Keep simulated data distinct from a live connection
 
     // Emit simulated latency (e.g. 18-35ms)
-    this.latencyListeners.forEach((fn) => fn(Math.floor(18 + Math.random() * 15)));
+    this.latencyListeners.forEach((fn) =>
+      fn(Math.floor(18 + Math.random() * 15)),
+    );
 
     this.simulationIntervalId = setInterval(() => {
       // Broadcast synthetic micro-market adjustments to active topics
@@ -210,7 +217,9 @@ export class WebSocketManager {
           const basePrice = isBtc ? 67420 : isEth ? 3540 : 158;
           const delta = (Math.random() - 0.49) * (basePrice * 0.0006);
           const price = (basePrice + delta).toFixed(2);
-          const qty = isBtc ? (0.01 + Math.random() * 0.45).toFixed(4) : (0.1 + Math.random() * 3.5).toFixed(3);
+          const qty = isBtc
+            ? (0.01 + Math.random() * 0.45).toFixed(4)
+            : (0.1 + Math.random() * 3.5).toFixed(3);
           const side = Math.random() > 0.5 ? 'BUY' : 'SELL';
 
           const trade = {
@@ -245,6 +254,7 @@ export class WebSocketManager {
 // Global singleton instance for shared connection across hooks
 export const wsManager = new WebSocketManager(
   typeof window !== 'undefined'
-    ? (process.env.NEXT_PUBLIC_WS_URL || `ws://${window.location.hostname}:8080/ws`)
-    : 'ws://localhost:8080/ws'
+    ? process.env.NEXT_PUBLIC_WS_URL ||
+        `ws://${window.location.hostname}:8080/ws`
+    : 'ws://localhost:8080/ws',
 );

@@ -30,8 +30,15 @@ export function OrderHistoryTable({ orders }: OrderHistoryTableProps) {
   }
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
+    <div style={{ height: '100%', overflow: 'auto' }}>
+      <table
+        className="data-table"
+        style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          fontSize: '0.72rem',
+        }}
+      >
         <thead>
           <tr
             style={{
@@ -59,11 +66,17 @@ export function OrderHistoryTable({ orders }: OrderHistoryTableProps) {
               : '--:--';
 
             const statusColors: Record<string, { bg: string; text: string }> = {
-              FILLED: { bg: 'rgba(0, 245, 160, 0.15)', text: 'var(--bid-green)' },
-              CANCELLED: { bg: 'rgba(100, 116, 139, 0.2)', text: 'var(--text-secondary)' },
-              REJECTED: { bg: 'rgba(255, 59, 105, 0.15)', text: 'var(--ask-red)' },
-              ACCEPTED: { bg: 'rgba(0, 210, 255, 0.15)', text: 'var(--accent-cyan)' },
-              SUBMITTED: { bg: 'rgba(255, 184, 0, 0.15)', text: 'var(--accent-amber)' },
+              FILLED: { bg: 'var(--bid-green-bg)', text: 'var(--bid-green)' },
+              CANCELLED: {
+                bg: 'rgba(100, 116, 139, 0.2)',
+                text: 'var(--text-secondary)',
+              },
+              REJECTED: { bg: 'var(--ask-red-bg)', text: 'var(--ask-red)' },
+              ACCEPTED: { bg: 'var(--bg-hover)', text: 'var(--accent-cyan)' },
+              SUBMITTED: {
+                bg: 'rgba(255, 184, 0, 0.15)',
+                text: 'var(--accent-amber)',
+              },
             };
 
             const colorScheme = statusColors[order.status] || {
@@ -79,10 +92,19 @@ export function OrderHistoryTable({ orders }: OrderHistoryTableProps) {
                   height: 28,
                 }}
               >
-                <td className="font-mono" style={{ padding: '0 8px', color: 'var(--text-secondary)' }}>
+                <td
+                  className="font-mono"
+                  style={{ padding: '0 8px', color: 'var(--text-secondary)' }}
+                >
                   {timeStr}
                 </td>
-                <td style={{ padding: '0 8px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                <td
+                  style={{
+                    padding: '0 8px',
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
+                  }}
+                >
                   {order.instrument.replace('_', '/')}
                 </td>
                 <td
@@ -94,16 +116,39 @@ export function OrderHistoryTable({ orders }: OrderHistoryTableProps) {
                 >
                   {order.side}
                 </td>
-                <td style={{ padding: '0 8px', color: 'var(--text-secondary)' }}>
+                <td
+                  style={{ padding: '0 8px', color: 'var(--text-secondary)' }}
+                >
                   {order.type}
                 </td>
-                <td className="font-mono" style={{ padding: '0 8px', textAlign: 'right', color: 'var(--text-primary)' }}>
+                <td
+                  className="font-mono"
+                  style={{
+                    padding: '0 8px',
+                    textAlign: 'right',
+                    color: 'var(--text-primary)',
+                  }}
+                >
                   {order.price}
                 </td>
-                <td className="font-mono" style={{ padding: '0 8px', textAlign: 'right', color: 'var(--text-primary)' }}>
+                <td
+                  className="font-mono"
+                  style={{
+                    padding: '0 8px',
+                    textAlign: 'right',
+                    color: 'var(--text-primary)',
+                  }}
+                >
                   {order.quantity}
                 </td>
-                <td className="font-mono" style={{ padding: '0 8px', textAlign: 'right', color: 'var(--text-secondary)' }}>
+                <td
+                  className="font-mono"
+                  style={{
+                    padding: '0 8px',
+                    textAlign: 'right',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
                   {order.filledQuantity || '0.0000'}
                 </td>
                 <td style={{ padding: '0 8px' }}>

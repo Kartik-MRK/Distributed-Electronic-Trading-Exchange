@@ -13,7 +13,7 @@ import {
 import { Instrument } from '../../types';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { INSTRUMENT_METAS } from '../../lib/api';
-import { Maximize2, BarChart2 } from 'lucide-react';
+import { Maximize2 } from 'lucide-react';
 
 interface PriceChartProps {
   instrument: Instrument;
@@ -21,13 +21,18 @@ interface PriceChartProps {
 
 type Interval = '1m' | '5m' | '15m' | '1h';
 
-function generateCandles(instrument: Instrument, count = 120, intervalMinutes = 5): CandlestickData<Time>[] {
+function generateCandles(
+  instrument: Instrument,
+  count = 120,
+  intervalMinutes = 5,
+): CandlestickData<Time>[] {
   const meta = INSTRUMENT_METAS[instrument];
   const mid = parseFloat(meta.lastPrice);
   const candles: CandlestickData<Time>[] = [];
-  const nowSec = Math.floor(Date.now() / 1000);
+  const nowSec =
+    Math.floor(Date.now() / (intervalMinutes * 60000)) * intervalMinutes * 60;
   const stepSec = intervalMinutes * 60;
-  let currentPrice = mid * (1 - (count * 0.0008));
+  let currentPrice = mid * 0.995;
 
   for (let i = count; i >= 0; i--) {
     const time = (nowSec - i * stepSec) as unknown as Time;
@@ -57,8 +62,10 @@ export function PriceChart({ instrument }: PriceChartProps) {
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const [interval, setInterval] = useState<Interval>('5m');
-  const [lastPrice, setLastPrice] = useState<string>(INSTRUMENT_METAS[instrument].lastPrice);
-  const { subscribe } = useWebSocket();
+  const [lastPrice, setLastPrice] = useState<string>(
+    INSTRUMENT_METAS[instrument].lastPrice,
+  );
+  const { subscribe, connectionState } = useWebSocket();
 
   // Create chart instance
   useEffect(() => {
@@ -66,8 +73,8 @@ export function PriceChart({ instrument }: PriceChartProps) {
 
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: '#0e1524' },
-        textColor: '#94a3b8',
+        background: { type: ColorType.Solid, color: '#1c1c1e' },
+        textColor: '#9b9b9f',
         fontSize: 11,
       },
       grid: {
@@ -75,8 +82,8 @@ export function PriceChart({ instrument }: PriceChartProps) {
         horzLines: { color: 'rgba(255, 255, 255, 0.03)' },
       },
       crosshair: {
-        vertLine: { color: 'rgba(0, 210, 255, 0.4)', width: 1, style: 3 },
-        horzLine: { color: 'rgba(0, 210, 255, 0.4)', width: 1, style: 3 },
+        vertLine: { color: 'rgba(210, 210, 215, 0.35)', width: 1, style: 3 },
+        horzLine: { color: 'rgba(210, 210, 215, 0.35)', width: 1, style: 3 },
       },
       timeScale: {
         borderColor: 'rgba(255, 255, 255, 0.08)',
@@ -90,18 +97,25 @@ export function PriceChart({ instrument }: PriceChartProps) {
     });
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#00f5a0',
-      downColor: '#ff3b69',
+      upColor: '#9bafa2',
+      downColor: '#b38c8c',
       borderVisible: false,
-      wickUpColor: '#00f5a0',
-      wickDownColor: '#ff3b69',
+      wickUpColor: '#9bafa2',
+      wickDownColor: '#b38c8c',
     });
 
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
 
     // Load initial candles
-    const intervalMin = interval === '1m' ? 1 : interval === '5m' ? 5 : interval === '15m' ? 15 : 60;
+    const intervalMin =
+      interval === '1m'
+        ? 1
+        : interval === '5m'
+          ? 5
+          : interval === '15m'
+            ? 15
+            : 60;
     const initialData = generateCandles(instrument, 100, intervalMin);
     candleSeries.setData(initialData);
     chart.timeScale().fitContent();
@@ -153,15 +167,27 @@ export function PriceChart({ instrument }: PriceChartProps) {
     };
   }, [instrument, interval, subscribe]);
 
-  // Periodic subtle tick update to keep canvas reactive
+  // Only animate sample ticks while the live feed is unavailable.
   useEffect(() => {
+    if (connectionState === 'connected') return;
     const intervalId = window.setInterval(() => {
       if (!candleSeriesRef.current) return;
       const meta = INSTRUMENT_METAS[instrument];
       const mid = parseFloat(meta.lastPrice);
       const delta = (Math.random() - 0.49) * (mid * 0.0004);
-      const updatedClose = parseFloat((mid + delta).toFixed(meta.priceDecimals));
-      const nowSec = (Math.floor(Date.now() / 60000) * 60) as unknown as Time;
+      const updatedClose = parseFloat(
+        (mid + delta).toFixed(meta.priceDecimals),
+      );
+      const step =
+        (interval === '1m'
+          ? 1
+          : interval === '5m'
+            ? 5
+            : interval === '15m'
+              ? 15
+              : 60) * 60;
+      const nowSec = (Math.floor(Date.now() / (step * 1000)) *
+        step) as unknown as Time;
 
       try {
         candleSeriesRef.current.update({
@@ -178,111 +204,50 @@ export function PriceChart({ instrument }: PriceChartProps) {
     }, 4000);
 
     return () => window.clearInterval(intervalId);
-  }, [instrument]);
+  }, [instrument, interval, connectionState]);
 
   return (
-    <div
-      className="glass-panel"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        backgroundColor: 'var(--bg-panel)',
-      }}
-    >
-      {/* Chart Top Bar */}
-      <div
-        style={{
-          height: 38,
-          borderBottom: '1px solid var(--border-subtle)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 12px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <BarChart2 size={16} color="var(--accent-cyan)" />
-            <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-primary)' }}>
-              {instrument.replace('_', '/')}
-            </span>
-            <span
-              className="font-mono"
-              style={{
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                color: 'var(--bid-green)',
-                marginLeft: 4,
-              }}
-            >
-              ${lastPrice}
-            </span>
-          </div>
-
-          {/* Timeframe Selectors */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              backgroundColor: 'var(--bg-input)',
-              borderRadius: 4,
-              padding: 2,
-              gap: 2,
-            }}
-          >
-            {(['1m', '5m', '15m', '1h'] as Interval[]).map((int) => (
+    <div className="panel price-chart">
+      <div className="chart-toolbar">
+        <div>
+          <h2>
+            {instrument.replace('_', ' / ')}{' '}
+            <span className="muted">/ Spot</span>
+          </h2>
+          <p className="chart-quote font-mono">
+            {Number(lastPrice).toLocaleString('en-US', {
+              minimumFractionDigits: 2,
+            })}{' '}
+            <span>USDT</span>
+          </p>
+        </div>
+        <div className="chart-actions">
+          <div className="segmented" aria-label="Chart interval">
+            {(['1m', '5m', '15m', '1h'] as Interval[]).map((value) => (
               <button
-                key={int}
-                onClick={() => setInterval(int)}
-                style={{
-                  background: interval === int ? 'var(--bg-hover)' : 'transparent',
-                  color: interval === int ? 'var(--accent-cyan)' : 'var(--text-muted)',
-                  border: 'none',
-                  borderRadius: 3,
-                  padding: '2px 8px',
-                  fontSize: '0.7rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
+                key={value}
+                aria-pressed={interval === value}
+                onClick={() => setInterval(value)}
               >
-                {int}
+                {value}
               </button>
             ))}
           </div>
+          <button
+            className="icon-button"
+            aria-label="Reset chart zoom"
+            title="Reset chart zoom"
+            onClick={() => chartRef.current?.timeScale().fitContent()}
+          >
+            <Maximize2 size={15} />
+          </button>
         </div>
-
-        <button
-          onClick={() => {
-            if (chartRef.current) {
-              chartRef.current.timeScale().fitContent();
-            }
-          }}
-          title="Reset Zoom"
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            padding: 4,
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <Maximize2 size={14} />
-        </button>
       </div>
-
-      {/* Chart Canvas Area */}
-      <div
-        ref={containerRef}
-        style={{
-          flex: 1,
-          width: '100%',
-          position: 'relative',
-        }}
-      />
+      <div className="chart-canvas" ref={containerRef} />
+      <div className="chart-caption">
+        <span>Candlestick chart</span>
+        <span>Sample history / Scroll to zoom</span>
+      </div>
     </div>
   );
 }

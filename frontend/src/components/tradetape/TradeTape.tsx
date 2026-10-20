@@ -37,8 +37,10 @@ function generateInitialTrades(instrument: Instrument): TradeRecord[] {
 }
 
 export function TradeTape({ instrument }: TradeTapeProps) {
-  const { subscribe } = useWebSocket();
-  const [trades, setTrades] = useState<TradeRecord[]>(() => generateInitialTrades(instrument));
+  const { subscribe, connectionState } = useWebSocket();
+  const [trades, setTrades] = useState<TradeRecord[]>(() =>
+    generateInitialTrades(instrument),
+  );
 
   // Reset when instrument changes
   useEffect(() => {
@@ -59,104 +61,31 @@ export function TradeTape({ instrument }: TradeTapeProps) {
   }, [instrument, subscribe]);
 
   return (
-    <div
-      className="glass-panel"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        backgroundColor: 'var(--bg-panel)',
-      }}
-    >
-      {/* Panel Header */}
-      <div
-        style={{
-          padding: '8px 12px',
-          borderBottom: '1px solid var(--border-subtle)',
-          fontSize: '0.78rem',
-          fontWeight: 700,
-          color: 'var(--text-secondary)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <span>TRADE TAPE</span>
-        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Market Executions</span>
-      </div>
-
-      {/* Column Headers */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr 1fr',
-          padding: '4px 10px',
-          fontSize: '0.68rem',
-          color: 'var(--text-muted)',
-          borderBottom: '1px solid var(--border-subtle)',
-        }}
-      >
+    <div className="trade-tape">
+      <p className="panel-footnote">
+        {connectionState === 'connected'
+          ? 'Market executions'
+          : 'Preview · Sample executions'}
+      </p>
+      <div className="depth-columns">
         <span>Price (USDT)</span>
-        <span style={{ textAlign: 'right' }}>Size</span>
-        <span style={{ textAlign: 'right' }}>Time</span>
+        <span>Size</span>
+        <span>Time</span>
       </div>
-
-      {/* Trades Scrollable List */}
-      <div
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        {trades.map((t) => {
-          const isBuy = t.takerSide === 'BUY';
-          const timeStr = t.executedAt ? new Date(t.executedAt).toLocaleTimeString() : '--:--:--';
-
-          return (
-            <div
-              key={t.tradeId}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr 1fr',
-                padding: '3px 10px',
-                fontSize: '0.72rem',
-                borderBottom: '1px solid rgba(255,255,255,0.02)',
-                alignItems: 'center',
-              }}
+      <div className="tape-list">
+        {trades.map((trade) => (
+          <div className="tape-row font-mono" key={trade.tradeId}>
+            <span
+              className={trade.takerSide === 'BUY' ? 'positive' : 'negative'}
             >
-              <span
-                className="font-mono"
-                style={{
-                  color: isBuy ? 'var(--bid-green)' : 'var(--ask-red)',
-                  fontWeight: 600,
-                }}
-              >
-                {t.price}
-              </span>
-              <span
-                className="font-mono"
-                style={{
-                  color: 'var(--text-primary)',
-                  textAlign: 'right',
-                }}
-              >
-                {t.quantity}
-              </span>
-              <span
-                className="font-mono"
-                style={{
-                  color: 'var(--text-muted)',
-                  textAlign: 'right',
-                  fontSize: '0.66rem',
-                }}
-              >
-                {timeStr}
-              </span>
-            </div>
-          );
-        })}
+              {trade.price}
+            </span>
+            <span>{trade.quantity}</span>
+            <span className="muted">
+              {new Date(trade.executedAt).toLocaleTimeString('en-GB')}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
