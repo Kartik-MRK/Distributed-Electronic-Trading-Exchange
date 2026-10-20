@@ -8,6 +8,9 @@ plugins {
     java
 }
 
+val junitVersion = libs.versions.junit.get()
+val springBootVersion = libs.versions.spring.boot.get()
+
 // ---------------------------------------------------------------------------
 // Spotless formatting — applied to every subproject
 // ---------------------------------------------------------------------------
@@ -47,6 +50,11 @@ subprojects {
         onlyIf { file("src/main/java").exists() }
     }
 
+    // Disable empty plain JAR generation for Spring Boot services so container packaging always picks the executable fat JAR
+    tasks.matching { it.name == "jar" && project.plugins.hasPlugin("org.springframework.boot") }.configureEach {
+        enabled = false
+    }
+
     // ---------------------------------------------------------------------------
     // All subprojects get these common test settings
     // ---------------------------------------------------------------------------
@@ -65,13 +73,18 @@ subprojects {
         environment("DOCKER_API_VERSION", "1.44")
     }
 
+    dependencies {
+        "testImplementation"(platform("org.junit:junit-bom:$junitVersion"))
+        "testRuntimeOnly"("org.junit.platform:junit-platform-launcher")
+    }
+
     // ---------------------------------------------------------------------------
     // Shared dependency versions via Spring BOM in every Spring subproject
     // ---------------------------------------------------------------------------
     configurations.all {
         resolutionStrategy.eachDependency {
             if (requested.group == "org.springframework.boot") {
-                useVersion(libs.versions.spring.boot.get())
+                useVersion(springBootVersion)
             }
         }
     }
