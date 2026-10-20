@@ -27,15 +27,24 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configure SSH Key
+        env:
+          SSH_KEY: ${{ secrets.ORACLE_VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.ORACLE_VPS_HOST }}
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.ORACLE_VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }} >> ~/.ssh/known_hosts
+          TARGET_HOST="${VPS_HOST:-141.148.223.82}"
+          ssh-keyscan -H "$TARGET_HOST" >> ~/.ssh/known_hosts
 
       - name: Deploy on Oracle Cloud VPS via SSH
+        env:
+          VPS_HOST: ${{ secrets.ORACLE_VPS_HOST }}
+          VPS_USER: ${{ secrets.ORACLE_VPS_USER }}
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.ORACLE_VPS_USER || 'ubuntu' }}@${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }} bash -s << 'EOF'
+          TARGET_HOST="${VPS_HOST:-141.148.223.82}"
+          TARGET_USER="${VPS_USER:-ubuntu}"
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no "$TARGET_USER@$TARGET_HOST" bash -s << 'EOF'
             set -e
             echo "=========================================================="
             echo " Starting DETE Automated Deployment on K3s Cluster"
@@ -80,15 +89,24 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configure SSH Key
+        env:
+          SSH_KEY: ${{ secrets.ORACLE_VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.ORACLE_VPS_HOST }}
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.ORACLE_VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }} >> ~/.ssh/known_hosts
+          TARGET_HOST="${VPS_HOST:-141.148.223.82}"
+          ssh-keyscan -H "$TARGET_HOST" >> ~/.ssh/known_hosts
 
       - name: Execute Live Smoke Tests on Oracle VPS
+        env:
+          VPS_HOST: ${{ secrets.ORACLE_VPS_HOST }}
+          VPS_USER: ${{ secrets.ORACLE_VPS_USER }}
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.ORACLE_VPS_USER || 'ubuntu' }}@${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }} bash -s << 'EOF'
+          TARGET_HOST="${VPS_HOST:-141.148.223.82}"
+          TARGET_USER="${VPS_USER:-ubuntu}"
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no "$TARGET_USER@$TARGET_HOST" bash -s << 'EOF'
             set -e
             echo "--> Running DETE Smoke Tests..."
             python3 /home/ubuntu/dete/scripts/smoke_test.py
@@ -96,9 +114,13 @@ jobs:
 
       - name: Post Deployment Summary
         if: always()
+        env:
+          VPS_HOST: ${{ secrets.ORACLE_VPS_HOST }}
         run: |
+          TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           echo "### 🚀 DETE Deployment Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Host**: \`${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Host**: \`$TARGET_HOST\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Trading Web UI**: http://${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }}/" >> $GITHUB_STEP_SUMMARY
-          echo "- **Grafana Telemetry**: http://${{ secrets.ORACLE_VPS_HOST || '141.148.223.82' }}/grafana/" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trading Web UI**: http://$TARGET_HOST/" >> $GITHUB_STEP_SUMMARY
+          echo "- **Grafana Telemetry**: http://$TARGET_HOST/grafana/" >> $GITHUB_STEP_SUMMARY
+
