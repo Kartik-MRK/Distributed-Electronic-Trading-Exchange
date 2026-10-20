@@ -39,8 +39,6 @@ jobs:
           printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
           sed -i -e '$a\' ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          echo "Validating SSH key format:"
-          ssh-keygen -l -f ~/.ssh/id_rsa
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           ssh-keyscan -H "$TARGET_HOST" >> ~/.ssh/known_hosts
 
@@ -104,7 +102,6 @@ jobs:
           printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
           sed -i -e '$a\' ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keygen -l -f ~/.ssh/id_rsa
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           ssh-keyscan -H "$TARGET_HOST" >> ~/.ssh/known_hosts
 
