@@ -56,6 +56,12 @@ jobs:
                   out.write(key + '\n')
           "
           chmod 600 ~/.ssh/id_rsa
+          if ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub 2>/tmp/keygen_err.log; then
+            FP=$(ssh-keygen -l -f ~/.ssh/id_rsa.pub)
+            echo "::notice title=Key Fingerprint::$FP"
+          else
+            echo "::error title=Failed to derive public key::$(cat /tmp/keygen_err.log)"
+          fi
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           ssh-keyscan -H "$TARGET_HOST" >> ~/.ssh/known_hosts
 
@@ -66,7 +72,7 @@ jobs:
         run: |
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           TARGET_USER="${VPS_USER:-ubuntu}"
-          SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=no -o PubkeyAcceptedKeyTypes=+ssh-rsa -o HostkeyAlgorithms=+ssh-rsa"
+          SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=no -o PubkeyAcceptedAlgorithms=rsa-sha2-512,rsa-sha2-256,ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa"
           echo "Connecting to $TARGET_USER@$TARGET_HOST..."
           if ! ssh -v -o BatchMode=yes $SSH_OPTS -i ~/.ssh/id_rsa "$TARGET_USER@$TARGET_HOST" "echo SSH_CONNECTION_OK" > /tmp/ssh_debug.log 2>&1; then
             cat /tmp/ssh_debug.log
@@ -144,6 +150,12 @@ jobs:
                   out.write(key + '\n')
           "
           chmod 600 ~/.ssh/id_rsa
+          if ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub 2>/tmp/keygen_err.log; then
+            FP=$(ssh-keygen -l -f ~/.ssh/id_rsa.pub)
+            echo "::notice title=Key Fingerprint::$FP"
+          else
+            echo "::error title=Failed to derive public key::$(cat /tmp/keygen_err.log)"
+          fi
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           ssh-keyscan -H "$TARGET_HOST" >> ~/.ssh/known_hosts
 
@@ -154,7 +166,7 @@ jobs:
         run: |
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           TARGET_USER="${VPS_USER:-ubuntu}"
-          SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=no -o PubkeyAcceptedKeyTypes=+ssh-rsa -o HostkeyAlgorithms=+ssh-rsa"
+          SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=no -o PubkeyAcceptedAlgorithms=rsa-sha2-512,rsa-sha2-256,ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa"
           ssh $SSH_OPTS -i ~/.ssh/id_rsa "$TARGET_USER@$TARGET_HOST" bash -s << 'EOF'
             set -e
             echo "--> Running DETE Smoke Tests..."
