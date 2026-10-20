@@ -9,6 +9,8 @@ on:
       - 'frontend/**'
       - 'infra/**'
       - 'scripts/**'
+      - 'benchmarks/**'
+      - 'build.gradle.kts'
       - '.github/workflows/cd.yml'
   workflow_dispatch:
 
