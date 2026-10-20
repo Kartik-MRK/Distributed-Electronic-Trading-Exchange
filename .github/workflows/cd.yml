@@ -35,11 +35,12 @@ jobs:
             echo "::error::ORACLE_VPS_SSH_KEY secret is EMPTY or NOT FOUND in GitHub Secrets! Please check repository settings."
             exit 1
           fi
-          echo "SSH key found (length: ${#SSH_KEY} bytes)"
           mkdir -p ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_rsa
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+          sed -i -e '$a\' ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keygen -l -f ~/.ssh/id_rsa || { echo "::error::SSH key is corrupt or invalid format"; exit 1; }
+          echo "Validating SSH key format:"
+          ssh-keygen -l -f ~/.ssh/id_rsa
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           ssh-keyscan -H "$TARGET_HOST" >> ~/.ssh/known_hosts
 
@@ -100,8 +101,10 @@ jobs:
           VPS_HOST: ${{ secrets.ORACLE_VPS_HOST }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_rsa
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+          sed -i -e '$a\' ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          ssh-keygen -l -f ~/.ssh/id_rsa
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           ssh-keyscan -H "$TARGET_HOST" >> ~/.ssh/known_hosts
 
