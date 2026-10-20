@@ -36,8 +36,25 @@ jobs:
             exit 1
           fi
           mkdir -p ~/.ssh
-          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
-          sed -i -e '$a\' ~/.ssh/id_rsa
+          python3 -c "
+          import os, re
+          key = os.environ.get('SSH_KEY', '').strip()
+          m = re.search(r'(-----BEGIN [A-Z0-9 ]+PRIVATE KEY-----)(.*?)(-----END [A-Z0-9 ]+PRIVATE KEY-----)', key, re.DOTALL)
+          if m:
+              h = m.group(1).strip()
+              b = re.sub(r'\s+', '', m.group(2))
+              f = m.group(3).strip()
+              lines = [b[i:i+64] for i in range(0, len(b), 64)]
+              fixed = h + '\n' + '\n'.join(lines) + '\n' + f + '\n'
+              path = os.path.expanduser('~/.ssh/id_rsa')
+              with open(path, 'w') as out:
+                  out.write(fixed)
+              print(f'Successfully formatted SSH key with {len(lines) + 2} lines.')
+          else:
+              print('Warning: Key does not match PEM pattern, writing verbatim.')
+              with open(os.path.expanduser('~/.ssh/id_rsa'), 'w') as out:
+                  out.write(key + '\n')
+          "
           chmod 600 ~/.ssh/id_rsa
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           ssh-keyscan -H "$TARGET_HOST" >> ~/.ssh/known_hosts
@@ -49,16 +66,17 @@ jobs:
         run: |
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           TARGET_USER="${VPS_USER:-ubuntu}"
+          SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=no -o PubkeyAcceptedKeyTypes=+ssh-rsa -o HostkeyAlgorithms=+ssh-rsa"
           echo "Connecting to $TARGET_USER@$TARGET_HOST..."
-          if ! ssh -v -o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa "$TARGET_USER@$TARGET_HOST" "echo SSH_CONNECTION_OK" > /tmp/ssh_debug.log 2>&1; then
+          if ! ssh -v -o BatchMode=yes $SSH_OPTS -i ~/.ssh/id_rsa "$TARGET_USER@$TARGET_HOST" "echo SSH_CONNECTION_OK" > /tmp/ssh_debug.log 2>&1; then
             cat /tmp/ssh_debug.log
             while IFS= read -r line; do
               echo "::error title=SSH Debug::$line"
-            done < <(tail -n 12 /tmp/ssh_debug.log)
+            done < <(tail -n 15 /tmp/ssh_debug.log)
             exit 255
           fi
           echo "SSH connection established successfully!"
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no "$TARGET_USER@$TARGET_HOST" bash -s << 'EOF'
+          ssh $SSH_OPTS -i ~/.ssh/id_rsa "$TARGET_USER@$TARGET_HOST" bash -s << 'EOF'
             set -e
             echo "=========================================================="
             echo " Starting DETE Automated Deployment on K3s Cluster"
@@ -108,8 +126,23 @@ jobs:
           VPS_HOST: ${{ secrets.ORACLE_VPS_HOST }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
-          sed -i -e '$a\' ~/.ssh/id_rsa
+          python3 -c "
+          import os, re
+          key = os.environ.get('SSH_KEY', '').strip()
+          m = re.search(r'(-----BEGIN [A-Z0-9 ]+PRIVATE KEY-----)(.*?)(-----END [A-Z0-9 ]+PRIVATE KEY-----)', key, re.DOTALL)
+          if m:
+              h = m.group(1).strip()
+              b = re.sub(r'\s+', '', m.group(2))
+              f = m.group(3).strip()
+              lines = [b[i:i+64] for i in range(0, len(b), 64)]
+              fixed = h + '\n' + '\n'.join(lines) + '\n' + f + '\n'
+              path = os.path.expanduser('~/.ssh/id_rsa')
+              with open(path, 'w') as out:
+                  out.write(fixed)
+          else:
+              with open(os.path.expanduser('~/.ssh/id_rsa'), 'w') as out:
+                  out.write(key + '\n')
+          "
           chmod 600 ~/.ssh/id_rsa
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           ssh-keyscan -H "$TARGET_HOST" >> ~/.ssh/known_hosts
@@ -121,7 +154,8 @@ jobs:
         run: |
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           TARGET_USER="${VPS_USER:-ubuntu}"
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no "$TARGET_USER@$TARGET_HOST" bash -s << 'EOF'
+          SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=no -o PubkeyAcceptedKeyTypes=+ssh-rsa -o HostkeyAlgorithms=+ssh-rsa"
+          ssh $SSH_OPTS -i ~/.ssh/id_rsa "$TARGET_USER@$TARGET_HOST" bash -s << 'EOF'
             set -e
             echo "--> Running DETE Smoke Tests..."
             python3 /home/ubuntu/dete/scripts/smoke_test.py
