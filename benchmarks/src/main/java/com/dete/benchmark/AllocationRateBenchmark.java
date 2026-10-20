@@ -31,7 +31,6 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
  * with GC profiler (-prof gc) to track B/op and allocation rates. Target: Near-zero allocs.
  */
 
-
 /*
 1. What Is Your Project? (The Big Picture)
 Your project is named DETE (Distributed Electronic Trading Exchange).
