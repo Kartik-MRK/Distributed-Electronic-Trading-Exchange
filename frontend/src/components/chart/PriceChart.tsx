@@ -71,6 +71,12 @@ export function PriceChart({ instrument }: PriceChartProps) {
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Canvas cannot resolve CSS variables itself; share the data palette with
+    // the order book and trade tables instead of muting the chart separately.
+    const theme = getComputedStyle(containerRef.current);
+    const upColor = theme.getPropertyValue('--bid-green').trim();
+    const downColor = theme.getPropertyValue('--ask-red').trim();
+
     const chart = createChart(containerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: '#1c1c1e' },
@@ -97,11 +103,11 @@ export function PriceChart({ instrument }: PriceChartProps) {
     });
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#9bafa2',
-      downColor: '#b38c8c',
+      upColor,
+      downColor,
       borderVisible: false,
-      wickUpColor: '#9bafa2',
-      wickDownColor: '#b38c8c',
+      wickUpColor: upColor,
+      wickDownColor: downColor,
     });
 
     chartRef.current = chart;

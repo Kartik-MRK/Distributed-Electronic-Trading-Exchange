@@ -62,6 +62,7 @@ jobs:
             cd /home/ubuntu/dete
             git fetch origin master
             git reset --hard origin/master
+            chmod +x ./gradlew ./scripts/*.sh ./scripts/chaos/*.sh ./scripts/*.py 2>/dev/null || true
 
             echo "--> Compiling Spring Boot Executable JARs..."
             ./gradlew bootJar -x test --no-daemon --max-workers=2
@@ -112,10 +113,11 @@ jobs:
         run: |
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           TARGET_USER="${VPS_USER:-ubuntu}"
-          SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=no -o PubkeyAcceptedAlgorithms=rsa-sha2-512,rsa-sha2-256,ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa"
+          SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=no"
           ssh $SSH_OPTS -i ~/.ssh/id_rsa "$TARGET_USER@$TARGET_HOST" bash -s << 'EOF'
             set -e
             echo "--> Running DETE Smoke Tests..."
+            chmod +x /home/ubuntu/dete/scripts/*.py 2>/dev/null || true
             python3 /home/ubuntu/dete/scripts/smoke_test.py
           EOF
 

@@ -12,15 +12,16 @@
   --text-secondary: #b3b3b9;
   --text-muted: #96969e;
   --text-disabled: #73737c;
-  --bid-green: #a2bcac;
-  --bid-green-bg: rgba(142, 174, 154, 0.1);
-  --bid-green-depth: rgba(142, 174, 154, 0.09);
-  --ask-red: #c6a0a0;
-  --ask-red-bg: rgba(184, 139, 139, 0.1);
-  --ask-red-depth: rgba(184, 139, 139, 0.09);
+  /* Semantic data colors stay distinct from the neutral interface surfaces. */
+  --bid-green: #26c99a;
+  --bid-green-bg: rgba(38, 201, 154, 0.12);
+  --bid-green-depth: rgba(38, 201, 154, 0.14);
+  --ask-red: #ef5350;
+  --ask-red-bg: rgba(239, 83, 80, 0.12);
+  --ask-red-depth: rgba(239, 83, 80, 0.14);
   --accent-cyan: #d6d6dc;
   --accent-cyan-bg: #303033;
-  --accent-amber: #c0b398;
+  --accent-amber: #e4b44c;
   --accent-purple: #b7b1c1;
   --font-mono: var(--font-geist-mono), monospace;
   --font-sans:

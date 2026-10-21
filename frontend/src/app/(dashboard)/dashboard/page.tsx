@@ -243,6 +243,14 @@ export default function SystemDashboardPage() {
                       <span
                         style={{
                           width: `${Math.min(100, memory.maxMb > 0 ? (memory.usedMb / memory.maxMb) * 100 : 0)}%`,
+                          backgroundColor:
+                            memory.maxMb <= 0
+                              ? 'var(--text-muted)'
+                              : memory.usedMb / memory.maxMb > 0.8
+                                ? 'var(--ask-red)'
+                                : memory.usedMb / memory.maxMb > 0.6
+                                  ? 'var(--accent-amber)'
+                                  : 'var(--bid-green)',
                         }}
                       />
                     </div>
