@@ -251,10 +251,19 @@ export class WebSocketManager {
   }
 }
 
+export function getWebSocketUrl(): string {
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    return process.env.NEXT_PUBLIC_WS_URL;
+  }
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname === 'localhost' && window.location.port === '3000') {
+      return 'ws://localhost:8080/ws';
+    }
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.host}/ws`;
+  }
+  return 'ws://localhost:8080/ws';
+}
+
 // Global singleton instance for shared connection across hooks
-export const wsManager = new WebSocketManager(
-  typeof window !== 'undefined'
-    ? process.env.NEXT_PUBLIC_WS_URL ||
-        `ws://${window.location.hostname}:8080/ws`
-    : 'ws://localhost:8080/ws',
-);
+export const wsManager = new WebSocketManager(getWebSocketUrl());

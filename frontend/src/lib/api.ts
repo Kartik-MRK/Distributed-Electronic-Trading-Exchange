@@ -18,8 +18,21 @@ import {
 } from '../types';
 import { getAuthToken } from './auth';
 
-const GATEWAY_BASE_URL =
-  process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:8080';
+export function getGatewayBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_GATEWAY_URL) {
+    return process.env.NEXT_PUBLIC_GATEWAY_URL;
+  }
+  if (typeof window !== 'undefined') {
+    // If running on local next dev server (localhost:3000), point to local gateway port 8080
+    if (window.location.hostname === 'localhost' && window.location.port === '3000') {
+      return 'http://localhost:8080';
+    }
+    // In all other environments (deployed VPS, production, reverse proxy), use relative path
+    // so requests hit the current host (e.g. http://141.148.223.82/auth/...) and Nginx reverse proxy
+    return '';
+  }
+  return process.env.GATEWAY_URL || 'http://localhost:8080';
+}
 
 export class ApiError extends Error {
   constructor(
@@ -49,7 +62,8 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const url = `${GATEWAY_BASE_URL}${endpoint}`;
+  const baseUrl = getGatewayBaseUrl();
+  const url = `${baseUrl}${endpoint}`;
 
   try {
     const response = await fetch(url, {
