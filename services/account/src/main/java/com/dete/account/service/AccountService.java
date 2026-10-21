@@ -172,11 +172,6 @@ public class AccountService {
               "Insufficient available balance to reserve %d %s (available: %d)",
               amount, asset, current.available()));
     }
-    String siblingQuote =
-        "USD".equalsIgnoreCase(asset) ? "USDT" : ("USDT".equalsIgnoreCase(asset) ? "USD" : null);
-    if (siblingQuote != null && balanceRepository.getBalance(accountId, siblingQuote).isPresent()) {
-      balanceRepository.reserve(accountId, siblingQuote, amount);
-    }
 
     long seq = ledgerRepository.getNextSequenceNum(accountId);
     LedgerEntry entry =
@@ -251,11 +246,6 @@ public class AccountService {
               "Insufficient reserved balance to release %d %s (reserved: %d)",
               amount, asset, current.reserved()));
     }
-    String siblingQuote =
-        "USD".equalsIgnoreCase(asset) ? "USDT" : ("USDT".equalsIgnoreCase(asset) ? "USD" : null);
-    if (siblingQuote != null && balanceRepository.getBalance(accountId, siblingQuote).isPresent()) {
-      balanceRepository.release(accountId, siblingQuote, amount);
-    }
 
     long seq = ledgerRepository.getNextSequenceNum(accountId);
     LedgerEntry entry =
@@ -323,22 +313,21 @@ public class AccountService {
 
     // 2. Double-entry balance state updates
     // Buyer: debited quote amount from reserved, credited base asset to available
-    balanceRepository.debitReserved(buyerId, quoteAsset, quoteAmount);
-    String siblingQuote =
-        "USD".equalsIgnoreCase(quoteAsset)
-            ? "USDT"
-            : ("USDT".equalsIgnoreCase(quoteAsset) ? "USD" : null);
-    if (siblingQuote != null && balanceRepository.getBalance(buyerId, siblingQuote).isPresent()) {
-      balanceRepository.debitReserved(buyerId, siblingQuote, quoteAmount);
+    int buyerDebited = balanceRepository.debitReserved(buyerId, quoteAsset, quoteAmount);
+    if (buyerDebited == 0) {
+      String sibling =
+          "USD".equalsIgnoreCase(quoteAsset)
+              ? "USDT"
+              : ("USDT".equalsIgnoreCase(quoteAsset) ? "USD" : null);
+      if (sibling != null) {
+        balanceRepository.debitReserved(buyerId, sibling, quoteAmount);
+      }
     }
     balanceRepository.creditAvailable(buyerId, baseAsset, quantity);
 
     // Seller: debited base asset from reserved, credited quote asset to available
     balanceRepository.debitReserved(sellerId, baseAsset, quantity);
     balanceRepository.creditAvailable(sellerId, quoteAsset, quoteAmount);
-    if (siblingQuote != null && balanceRepository.getBalance(sellerId, siblingQuote).isPresent()) {
-      balanceRepository.creditAvailable(sellerId, siblingQuote, quoteAmount);
-    }
 
     // 3. Write 4 double-entry ledger entries
     long buyerSeq1 = ledgerRepository.getNextSequenceNum(buyerId);
