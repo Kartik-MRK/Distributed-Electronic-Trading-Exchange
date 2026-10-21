@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { Loader } from '@/components/common/Loader';
 
 export default function RegisterRedirect() {
   const router = useRouter();
@@ -12,9 +13,7 @@ export default function RegisterRedirect() {
 
   return (
     <Suspense fallback={null}>
-      <div className="loading-screen" role="status">
-        Redirecting to registration...
-      </div>
+      <Loader variant="page" label="Opening registration..." />
     </Suspense>
   );
 }

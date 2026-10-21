@@ -1,0 +1,329 @@
+.page {
+  --bg-input: #0b121b;
+  --bg-panel: #111d29;
+  --bg-card: #111d29;
+  --border-subtle: #263441;
+  --border-light: #344453;
+  --text-primary: #edf1f6;
+  --text-secondary: #b7c4d2;
+  --text-muted: #95a5b6;
+  --text-disabled: #748596;
+  --accent-cyan: #a7cfe7;
+  min-height: 100svh;
+  background: #070b11;
+  color: var(--text-primary);
+}
+.header {
+  width: min(1320px, calc(100% - 96px));
+  min-height: 88px;
+  margin: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid rgba(162, 188, 210, 0.14);
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #a6b6c6;
+  font-size: 12px;
+  min-height: 44px;
+}
+.back svg {
+  transition: transform 200ms ease;
+}
+.back:hover {
+  color: #edf1f6;
+}
+.back:hover svg {
+  transform: translateX(-3px);
+}
+.workspace {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  max-width: 1320px;
+  margin: auto;
+  min-height: calc(100svh - 88px);
+}
+.intro {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 690px;
+}
+.introCopy {
+  position: relative;
+  z-index: 1;
+  padding: 92px 48px 0;
+  animation: arrive 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.eyebrow {
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: #84a6bf;
+}
+.intro h2 {
+  margin: 25px 0 22px;
+  font-size: clamp(36px, 3.7vw, 52px);
+  line-height: 1.1;
+  letter-spacing: -0.05em;
+  font-weight: 450;
+}
+.introCopy > p:last-child {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #9cabbc;
+}
+.visual {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.visual::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(transparent 65%, #070b11 98%);
+}
+.visual .globe {
+  width: 820px;
+  height: 820px;
+  bottom: -405px;
+  left: 48%;
+}
+.caption {
+  position: absolute;
+  bottom: 32px;
+  left: 48px;
+  right: 24px;
+  font-size: 9px;
+  color: #8094a7;
+}
+.content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 64px 48px;
+  border-left: 1px solid rgba(162, 188, 210, 0.1);
+  background: radial-gradient(ellipse at 90% 5%, #0c1621, transparent 65%);
+}
+.form {
+  width: 100%;
+  max-width: 390px;
+  animation: arrive 550ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.form :global(.auth-tabs) {
+  position: relative;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #263441;
+  border-radius: 0;
+  padding: 0;
+  margin-bottom: 36px;
+  gap: 28px;
+}
+.form :global(.auth-tab-btn) {
+  position: relative;
+  flex: none;
+  padding: 12px 0;
+  border-radius: 0;
+  font-size: 12px;
+}
+.form :global(.auth-tab-btn.active) {
+  background: transparent;
+  box-shadow: none;
+  color: #e4f1fa;
+}
+.form :global(.auth-tab-btn)::after {
+  content: '';
+  position: absolute;
+  height: 1px;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  background: #9bcbe9;
+  box-shadow: 0 0 9px #86bfe755;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 220ms ease;
+}
+.form :global(.auth-tab-btn.active)::after {
+  transform: scaleX(1);
+}
+.form :global(.auth-panel) {
+  animation: arrive 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.form :global(.auth-header-copy) {
+  margin-bottom: 28px;
+}
+.form :global(.auth-header-copy h1) {
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 450;
+  letter-spacing: -0.04em;
+  margin-bottom: 10px;
+}
+.form :global(.auth-header-copy p) {
+  line-height: 1.7;
+}
+.form :global(.auth-form) {
+  gap: 20px;
+}
+.form :global(.field label) {
+  font-size: 12px;
+}
+.form :global(.field-icon-label) {
+  color: #b7c4d2;
+}
+.form :global(input) {
+  min-height: 46px;
+  border-radius: 5px;
+  transition:
+    border-color 180ms,
+    box-shadow 180ms;
+}
+.form :global(input:hover) {
+  border-color: #52687c;
+}
+.form :global(input:focus) {
+  border-color: #87b6d5;
+  outline: none;
+  box-shadow: 0 0 0 3px #87b6d512;
+}
+.form :global(.auth-submit-btn) {
+  height: 46px;
+  background: #d7e8f4;
+  color: #0e1a25;
+  border-color: #d7e8f4;
+  border-radius: 5px;
+  justify-content: space-between;
+  padding-inline: 16px;
+  transition:
+    transform 200ms,
+    background-color 200ms,
+    box-shadow 200ms;
+}
+.form :global(.auth-submit-btn:hover:not(:disabled)) {
+  background: #f0f8ff;
+  border-color: #f0f8ff;
+  transform: translateY(-1px);
+  box-shadow: 0 5px 20px #8ec8ef12;
+}
+.form :global(.auth-submit-btn:active:not(:disabled)) {
+  transform: translateY(0);
+}
+.form :global(.auth-submit-btn svg) {
+  transition: transform 200ms;
+}
+.form :global(.auth-submit-btn:hover:not(:disabled) svg) {
+  transform: translateX(3px);
+}
+.form :global(.auth-divider) {
+  margin: 26px 0;
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.form :global(.guest-action-card) {
+  background: transparent;
+  border: 1px solid #2c3b49;
+  border-radius: 5px;
+  padding: 14px 16px;
+}
+.form :global(.guest-action-card:hover:not(:disabled)) {
+  background: #101c27;
+  border-color: #5b7b94;
+  transform: none;
+}
+.form :global(.guest-action-card:disabled) {
+  transform: none;
+}
+.form :global(.guest-action-text strong) {
+  font-size: 12px;
+  font-weight: 500;
+}
+.form :global(.guest-action-text span) {
+  margin-top: 3px;
+  line-height: 1.6;
+}
+.form :global(.otp-digit-box) {
+  padding: 8px 0;
+  border-radius: 5px;
+}
+.form :global(.notice) {
+  overflow-wrap: anywhere;
+}
+.page :is(a, button):focus-visible {
+  outline: 2px solid #91c7ec;
+  outline-offset: 5px;
+}
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 1050px) {
+  .header {
+    width: calc(100% - 48px);
+  }
+  .introCopy {
+    padding: 80px 24px 0;
+  }
+  .caption {
+    left: 24px;
+  }
+  .content {
+    padding: 40px 32px;
+  }
+}
+@media (max-width: 760px) {
+  .header {
+    min-height: 78px;
+  }
+  .back {
+    font-size: 11px;
+  }
+  .workspace {
+    display: block;
+    min-height: calc(100svh - 78px);
+  }
+  .intro {
+    display: none;
+  }
+  .content {
+    min-height: calc(100svh - 78px);
+    border: 0;
+    padding: 40px 24px 56px;
+    align-items: flex-start;
+  }
+  .form {
+    max-width: 410px;
+  }
+  .form :global(.auth-tabs) {
+    margin-bottom: 32px;
+  }
+  .form :global(input) {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .introCopy,
+  .form,
+  .form :global(.auth-panel) {
+    animation: none;
+  }
+  .page a,
+  .page button,
+  .page svg {
+    transition: none;
+    transform: none !important;
+  }
+}

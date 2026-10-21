@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import styles from './LandingPage.module.css';
 
-export function Globe() {
+export function Globe({ className = '' }: { className?: string }) {
+  const shadingId = useId();
   const hostRef = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
 
@@ -32,7 +33,7 @@ export function Globe() {
 
   return (
     <div
-      className={styles.globe}
+      className={`${styles.globe} ${className}`}
       aria-hidden="true"
       data-renderer={ready ? 'webgl' : 'fallback'}
     >
@@ -42,7 +43,7 @@ export function Globe() {
         focusable="false"
       >
         <defs>
-          <radialGradient id="globe-shading" cx="50%" cy="12%" r="80%">
+          <radialGradient id={shadingId} cx="50%" cy="12%" r="80%">
             <stop offset="0" stopColor="#102534" />
             <stop offset="1" stopColor="#060a10" />
           </radialGradient>
@@ -51,7 +52,7 @@ export function Globe() {
           cx="500"
           cy="500"
           r="420"
-          fill="url(#globe-shading)"
+          fill={`url(#${shadingId})`}
           stroke="#2a6379"
           strokeWidth="1"
         />

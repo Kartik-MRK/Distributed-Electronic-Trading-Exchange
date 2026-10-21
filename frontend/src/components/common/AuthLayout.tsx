@@ -1,42 +1,45 @@
 import Link from 'next/link';
-import { Activity } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { ReactNode } from 'react';
+import { ExchangeBrand } from './ExchangeBrand';
+import { Globe } from '../landing/Globe';
+import styles from './AuthLayout.module.css';
+
 export function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <main className="auth-page">
-      <aside className="auth-intro">
-        <Link className="brand" href="/terminal">
-          <span className="brand-mark">
-            <Activity size={20} />
-          </span>
-          DETE<span className="brand-caption">EXCHANGE</span>
+    <main className={styles.page}>
+      <header className={styles.header}>
+        <ExchangeBrand />
+        <Link href="/" className={styles.back}>
+          <ArrowLeft size={14} /> Back to overview
         </Link>
-        <div>
-          <span className="eyebrow">
-            Distributed electronic trading exchange
+      </header>
+      <div className={styles.workspace}>
+        <aside className={styles.intro}>
+          <div className={styles.introCopy}>
+            <p className={styles.eyebrow}>DISTRIBUTED BY DESIGN</p>
+            <h2>
+              Access your
+              <br />
+              trading workspace.
+            </h2>
+            <p>
+              Follow the market. Manage your orders.
+              <br />
+              See every trade through.
+            </p>
+          </div>
+          <div className={styles.visual} aria-hidden="true">
+            <Globe className={styles.globe} />
+          </div>
+          <span className={styles.caption}>
+            DETE / Distributed Electronic Trading Exchange
           </span>
-          <h2>
-            A clear view.
-            <br />A considered trade.
-          </h2>
-          <p>
-            Your markets, orders, and account activity in one focused workspace.
-          </p>
-          <div className="auth-feature" style={{ marginTop: 36 }}>
-            Market depth<span>01</span>
-          </div>
-          <div className="auth-feature">
-            Order management<span>02</span>
-          </div>
-          <div className="auth-feature">
-            Execution history<span>03</span>
-          </div>
-        </div>
-        <footer>DETE / Trading infrastructure</footer>
-      </aside>
-      <section className="auth-content">
-        <div className="auth-card">{children}</div>
-      </section>
+        </aside>
+        <section className={styles.content} aria-label="Exchange access">
+          <div className={styles.form}>{children}</div>
+        </section>
+      </div>
     </main>
   );
 }

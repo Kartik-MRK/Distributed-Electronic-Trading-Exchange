@@ -1,0 +1,42 @@
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #edf1f6;
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: 0.025em;
+}
+.mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #344251;
+  border-radius: 8px;
+  background: #101923;
+  color: #c4d4e3;
+  transition:
+    border-color 200ms,
+    background-color 200ms;
+}
+.brand:hover .mark {
+  border-color: #7192aa;
+  background: #162330;
+}
+.caption {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  color: #9aa7b5;
+}
+@media (max-width: 1050px) {
+  .caption {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .brand {
+    font-size: 19px;
+  }
+}

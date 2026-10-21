@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Instrument, ReplayTradeRecord } from '@/types';
 import { api } from '@/lib/api';
+import { Loader } from '@/components/common/Loader';
 
 export function ReplayViewer({
   instrument: initialInstrument,
@@ -208,12 +209,10 @@ export function ReplayViewer({
             </dl>
           </section>
         </div>
+      ) : loading ? (
+        <Loader label="Loading replay..." />
       ) : (
-        <p className="empty-state">
-          {loading
-            ? 'Loading replay...'
-            : 'No executions found in this time window.'}
-        </p>
+        <p className="empty-state">No executions found in this time window.</p>
       )}
     </div>
   );

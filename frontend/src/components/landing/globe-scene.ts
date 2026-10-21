@@ -27,6 +27,14 @@ export function createGlobe(
   let resizeObserver: ResizeObserver | undefined;
   let intersectionObserver: IntersectionObserver | undefined;
   const globe = new THREE.Group();
+  let elapsed = 0;
+  const signals: {
+    mesh: THREE.Mesh;
+    from: THREE.Vector3;
+    to: THREE.Vector3;
+    phase: number;
+  }[] = [];
+  const nodeMeshes: THREE.Mesh[] = [];
 
   const render = () => {
     if (!disposed && !lost) renderer.render(scene, camera);
@@ -37,7 +45,20 @@ export function createGlobe(
       ? Math.min((time - previousTime) / 1000, 0.1)
       : 0;
     previousTime = time;
+    elapsed += delta;
     globe.rotation.y += delta * 0.035;
+    signals.forEach(({ mesh, from, to, phase }) => {
+      const t = (elapsed * 0.085 + phase) % 1;
+      mesh.position
+        .copy(from)
+        .lerp(to, t)
+        .normalize()
+        .multiplyScalar(2.875 + Math.sin(t * Math.PI) * 0.28);
+      mesh.scale.setScalar(0.55 + Math.sin(t * Math.PI) * 0.45);
+    });
+    nodeMeshes.forEach((node, index) =>
+      node.scale.setScalar(1 + Math.sin(elapsed * 1.1 + index) * 0.12),
+    );
     render();
   };
   const syncMotion = () => {
@@ -88,6 +109,34 @@ export function createGlobe(
       ),
     );
     globe.add(surface);
+    // A thin atmospheric rim adds depth without a postprocessing pass.
+    globe.add(
+      new THREE.Mesh(
+        keep(new THREE.SphereGeometry(radius + 0.035, 64, 48)),
+        keep(
+          new THREE.ShaderMaterial({
+            transparent: true,
+            depthWrite: false,
+            vertexShader: `
+          varying vec3 vNormal;
+          varying vec3 vView;
+          void main() {
+            vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+            vNormal = normalize(normalMatrix * normal);
+            vView = -viewPosition.xyz;
+            gl_Position = projectionMatrix * viewPosition;
+          }`,
+            fragmentShader: `
+          varying vec3 vNormal;
+          varying vec3 vView;
+          void main() {
+            float rim = pow(1.0 - max(dot(normalize(vNormal), normalize(vView)), 0.0), 4.0);
+            gl_FragColor = vec4(0.31, 0.61, 0.78, rim * 0.24);
+          }`,
+          }),
+        ),
+      ),
+    );
     scene.add(new THREE.AmbientLight(0x517088, 1.5));
     const light = new THREE.DirectionalLight(0x86c9ef, 2.5);
     light.position.set(-3, 5, 4);
@@ -188,6 +237,7 @@ export function createGlobe(
     nodes.forEach((position) => {
       const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
       node.position.copy(position);
+      nodeMeshes.push(node);
       globe.add(node);
     });
     const arcMaterial = keep(
@@ -197,13 +247,17 @@ export function createGlobe(
         opacity: 0.5,
       }),
     );
+    const signalGeometry = keep(new THREE.SphereGeometry(0.018, 8, 6));
+    const signalMaterial = keep(
+      new THREE.MeshBasicMaterial({ color: 0xc5edff }),
+    );
     [
       [0, 1],
       [1, 2],
       [2, 3],
       [0, 4],
       [2, 5],
-    ].forEach(([from, to]) => {
+    ].forEach(([from, to], index) => {
       const points = Array.from({ length: 49 }, (_, i) => {
         const t = i / 48;
         return nodes[from]
@@ -218,6 +272,15 @@ export function createGlobe(
           arcMaterial,
         ),
       );
+      const signal = new THREE.Mesh(signalGeometry, signalMaterial);
+      const phase = index / 5;
+      signal.position
+        .copy(nodes[from])
+        .lerp(nodes[to], phase)
+        .normalize()
+        .multiplyScalar(radius + 0.025 + Math.sin(phase * Math.PI) * 0.28);
+      globe.add(signal);
+      signals.push({ mesh: signal, from: nodes[from], to: nodes[to], phase });
     });
 
     const resize = () => {

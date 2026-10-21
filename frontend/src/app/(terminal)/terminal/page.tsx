@@ -17,6 +17,7 @@ import { TradeHistoryTable } from '@/components/orders/TradeHistoryTable';
 import { AccountPanel } from '@/components/account/AccountPanel';
 import { ToastProvider } from '@/components/common/ToastContext';
 import { ReplayViewer } from '@/components/replay/ReplayViewer';
+import { Loader } from '@/components/common/Loader';
 
 type ActivityTab = 'open' | 'history' | 'trades' | 'replay';
 const tabs: [ActivityTab, string][] = [
@@ -42,9 +43,7 @@ export default function TerminalPage() {
       {ready ? (
         <TradingWorkspace />
       ) : (
-        <div className="loading-screen" role="status" suppressHydrationWarning>
-          Loading trading workspace...
-        </div>
+        <Loader variant="page" label="Loading trading workspace..." />
       )}
     </ToastProvider>
   );
@@ -56,8 +55,14 @@ function TradingWorkspace() {
   const [activeTab, setActiveTab] = useState<ActivityTab>('open');
   const [marketTab, setMarketTab] = useState<'book' | 'tape'>('book');
   const { connectionState, latency } = useWebSocket();
-  const { balances, orders, orderHistory, tradeHistory, placeOrder, cancelOrder } =
-    useAccount();
+  const {
+    balances,
+    orders,
+    orderHistory,
+    tradeHistory,
+    placeOrder,
+    cancelOrder,
+  } = useAccount();
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('tab') === 'replay')
       setActiveTab('replay');
@@ -138,7 +143,9 @@ function TradingWorkspace() {
             {activeTab === 'open' && (
               <OpenOrdersTable orders={orders} onCancelOrder={cancelOrder} />
             )}
-            {activeTab === 'history' && <OrderHistoryTable orders={orderHistory} />}
+            {activeTab === 'history' && (
+              <OrderHistoryTable orders={orderHistory} />
+            )}
             {activeTab === 'trades' && (
               <TradeHistoryTable trades={tradeHistory} />
             )}

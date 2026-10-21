@@ -1,0 +1,126 @@
+/* Adapted from Uiverse.io by Li-Deheng. */
+.loader {
+  --diameter: 10px;
+  --gap: 12px;
+  --stroke: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  max-width: 100%;
+  vertical-align: middle;
+  color: inherit;
+}
+.animation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap);
+  flex: none;
+  padding: calc(var(--diameter) * 1.5) var(--diameter);
+  color: inherit;
+}
+.circle {
+  position: relative;
+  width: var(--diameter);
+  height: var(--diameter);
+  flex: none;
+  border: var(--stroke) solid currentColor;
+  border-radius: 50%;
+  animation: circle-keys 2s ease-in-out infinite var(--delay);
+}
+.dot,
+.outline {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  border-radius: 50%;
+}
+.dot {
+  width: 70%;
+  height: 70%;
+  background: currentColor;
+  animation: dot-keys 2s ease-in-out infinite var(--delay);
+}
+.outline {
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  animation: outline-keys 2s ease-in-out infinite var(--outline-delay);
+}
+.label {
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.panel,
+.page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  text-align: center;
+  color: var(--text-secondary, #b7c4d2);
+  padding: 32px 20px;
+  min-height: 160px;
+}
+.page {
+  --diameter: 14px;
+  --gap: 16px;
+  --stroke: 1.5px;
+  min-height: 100svh;
+  background: #070b11;
+  color: #c5d4e2;
+}
+.inline {
+  --diameter: 5px;
+  --gap: 4px;
+  gap: 8px;
+}
+.inline .label {
+  font-size: inherit;
+}
+@keyframes circle-keys {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.5;
+  }
+}
+@keyframes dot-keys {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0);
+  }
+}
+@keyframes outline-keys {
+  0% {
+    transform: scale(0);
+    box-shadow: 0 0 0 calc(var(--diameter) * 0.6) currentColor;
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.6);
+    box-shadow: 0 0 0 0 transparent;
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .circle,
+  .dot,
+  .outline {
+    animation: none;
+  }
+  .outline {
+    display: none;
+  }
+  .dot {
+    transform: scale(0.65);
+  }
+}

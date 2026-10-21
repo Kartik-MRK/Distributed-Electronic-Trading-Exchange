@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { AppHeader } from '@/components/common/AppHeader';
+import { Loader } from '@/components/common/Loader';
 import { api } from '@/lib/api';
 import { Instrument, SystemMetricsSnapshot, SimulatorStatus } from '@/types';
 import { TradeTape } from '@/components/tradetape/TradeTape';
@@ -148,15 +149,18 @@ export default function SystemDashboardPage() {
             <button
               className="button"
               disabled={simLoading || !simulator}
+              aria-busy={simLoading}
               onClick={() =>
                 handleSimAction(simulator?.running ? 'stop' : 'start')
               }
             >
-              {simLoading
-                ? 'Updating…'
-                : simulator?.running
-                  ? 'Pause simulator'
-                  : 'Start simulator'}
+              {simLoading ? (
+                <Loader variant="inline" label="Updating..." />
+              ) : simulator?.running ? (
+                'Pause simulator'
+              ) : (
+                'Start simulator'
+              )}
             </button>
             <button
               className="button"

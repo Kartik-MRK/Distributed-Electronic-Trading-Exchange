@@ -2,6 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { AppHeader } from '@/components/common/AppHeader';
+import { Loader } from '@/components/common/Loader';
 import { api } from '@/lib/api';
 import { AuditLogEntry, AuditQueryParams } from '@/types';
 import { Download, ExternalLink } from 'lucide-react';
@@ -227,9 +228,7 @@ export default function AuditLogViewerPage() {
             </span>
           </div>
           {loading ? (
-            <p className="empty-state" role="status">
-              Loading audit records…
-            </p>
+            <Loader label="Loading audit records..." />
           ) : logs.length === 0 ? (
             <p className="empty-state">
               {error

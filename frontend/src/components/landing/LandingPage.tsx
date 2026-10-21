@@ -1,6 +1,8 @@
 import Link from 'next/link';
-import { Activity, ArrowDown, ArrowRight, ArrowUpRight } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUpRight } from 'lucide-react';
 import { Globe } from './Globe';
+import { LandingNav } from './LandingNav';
+import { ExchangeBrand } from '../common/ExchangeBrand';
 import styles from './LandingPage.module.css';
 
 const documentation =
@@ -14,19 +16,8 @@ export function LandingPage() {
       </a>
       <section className={styles.hero} aria-labelledby="hero-title">
         <header className={styles.header}>
-          <Link href="/" className={styles.brand} aria-label="DETE home">
-            <span className={styles.brandMark}>
-              <Activity size={21} strokeWidth={1.5} />
-            </span>
-            DETE<span className={styles.brandCaption}>EXCHANGE</span>
-          </Link>
-          <nav className={styles.nav} aria-label="Landing navigation">
-            <a href="#markets">Markets</a>
-            <a href="#technology">Technology</a>
-            <a href={documentation} target="_blank" rel="noreferrer">
-              Documentation <ArrowUpRight size={12} />
-            </a>
-          </nav>
+          <ExchangeBrand />
+          <LandingNav documentation={documentation} />
           <div className={styles.headerActions}>
             <Link href="/login" className={styles.signIn}>
               Sign In
@@ -59,9 +50,6 @@ export function LandingPage() {
               Explore Technology <ArrowRight size={16} />
             </a>
           </div>
-          <p className={styles.heroNote}>
-            Precision at the core. Connected by architecture.
-          </p>
         </div>
 
         <div className={styles.visual} aria-hidden="true">

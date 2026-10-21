@@ -8,20 +8,9 @@ import {
   setCustomUserSession,
   DEMO_CREDENTIALS,
 } from '../../../lib/auth';
-import {
-  ArrowRight,
-  Sparkles,
-  ShieldCheck,
-  Mail,
-  User,
-  Lock,
-  Calendar,
-  CheckCircle2,
-  RefreshCw,
-  ArrowLeft,
-  KeyRound,
-} from 'lucide-react';
+import { ArrowRight, CheckCircle2, RefreshCw, ArrowLeft } from 'lucide-react';
 import { AuthLayout } from '@/components/common/AuthLayout';
+import { Loader } from '@/components/common/Loader';
 import { UserRecord } from '@/types';
 
 function createFallbackGuestUser(): UserRecord {
@@ -40,9 +29,11 @@ function createFallbackGuestUser(): UserRecord {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="loading-screen">Loading DETE Access...</div>}>
-      <AuthContent />
-    </Suspense>
+    <AuthLayout>
+      <Suspense fallback={<Loader label="Loading exchange access..." />}>
+        <AuthContent />
+      </Suspense>
+    </AuthLayout>
   );
 }
 
@@ -67,7 +58,14 @@ function AuthContent() {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   // OTP State
-  const [otpValues, setOtpValues] = useState<string[]>(['', '', '', '', '', '']);
+  const [otpValues, setOtpValues] = useState<string[]>([
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+  ]);
   const [otpNotice, setOtpNotice] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(60);
   const [isResending, setIsResending] = useState(false);
@@ -76,7 +74,10 @@ function AuthContent() {
   // Feedback State
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [pendingAction, setPendingAction] = useState<
+    'signin' | 'guest' | 'signup' | 'verify' | null
+  >(null);
+  const isLoading = pendingAction !== null;
 
   // Countdown timer effect for OTP resend
   useEffect(() => {
@@ -108,7 +109,7 @@ function AuthContent() {
       return;
     }
 
-    setIsLoading(true);
+    setPendingAction('signin');
     setErrorMsg(null);
 
     try {
@@ -136,10 +137,14 @@ function AuthContent() {
         });
         router.push(returnUrl);
       } else {
-        setErrorMsg(err instanceof Error ? err.message : 'Invalid credentials. Please verify your email and password.');
+        setErrorMsg(
+          err instanceof Error
+            ? err.message
+            : 'Invalid credentials. Please verify your email and password.',
+        );
       }
     } finally {
-      setIsLoading(false);
+      setPendingAction(null);
     }
   };
 
@@ -147,7 +152,7 @@ function AuthContent() {
      2. 1-Click Guest Trader Login (50,000 USDT Demo Balance)
      -------------------------------------------------------------------------- */
   const handleGuestLogin = async () => {
-    setIsLoading(true);
+    setPendingAction('guest');
     setErrorMsg(null);
 
     try {
@@ -162,7 +167,7 @@ function AuthContent() {
       setCustomUserSession('mock-jwt-guest-token', fallbackGuest);
       router.push(returnUrl);
     } finally {
-      setIsLoading(false);
+      setPendingAction(null);
     }
   };
 
@@ -186,7 +191,7 @@ function AuthContent() {
       return;
     }
 
-    setIsLoading(true);
+    setPendingAction('signup');
 
     try {
       const res = await api.auth.initiateRegister({
@@ -197,7 +202,9 @@ function AuthContent() {
       });
 
       setOtpNotice(res.message || `Verification code sent to ${email}`);
-      setCountdown(res.expiresInSeconds ? Math.min(res.expiresInSeconds, 60) : 60);
+      setCountdown(
+        res.expiresInSeconds ? Math.min(res.expiresInSeconds, 60) : 60,
+      );
       setOtpValues(['', '', '', '', '', '']);
       setSignupStep('otp');
       // Focus first OTP input
@@ -205,9 +212,11 @@ function AuthContent() {
         otpInputsRef.current[0]?.focus();
       }, 150);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Registration initiation failed');
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Registration initiation failed',
+      );
     } finally {
-      setIsLoading(false);
+      setPendingAction(null);
     }
   };
 
@@ -231,7 +240,9 @@ function AuthContent() {
       setOtpValues(['', '', '', '', '', '']);
       otpInputsRef.current[0]?.focus();
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to resend OTP code');
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Failed to resend OTP code',
+      );
     } finally {
       setIsResending(false);
     }
@@ -240,15 +251,15 @@ function AuthContent() {
   /* --------------------------------------------------------------------------
      5. Verify OTP & Finalize Registration
      -------------------------------------------------------------------------- */
-  const handleVerifyOtp = async (e?: React.FormEvent) => {
+  const handleVerifyOtp = async (e?: React.FormEvent, code?: string) => {
     if (e) e.preventDefault();
-    const otpCode = otpValues.join('');
+    const otpCode = code ?? otpValues.join('');
     if (otpCode.length !== 6) {
       setErrorMsg('Please enter the complete 6-digit verification code');
       return;
     }
 
-    setIsLoading(true);
+    setPendingAction('verify');
     setErrorMsg(null);
 
     try {
@@ -257,16 +268,18 @@ function AuthContent() {
         otp: otpCode,
       });
 
-      setSuccessMsg('Email verified! Pre-funding 50,000 USDT to your account...');
+      setSuccessMsg('Email verified. Opening your workspace...');
       setAuthSession(res);
 
       setTimeout(() => {
         router.push(returnUrl);
       }, 1200);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Invalid or expired OTP code');
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Invalid or expired OTP code',
+      );
     } finally {
-      setIsLoading(false);
+      setPendingAction(null);
     }
   };
 
@@ -297,13 +310,16 @@ function AuthContent() {
     if (index === 5 || newOtp.every((d) => d.length === 1)) {
       if (newOtp.join('').length === 6) {
         setTimeout(() => {
-          handleVerifyOtp();
+          handleVerifyOtp(undefined, newOtp.join(''));
         }, 100);
       }
     }
   };
 
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleOtpKeyDown = (
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
     if (e.key === 'Backspace') {
       if (!otpValues[index] && index > 0) {
         otpInputsRef.current[index - 1]?.focus();
@@ -317,7 +333,10 @@ function AuthContent() {
 
   const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    const pasted = e.clipboardData
+      .getData('text')
+      .replace(/\D/g, '')
+      .slice(0, 6);
     if (!pasted) return;
 
     const newOtp = [...otpValues];
@@ -331,18 +350,44 @@ function AuthContent() {
 
     if (pasted.length === 6) {
       setTimeout(() => {
-        handleVerifyOtp();
+        handleVerifyOtp(undefined, newOtp.join(''));
       }, 100);
     }
   };
 
   return (
-    <AuthLayout>
+    <>
       {/* Tab Navigation Header */}
-      <div className="auth-tabs" role="tablist">
+      <div
+        className="auth-tabs"
+        role="tablist"
+        aria-label="Account access"
+        onKeyDown={(event) => {
+          if (
+            !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) ||
+            isLoading
+          )
+            return;
+          event.preventDefault();
+          const next =
+            event.key === 'Home'
+              ? 'signin'
+              : event.key === 'End'
+                ? 'signup'
+                : activeTab === 'signin'
+                  ? 'signup'
+                  : 'signin';
+          handleTabChange(next);
+          document.getElementById(`tab-${next}`)?.focus();
+        }}
+      >
         <button
           role="tab"
           aria-selected={activeTab === 'signin'}
+          id="tab-signin"
+          aria-controls="panel-signin"
+          tabIndex={activeTab === 'signin' ? 0 : -1}
+          disabled={isLoading}
           className={`auth-tab-btn ${activeTab === 'signin' ? 'active' : ''}`}
           onClick={() => handleTabChange('signin')}
         >
@@ -351,6 +396,10 @@ function AuthContent() {
         <button
           role="tab"
           aria-selected={activeTab === 'signup'}
+          id="tab-signup"
+          aria-controls="panel-signup"
+          tabIndex={activeTab === 'signup' ? 0 : -1}
+          disabled={isLoading}
           className={`auth-tab-btn ${activeTab === 'signup' ? 'active' : ''}`}
           onClick={() => handleTabChange('signup')}
         >
@@ -365,8 +414,16 @@ function AuthContent() {
         </div>
       )}
       {successMsg && (
-        <div className="notice" role="status" style={{ marginBottom: 16, borderColor: 'var(--bid-green)' }}>
-          <CheckCircle2 size={16} color="var(--bid-green)" style={{ marginRight: 6 }} />
+        <div
+          className="notice"
+          role="status"
+          style={{ marginBottom: 16, borderColor: 'var(--bid-green)' }}
+        >
+          <CheckCircle2
+            size={16}
+            color="var(--bid-green)"
+            style={{ marginRight: 6 }}
+          />
           <span>{successMsg}</span>
         </div>
       )}
@@ -375,16 +432,21 @@ function AuthContent() {
           TAB 1: SIGN IN (Returning User)
           ==================================================================== */}
       {activeTab === 'signin' && (
-        <div>
+        <div
+          className="auth-panel"
+          role="tabpanel"
+          id="panel-signin"
+          aria-labelledby="tab-signin"
+        >
           <div className="auth-header-copy">
-            <h1>Access Exchange</h1>
-            <p>Enter your credentials to enter the DETE trading terminal.</p>
+            <h1>Welcome back.</h1>
+            <p>Sign in to manage your account and trading activity.</p>
           </div>
 
           <form className="auth-form" onSubmit={handleLogin}>
             <div className="field">
               <label htmlFor="loginIdentifier">
-                <span className="field-icon-label"><User size={13} /> Email or Username</span>
+                <span className="field-icon-label">Email or Username</span>
               </label>
               <input
                 id="loginIdentifier"
@@ -393,13 +455,13 @@ function AuthContent() {
                 required
                 value={loginIdentifier}
                 onChange={(e) => setLoginIdentifier(e.target.value)}
-                placeholder="trader@domain.com or username"
+                placeholder="Email or username"
               />
             </div>
 
             <div className="field">
               <label htmlFor="loginPassword">
-                <span className="field-icon-label"><Lock size={13} /> Password</span>
+                <span className="field-icon-label">Password</span>
               </label>
               <input
                 id="loginPassword"
@@ -409,18 +471,26 @@ function AuthContent() {
                 required
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="Enter account password"
+                placeholder="Your password"
               />
             </div>
 
-            <button className="button primary full-width auth-submit-btn" disabled={isLoading}>
-              {isLoading ? 'Authenticating...' : 'Sign In to Terminal'}
-              <ArrowRight size={15} />
+            <button
+              className="button primary full-width auth-submit-btn"
+              disabled={isLoading}
+              aria-busy={pendingAction === 'signin'}
+            >
+              {pendingAction === 'signin' ? 'Signing in...' : 'Sign In'}
+              {pendingAction === 'signin' ? (
+                <Loader variant="inline" label="" />
+              ) : (
+                <ArrowRight size={15} />
+              )}
             </button>
           </form>
 
           {/* Quick 1-Click Guest Trader Entry */}
-          <div className="auth-divider">instant trial</div>
+          <div className="auth-divider">or explore the exchange</div>
 
           <button
             className="guest-action-card"
@@ -428,15 +498,21 @@ function AuthContent() {
             disabled={isLoading}
             type="button"
             title="Start instant paper trading with 50,000 USDT pre-funded"
+            aria-busy={pendingAction === 'guest'}
           >
-            <div className="guest-action-icon">
-              <Sparkles size={18} color="var(--accent-amber)" />
-            </div>
             <div className="guest-action-text">
-              <strong>1-Click Guest Access</strong>
-              <span>Instant terminal entry • Pre-funded 50,000 USDT</span>
+              <strong>
+                {pendingAction === 'guest'
+                  ? 'Opening workspace...'
+                  : 'Continue as guest'}
+              </strong>
+              <span>Practice with 50,000 USDT in demo funds</span>
             </div>
-            <ArrowRight size={16} className="guest-arrow" />
+            {pendingAction === 'guest' ? (
+              <Loader variant="inline" label="" />
+            ) : (
+              <ArrowRight size={16} className="guest-arrow" />
+            )}
           </button>
         </div>
       )}
@@ -445,16 +521,24 @@ function AuthContent() {
           TAB 2: SIGN UP (Email OTP Verification Flow)
           ==================================================================== */}
       {activeTab === 'signup' && signupStep === 'form' && (
-        <div>
+        <div
+          className="auth-panel"
+          role="tabpanel"
+          id="panel-signup"
+          aria-labelledby="tab-signup"
+        >
           <div className="auth-header-copy">
-            <h1>Create Trader Account</h1>
-            <p>Sign up to receive 50,000 USDT initial exchange liquidity.</p>
+            <h1>Create your account.</h1>
+            <p>
+              Start with 50,000 USDT in demo funds. Verify your email to
+              continue.
+            </p>
           </div>
 
           <form className="auth-form" onSubmit={handleInitiateSignup}>
             <div className="field">
               <label htmlFor="fullName">
-                <span className="field-icon-label"><User size={13} /> Full Legal Name</span>
+                <span className="field-icon-label">Full name</span>
               </label>
               <input
                 id="fullName"
@@ -463,13 +547,15 @@ function AuthContent() {
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="e.g. Satoshi Nakamoto"
+                placeholder="Your full name"
               />
             </div>
 
             <div className="field">
               <label htmlFor="dob">
-                <span className="field-icon-label"><Calendar size={13} /> Date of Birth</span>
+                <span className="field-icon-label">
+                  Date of birth (optional)
+                </span>
               </label>
               <input
                 id="dob"
@@ -484,7 +570,7 @@ function AuthContent() {
 
             <div className="field">
               <label htmlFor="email">
-                <span className="field-icon-label"><Mail size={13} /> Email Address</span>
+                <span className="field-icon-label">Email Address</span>
               </label>
               <input
                 id="email"
@@ -500,8 +586,10 @@ function AuthContent() {
 
             <div className="field">
               <label htmlFor="signupPassword">
-                <span className="field-icon-label"><Lock size={13} /> Password</span>
-                <span className="muted font-mono" style={{ fontSize: 11 }}>Min 8 chars</span>
+                <span className="field-icon-label">Password</span>
+                <span className="muted font-mono" style={{ fontSize: 11 }}>
+                  Min 8 chars
+                </span>
               </label>
               <input
                 id="signupPassword"
@@ -518,7 +606,7 @@ function AuthContent() {
 
             <div className="field">
               <label htmlFor="confirmPassword">
-                <span className="field-icon-label"><ShieldCheck size={13} /> Confirm Password</span>
+                <span className="field-icon-label">Confirm Password</span>
               </label>
               <input
                 id="confirmPassword"
@@ -533,29 +621,45 @@ function AuthContent() {
               />
             </div>
 
-            <button className="button primary full-width auth-submit-btn" disabled={isLoading}>
-              {isLoading ? 'Verifying & Sending OTP...' : 'Send Verification OTP'}
-              <ArrowRight size={15} />
+            <button
+              className="button primary full-width auth-submit-btn"
+              disabled={isLoading}
+              aria-busy={pendingAction === 'signup'}
+            >
+              {pendingAction === 'signup'
+                ? 'Sending code...'
+                : 'Continue with email'}
+              {pendingAction === 'signup' ? (
+                <Loader variant="inline" label="" />
+              ) : (
+                <ArrowRight size={15} />
+              )}
             </button>
           </form>
 
           {/* Quick 1-Click Guest Trader Entry */}
-          <div className="auth-divider">or skip registration</div>
+          <div className="auth-divider">or explore the exchange</div>
 
           <button
             className="guest-action-card"
             onClick={handleGuestLogin}
             disabled={isLoading}
             type="button"
+            aria-busy={pendingAction === 'guest'}
           >
-            <div className="guest-action-icon">
-              <Sparkles size={18} color="var(--accent-amber)" />
-            </div>
             <div className="guest-action-text">
-              <strong>Continue as Guest Trader</strong>
-              <span>Immediate access without verification</span>
+              <strong>
+                {pendingAction === 'guest'
+                  ? 'Opening workspace...'
+                  : 'Continue as guest'}
+              </strong>
+              <span>Practice with demo funds. No account required.</span>
             </div>
-            <ArrowRight size={16} className="guest-arrow" />
+            {pendingAction === 'guest' ? (
+              <Loader variant="inline" label="" />
+            ) : (
+              <ArrowRight size={16} className="guest-arrow" />
+            )}
           </button>
         </div>
       )}
@@ -564,7 +668,12 @@ function AuthContent() {
           TAB 2 STEP B: OTP VERIFICATION SCREEN
           ==================================================================== */}
       {activeTab === 'signup' && signupStep === 'otp' && (
-        <div className="otp-container">
+        <div
+          className="otp-container auth-panel"
+          role="tabpanel"
+          id="panel-signup"
+          aria-labelledby="tab-signup"
+        >
           <button
             className="otp-back-btn"
             onClick={() => setSignupStep('form')}
@@ -572,16 +681,14 @@ function AuthContent() {
             title="Edit registration details"
           >
             <ArrowLeft size={14} />
-            <span>Change Details / Email</span>
+            <span>Edit email and details</span>
           </button>
 
           <div className="auth-header-copy">
-            <div className="otp-icon-header">
-              <KeyRound size={22} color="var(--accent-cyan)" />
-            </div>
-            <h1>Verify Your Email</h1>
+            <h1>Check your email.</h1>
             <p>
-              We dispatched a 6-digit verification code to <strong style={{ color: 'var(--text-primary)' }}>{email}</strong>.
+              Enter the 6-digit code sent to{' '}
+              <strong style={{ color: 'var(--text-primary)' }}>{email}</strong>.
             </p>
           </div>
 
@@ -590,7 +697,6 @@ function AuthContent() {
               {otpNotice}
             </div>
           )}
-
 
           <form onSubmit={handleVerifyOtp} className="auth-form">
             <div className="otp-grid">
@@ -617,16 +723,24 @@ function AuthContent() {
             <button
               className="button primary full-width auth-submit-btn"
               disabled={isLoading || otpValues.join('').length !== 6}
+              aria-busy={pendingAction === 'verify'}
             >
-              {isLoading ? 'Verifying Code...' : 'Verify & Open Terminal'}
-              <ArrowRight size={15} />
+              {pendingAction === 'verify'
+                ? 'Verifying code...'
+                : 'Verify & Open Terminal'}
+              {pendingAction === 'verify' ? (
+                <Loader variant="inline" label="" />
+              ) : (
+                <ArrowRight size={15} />
+              )}
             </button>
           </form>
 
           <div className="otp-resend-row">
             {countdown > 0 ? (
               <span className="otp-timer-text">
-                Resend code in <strong className="font-mono">{countdown}s</strong>
+                Resend code in{' '}
+                <strong className="font-mono">{countdown}s</strong>
               </span>
             ) : (
               <button
@@ -634,14 +748,19 @@ function AuthContent() {
                 onClick={handleResendOtp}
                 disabled={isResending}
                 type="button"
+                aria-busy={isResending}
               >
-                <RefreshCw size={13} className={isResending ? 'spin' : ''} />
-                <span>{isResending ? 'Sending...' : 'Resend Verification Code'}</span>
+                {isResending ? (
+                  <Loader variant="inline" label="" />
+                ) : (
+                  <RefreshCw size={13} />
+                )}
+                <span>{isResending ? 'Sending...' : 'Resend code'}</span>
               </button>
             )}
           </div>
         </div>
       )}
-    </AuthLayout>
+    </>
   );
 }
