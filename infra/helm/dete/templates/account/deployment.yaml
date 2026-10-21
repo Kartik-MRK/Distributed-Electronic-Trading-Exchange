@@ -53,7 +53,7 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 5
             timeoutSeconds: 3
-            failureThreshold: 30
+            failureThreshold: 90
           readinessProbe:
             httpGet:
               path: /actuator/health

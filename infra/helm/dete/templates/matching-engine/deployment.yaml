@@ -39,7 +39,7 @@ spec:
             httpGet:
               path: /actuator/health
               port: {{ .Values.matchingEngine.port }}
-            failureThreshold: 30
+            failureThreshold: 90
             periodSeconds: 5
             timeoutSeconds: 3
           readinessProbe:
