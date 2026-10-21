@@ -95,11 +95,11 @@ public class OrderService {
       return response;
     }
 
-    // 3. Pre-trade Risk Validation
-    riskValidator.validateOrder(request, accountId);
+    // 3. Pre-trade Risk Validation with persistent order ID
+    UUID orderId = UUID.randomUUID();
+    riskValidator.validateOrder(request, accountId, orderId);
 
     // 4. Calculate required funds reservation
-    UUID orderId = UUID.randomUUID();
     String reserveAsset;
     long reserveAmount;
 

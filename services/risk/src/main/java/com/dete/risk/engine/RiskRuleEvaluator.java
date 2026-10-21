@@ -167,7 +167,7 @@ public class RiskRuleEvaluator {
     accountState.incrementOpenOrders();
     if (request.orderId() != null) {
       orderToAccount.put(request.orderId(), request.accountId());
-      if (price != null && price > 0) {
+      if (price != null && price > 0 && request.orderType() == OrderType.LIMIT) {
         accountState.addRestingOrder(request.orderId(), request.side(), price);
       }
     }
@@ -215,6 +215,10 @@ public class RiskRuleEvaluator {
         if (orderId != null) {
           state.removeRestingOrder(orderId);
         }
+      }
+    } else if (orderId != null) {
+      for (AccountRiskState state : accountStates.values()) {
+        state.removeRestingOrder(orderId);
       }
     }
   }

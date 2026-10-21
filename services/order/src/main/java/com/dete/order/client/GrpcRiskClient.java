@@ -60,14 +60,16 @@ public class GrpcRiskClient implements PreTradeRiskValidator {
 
   @Override
   @CircuitBreaker(name = "riskService", fallbackMethod = "riskFallback")
-  public void validateOrder(CreateOrderRequest request, UUID accountId) {
+  public void validateOrder(CreateOrderRequest request, UUID accountId, UUID orderId) {
     if (request == null) {
       throw new InvalidOrderException("Order request cannot be null");
     }
 
+    UUID effectiveOrderId = orderId != null ? orderId : UUID.randomUUID();
+
     ValidateOrderRequest grpcRequest =
         new ValidateOrderRequest(
-            UUID.randomUUID(),
+            effectiveOrderId,
             accountId,
             request.instrument(),
             request.side(),
@@ -102,10 +104,20 @@ public class GrpcRiskClient implements PreTradeRiskValidator {
     log.debug("Risk Service approved order for account {} on {}", accountId, request.instrument());
   }
 
+  @Override
+  @CircuitBreaker(name = "riskService", fallbackMethod = "riskFallback")
+  public void validateOrder(CreateOrderRequest request, UUID accountId) {
+    validateOrder(request, accountId, UUID.randomUUID());
+  }
+
   /**
    * Fallback method executed when Risk Service throws an error or the circuit breaker is OPEN.
    * Strictly enforces the "Fail Closed" invariant (never bypass risk).
    */
+  public void riskFallback(CreateOrderRequest request, UUID accountId, UUID orderId, Throwable t) {
+    riskFallback(request, accountId, t);
+  }
+
   public void riskFallback(CreateOrderRequest request, UUID accountId, Throwable t) {
     if (t instanceof PreTradeRiskException pte) {
       throw pte;

@@ -7,5 +7,10 @@ import java.util.UUID;
 public interface PreTradeRiskValidator {
 
   @CircuitBreaker(name = "riskService")
-  void validateOrder(CreateOrderRequest request, UUID accountId);
+  void validateOrder(CreateOrderRequest request, UUID accountId, UUID orderId);
+
+  @CircuitBreaker(name = "riskService")
+  default void validateOrder(CreateOrderRequest request, UUID accountId) {
+    validateOrder(request, accountId, UUID.randomUUID());
+  }
 }

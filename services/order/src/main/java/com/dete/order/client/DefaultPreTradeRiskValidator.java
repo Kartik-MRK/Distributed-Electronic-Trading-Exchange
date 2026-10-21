@@ -24,6 +24,12 @@ public class DefaultPreTradeRiskValidator implements PreTradeRiskValidator {
 
   @Override
   @CircuitBreaker(name = "riskService")
+  public void validateOrder(CreateOrderRequest request, UUID accountId, UUID orderId) {
+    validateOrder(request, accountId);
+  }
+
+  @Override
+  @CircuitBreaker(name = "riskService")
   public void validateOrder(CreateOrderRequest request, UUID accountId) {
     if (request == null) {
       throw new InvalidOrderException("Order request cannot be null");

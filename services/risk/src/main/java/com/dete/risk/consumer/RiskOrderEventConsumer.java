@@ -49,6 +49,7 @@ public class RiskOrderEventConsumer {
               || OrderCancelledEvent.EVENT_TYPE.equals(eventType)
               || OrderRejectedEvent.EVENT_TYPE.equals(eventType)
               || node.has("reason")
+              || (node.has("fillQuantity") && !node.has("remainingQuantity"))
               || (node.has("remainingQuantity") && node.get("remainingQuantity").asLong() == 0L);
 
       if (isTerminal && orderId != null) {
