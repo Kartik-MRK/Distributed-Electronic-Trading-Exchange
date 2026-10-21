@@ -45,6 +45,11 @@ auth:
   rate-limit:
     login-max-attempts: 5
     login-window-seconds: 60
+  account-service-url: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
+  welcome-funding:
+    enabled: true
+    usdt-amount: 50000
+    usd-amount: 50000
   demo:
     enabled: true
     email: "demo@dete.io"

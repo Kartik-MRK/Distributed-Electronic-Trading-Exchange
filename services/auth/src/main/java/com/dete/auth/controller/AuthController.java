@@ -1,12 +1,16 @@
 package com.dete.auth.controller;
 
 import com.dete.auth.dto.AuthResponse;
+import com.dete.auth.dto.GuestLoginRequest;
+import com.dete.auth.dto.InitiateRegisterRequest;
 import com.dete.auth.dto.JwksResponse;
 import com.dete.auth.dto.LoginRequest;
 import com.dete.auth.dto.LogoutRequest;
+import com.dete.auth.dto.OtpResponse;
 import com.dete.auth.dto.RegisterRequest;
 import com.dete.auth.dto.TokenRefreshRequest;
 import com.dete.auth.dto.UserResponse;
+import com.dete.auth.dto.VerifyOtpRequest;
 import com.dete.auth.service.AuthService;
 import com.dete.auth.service.JwtKeyProvider;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,6 +35,29 @@ public class AuthController {
   public AuthController(AuthService authService, JwtKeyProvider jwtKeyProvider) {
     this.authService = authService;
     this.jwtKeyProvider = jwtKeyProvider;
+  }
+
+  @PostMapping("/register/initiate")
+  public ResponseEntity<OtpResponse> initiateRegister(
+      @Valid @RequestBody InitiateRegisterRequest request) {
+    OtpResponse response = authService.initiateRegistration(request);
+    return ResponseEntity.ok(response);
+  }
+
+  @PostMapping("/register/verify-otp")
+  public ResponseEntity<AuthResponse> verifyOtpAndRegister(
+      @Valid @RequestBody VerifyOtpRequest request, HttpServletRequest servletRequest) {
+    String clientIp = extractClientIp(servletRequest);
+    AuthResponse response = authService.verifyOtpAndRegister(request, clientIp);
+    return ResponseEntity.status(HttpStatus.CREATED).body(response);
+  }
+
+  @PostMapping("/guest")
+  public ResponseEntity<AuthResponse> loginAsGuest(
+      @RequestBody(required = false) GuestLoginRequest request, HttpServletRequest servletRequest) {
+    String clientIp = extractClientIp(servletRequest);
+    AuthResponse response = authService.loginAsGuest(request, clientIp);
+    return ResponseEntity.ok(response);
   }
 
   @PostMapping("/register")

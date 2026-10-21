@@ -53,6 +53,8 @@ spec:
                 secretKeyRef:
                   name: dete-secrets
                   key: JWT_SECRET
+            - name: ACCOUNT_SERVICE_URL
+              value: "http://account:8082"
           resources:
             {{- toYaml .Values.auth.resources | nindent 12 }}
           startupProbe:

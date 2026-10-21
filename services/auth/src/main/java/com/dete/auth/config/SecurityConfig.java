@@ -49,6 +49,8 @@ public class SecurityConfig {
             auth ->
                 auth.requestMatchers(
                         "/auth/register",
+                        "/auth/register/**",
+                        "/auth/guest",
                         "/auth/login",
                         "/auth/refresh",
                         "/auth/logout",
