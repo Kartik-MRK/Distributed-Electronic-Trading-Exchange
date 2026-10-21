@@ -65,6 +65,9 @@ resilience4j:
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 3
         register-health-indicator: true
+        ignore-exceptions:
+          - com.dete.order.exception.PreTradeRiskException
+          - com.dete.order.exception.InvalidOrderException
       accountService:
         sliding-window-size: 10
         minimum-number-of-calls: 5

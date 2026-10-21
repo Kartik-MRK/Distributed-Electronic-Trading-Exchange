@@ -88,7 +88,7 @@ public class GrpcRiskClient implements PreTradeRiskValidator {
           "Risk Service gRPC call failed for account {}. Failing closed: {}",
           accountId,
           e.getMessage());
-      throw new PreTradeRiskException(
+      throw new RiskServiceUnavailableException(
           "Pre-trade risk check unavailable (fail closed): " + e.getMessage(), e);
     }
 
