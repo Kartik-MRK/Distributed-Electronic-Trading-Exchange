@@ -41,18 +41,21 @@ spec:
               port: {{ .Values.matchingEngine.port }}
             failureThreshold: 30
             periodSeconds: 5
+            timeoutSeconds: 3
           readinessProbe:
             httpGet:
               path: /actuator/health
               port: {{ .Values.matchingEngine.port }}
             initialDelaySeconds: 5
             periodSeconds: 5
+            timeoutSeconds: 3
           livenessProbe:
             httpGet:
               path: /actuator/health
               port: {{ .Values.matchingEngine.port }}
             initialDelaySeconds: 15
             periodSeconds: 10
+            timeoutSeconds: 3
 ---
 apiVersion: v1
 kind: Service

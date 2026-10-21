@@ -24,6 +24,7 @@ public class JwtKeyProvider {
     this(keyId, null, null);
   }
 
+  @org.springframework.beans.factory.annotation.Autowired
   public JwtKeyProvider(
       @Value("${auth.jwt.key-id:dete-auth-key-1}") String keyId,
       @Value("${auth.jwt.private-key:}") String privateKeyB64,

@@ -61,19 +61,22 @@ spec:
               port: {{ .Values.auth.port }}
             initialDelaySeconds: 10
             periodSeconds: 5
-            failureThreshold: 24
+            timeoutSeconds: 3
+            failureThreshold: 30
           readinessProbe:
             httpGet:
               path: /actuator/health
               port: {{ .Values.auth.port }}
             initialDelaySeconds: 5
             periodSeconds: 5
+            timeoutSeconds: 3
           livenessProbe:
             httpGet:
               path: /actuator/health
               port: {{ .Values.auth.port }}
             initialDelaySeconds: 10
             periodSeconds: 10
+            timeoutSeconds: 3
 ---
 apiVersion: v1
 kind: Service

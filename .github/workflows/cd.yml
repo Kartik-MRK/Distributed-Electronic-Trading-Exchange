@@ -81,10 +81,10 @@ jobs:
             kubectl rollout restart deployment account audit auth gateway market-data matching-engine order risk simulator frontend -n dete
 
             echo "--> Verifying Rollout Status..."
-            kubectl rollout status deployment/gateway -n dete --timeout=180s
-            kubectl rollout status deployment/order -n dete --timeout=180s
-            kubectl rollout status deployment/frontend -n dete --timeout=180s
-            kubectl rollout status deployment/account -n dete --timeout=180s
+            kubectl rollout status deployment/gateway -n dete --timeout=360s
+            kubectl rollout status deployment/order -n dete --timeout=360s
+            kubectl rollout status deployment/frontend -n dete --timeout=360s
+            kubectl rollout status deployment/account -n dete --timeout=360s
 
             echo "All microservices successfully deployed and running."
           EOF
