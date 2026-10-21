@@ -56,7 +56,7 @@ function TradingWorkspace() {
   const [activeTab, setActiveTab] = useState<ActivityTab>('open');
   const [marketTab, setMarketTab] = useState<'book' | 'tape'>('book');
   const { connectionState, latency } = useWebSocket();
-  const { balances, orders, tradeHistory, placeOrder, cancelOrder } =
+  const { balances, orders, orderHistory, tradeHistory, placeOrder, cancelOrder } =
     useAccount();
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('tab') === 'replay')
@@ -138,7 +138,7 @@ function TradingWorkspace() {
             {activeTab === 'open' && (
               <OpenOrdersTable orders={orders} onCancelOrder={cancelOrder} />
             )}
-            {activeTab === 'history' && <OrderHistoryTable orders={orders} />}
+            {activeTab === 'history' && <OrderHistoryTable orders={orderHistory} />}
             {activeTab === 'trades' && (
               <TradeHistoryTable trades={tradeHistory} />
             )}

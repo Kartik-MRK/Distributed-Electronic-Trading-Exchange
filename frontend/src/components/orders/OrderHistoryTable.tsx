@@ -67,6 +67,10 @@ export function OrderHistoryTable({ orders }: OrderHistoryTableProps) {
 
             const statusColors: Record<string, { bg: string; text: string }> = {
               FILLED: { bg: 'var(--bid-green-bg)', text: 'var(--bid-green)' },
+              PARTIALLY_FILLED: {
+                bg: 'rgba(255, 184, 0, 0.15)',
+                text: 'var(--accent-amber)',
+              },
               CANCELLED: {
                 bg: 'rgba(100, 116, 139, 0.2)',
                 text: 'var(--text-secondary)',
@@ -83,6 +87,11 @@ export function OrderHistoryTable({ orders }: OrderHistoryTableProps) {
               bg: 'rgba(255,255,255,0.05)',
               text: 'var(--text-muted)',
             };
+
+            const formattedPrice =
+              order.price === 'MARKET'
+                ? 'MARKET'
+                : `$${Number.isFinite(parseFloat(order.price)) ? parseFloat(order.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : order.price}`;
 
             return (
               <tr
@@ -129,7 +138,7 @@ export function OrderHistoryTable({ orders }: OrderHistoryTableProps) {
                     color: 'var(--text-primary)',
                   }}
                 >
-                  {order.price}
+                  {formattedPrice}
                 </td>
                 <td
                   className="font-mono"

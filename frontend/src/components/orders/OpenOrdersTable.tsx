@@ -64,8 +64,9 @@ export function OpenOrdersTable({
             <th style={{ padding: '0 8px' }}>Side</th>
             <th style={{ padding: '0 8px' }}>Type</th>
             <th style={{ padding: '0 8px', textAlign: 'right' }}>Price</th>
-            <th style={{ padding: '0 8px', textAlign: 'right' }}>Quantity</th>
+            <th style={{ padding: '0 8px', textAlign: 'right' }}>Total Qty</th>
             <th style={{ padding: '0 8px', textAlign: 'right' }}>Filled</th>
+            <th style={{ padding: '0 8px', textAlign: 'right' }}>Remaining</th>
             <th style={{ padding: '0 8px' }}>Status</th>
             <th style={{ padding: '0 8px', textAlign: 'center' }}>Action</th>
           </tr>
@@ -76,6 +77,20 @@ export function OpenOrdersTable({
             const timeStr = order.createdAt
               ? new Date(order.createdAt).toLocaleTimeString()
               : '--:--';
+
+            const totalNum = parseFloat(order.quantity) || 0;
+            const filledNum = parseFloat(order.filledQuantity) || 0;
+            const remainingNum =
+              order.remainingQuantity != null
+                ? parseFloat(order.remainingQuantity)
+                : Math.max(0, totalNum - filledNum);
+            const fillPct =
+              totalNum > 0 ? Math.min(100, Math.round((filledNum / totalNum) * 100)) : 0;
+
+            const formattedPrice =
+              order.price === 'MARKET'
+                ? 'MARKET'
+                : `$${Number.isFinite(parseFloat(order.price)) ? parseFloat(order.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : order.price}`;
 
             return (
               <tr
@@ -122,7 +137,7 @@ export function OpenOrdersTable({
                     color: 'var(--text-primary)',
                   }}
                 >
-                  {order.price}
+                  {formattedPrice}
                 </td>
                 <td
                   className="font-mono"
@@ -139,23 +154,46 @@ export function OpenOrdersTable({
                   style={{
                     padding: '0 8px',
                     textAlign: 'right',
-                    color: 'var(--text-secondary)',
+                    color: filledNum > 0 ? 'var(--bid-green)' : 'var(--text-secondary)',
                   }}
                 >
                   {order.filledQuantity || '0.0000'}
                 </td>
+                <td
+                  className="font-mono"
+                  style={{
+                    padding: '0 8px',
+                    textAlign: 'right',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  {remainingNum.toFixed(4)}
+                </td>
                 <td style={{ padding: '0 8px' }}>
                   <span
                     style={{
-                      backgroundColor: 'var(--bg-hover)',
-                      color: 'var(--accent-cyan)',
+                      backgroundColor:
+                        order.status === 'PARTIALLY_FILLED'
+                          ? 'rgba(255, 184, 0, 0.15)'
+                          : 'var(--bg-hover)',
+                      color:
+                        order.status === 'PARTIALLY_FILLED'
+                          ? 'var(--accent-amber)'
+                          : 'var(--accent-cyan)',
                       padding: '2px 6px',
                       borderRadius: 4,
                       fontSize: '0.65rem',
                       fontWeight: 600,
                     }}
+                    title={
+                      order.status === 'PARTIALLY_FILLED'
+                        ? 'Order is resting in order book with partial fills'
+                        : 'Open order resting in order book'
+                    }
                   >
-                    {order.status}
+                    {order.status === 'PARTIALLY_FILLED'
+                      ? `PARTIAL (${fillPct}%)`
+                      : 'OPEN'}
                   </span>
                 </td>
                 <td style={{ padding: '0 8px', textAlign: 'center' }}>

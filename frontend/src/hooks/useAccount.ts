@@ -10,6 +10,7 @@ export function useAccount() {
   const { subscribe } = useWebSocket();
   const [balances, setBalances] = useState<BalanceRecord[]>(INITIAL_DEMO_BALANCES);
   const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [orderHistory, setOrderHistory] = useState<OrderRecord[]>([]);
   const [tradeHistory, setTradeHistory] = useState<TradeRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
@@ -25,12 +26,24 @@ export function useAccount() {
     }
   }, []);
 
-  // Load orders from API
+  // Load active orders from API
   const refreshOrders = useCallback(async () => {
     try {
       const data = await api.orders.getOrders();
       if (Array.isArray(data)) {
         setOrders(data);
+      }
+    } catch {
+      // Fallback
+    }
+  }, []);
+
+  // Load past order history from API
+  const refreshOrderHistory = useCallback(async () => {
+    try {
+      const data = await api.orders.getOrderHistory();
+      if (Array.isArray(data)) {
+        setOrderHistory(data);
       }
     } catch {
       // Fallback
@@ -53,8 +66,9 @@ export function useAccount() {
   useEffect(() => {
     refreshBalances();
     refreshOrders();
+    refreshOrderHistory();
     refreshTrades();
-  }, [refreshBalances, refreshOrders, refreshTrades]);
+  }, [refreshBalances, refreshOrders, refreshOrderHistory, refreshTrades]);
 
   // Subscribe to real-time order and balance updates via WebSocket for current account
   useEffect(() => {
@@ -139,9 +153,9 @@ export function useAccount() {
         await refreshBalances();
         await refreshOrders();
         // Trigger follow-up refreshes to capture matching engine executions and trade settlements
-        setTimeout(() => { void refreshBalances(); void refreshOrders(); void refreshTrades(); }, 600);
-        setTimeout(() => { void refreshBalances(); void refreshOrders(); void refreshTrades(); }, 1800);
-        setTimeout(() => { void refreshBalances(); void refreshOrders(); void refreshTrades(); }, 3500);
+        setTimeout(() => { void refreshBalances(); void refreshOrders(); void refreshOrderHistory(); void refreshTrades(); }, 600);
+        setTimeout(() => { void refreshBalances(); void refreshOrders(); void refreshOrderHistory(); void refreshTrades(); }, 1800);
+        setTimeout(() => { void refreshBalances(); void refreshOrders(); void refreshOrderHistory(); void refreshTrades(); }, 3500);
         return order;
       } catch (err) {
         // If user is authenticated with a token, always surface real exchange rejection/error
@@ -213,16 +227,18 @@ export function useAccount() {
         return simOrder;
       }
     },
-    [refreshBalances, refreshOrders, refreshTrades]
+    [refreshBalances, refreshOrders, refreshOrderHistory, refreshTrades]
   );
 
   return {
     balances,
     orders,
+    orderHistory,
     tradeHistory,
     isLoading,
     refreshBalances,
     refreshOrders,
+    refreshOrderHistory,
     refreshTrades,
     placeOrder,
     cancelOrder,

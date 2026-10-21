@@ -105,6 +105,30 @@ async function request<T>(
   }
 }
 
+function formatOrderQuantity(val: unknown, isExplicitBackendNanos: boolean): string {
+  if (val == null) return '0.0000';
+  if (typeof val === 'number') {
+    if (isExplicitBackendNanos || (Number.isInteger(val) && val >= 1000)) {
+      return (val / 100_000_000).toFixed(4);
+    }
+    return val.toFixed(4);
+  }
+  const s = String(val).trim();
+  if (!s || s === '0') return '0.0000';
+  if (s.includes('.')) {
+    const parsed = parseFloat(s);
+    return Number.isFinite(parsed) ? parsed.toFixed(4) : '0.0000';
+  }
+  const parsedInt = parseInt(s, 10);
+  if (Number.isFinite(parsedInt)) {
+    if (isExplicitBackendNanos || parsedInt >= 1000) {
+      return (parsedInt / 100_000_000).toFixed(4);
+    }
+    return parsedInt.toFixed(4);
+  }
+  return '0.0000';
+}
+
 export function normalizeOrderRecord(raw: Record<string, unknown>): OrderRecord {
   if (!raw) {
     throw new Error('Invalid order payload');
@@ -119,20 +143,17 @@ export function normalizeOrderRecord(raw: Record<string, unknown>): OrderRecord 
     }
   }
 
+  const isBackend =
+    raw.originalQty !== undefined || raw.filledQty !== undefined || raw.remainingQty !== undefined;
+
   const rawQty = raw.originalQty ?? raw.quantity ?? 0;
-  const qtyNum = typeof rawQty === 'number' ? rawQty : parseFloat(String(rawQty));
-  const normalizedQty =
-    qtyNum >= 100_000_000 ? (qtyNum / 100_000_000).toFixed(4) : qtyNum.toFixed(4);
+  const normalizedQty = formatOrderQuantity(rawQty, isBackend || raw.originalQty !== undefined);
 
   const rawFilled = raw.filledQty ?? raw.filledQuantity ?? 0;
-  const filledNum = typeof rawFilled === 'number' ? rawFilled : parseFloat(String(rawFilled));
-  const normalizedFilled =
-    filledNum >= 100_000_000 ? (filledNum / 100_000_000).toFixed(4) : filledNum.toFixed(4);
+  const normalizedFilled = formatOrderQuantity(rawFilled, isBackend || raw.filledQty !== undefined);
 
   const rawRemaining = raw.remainingQty ?? raw.remainingQuantity ?? 0;
-  const remainingNum = typeof rawRemaining === 'number' ? rawRemaining : parseFloat(String(rawRemaining));
-  const normalizedRemaining =
-    remainingNum >= 100_000_000 ? (remainingNum / 100_000_000).toFixed(4) : remainingNum.toFixed(4);
+  const normalizedRemaining = formatOrderQuantity(rawRemaining, isBackend || raw.remainingQty !== undefined);
 
   return {
     orderId: String(raw.orderId),
@@ -332,6 +353,17 @@ export const api = {
       const list = await request<Record<string, unknown>[]>('/orders', {
         method: 'GET',
       });
+      if (!Array.isArray(list)) return [];
+      return list.map(normalizeOrderRecord);
+    },
+
+    async getOrderHistory(limit = 50, offset = 0): Promise<OrderRecord[]> {
+      const list = await request<Record<string, unknown>[]>(
+        `/orders/history?limit=${limit}&offset=${offset}`,
+        {
+          method: 'GET',
+        }
+      );
       if (!Array.isArray(list)) return [];
       return list.map(normalizeOrderRecord);
     },
