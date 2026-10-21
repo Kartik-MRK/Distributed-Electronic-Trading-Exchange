@@ -2,14 +2,19 @@ import {
   AuthResponse,
   BalanceRecord,
   CandleData,
+  GuestLoginRequest,
+  InitiateRegisterRequest,
   Instrument,
   InstrumentMeta,
+  LoginCredentials,
   OrderBookData,
   OrderRecord,
   OrderSide,
   OrderType,
+  OtpResponse,
   TradeRecord,
   UserRecord,
+  VerifyOtpRequest,
 } from '../types';
 import { getAuthToken } from './auth';
 
@@ -86,10 +91,32 @@ async function request<T>(
 export const api = {
   // Auth API
   auth: {
-    async login(credentials: { username: string; password: string }): Promise<AuthResponse> {
+    async login(credentials: LoginCredentials): Promise<AuthResponse> {
+      const identifier = credentials.identifier || credentials.username || credentials.email || '';
       return request<AuthResponse>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify(credentials),
+        body: JSON.stringify({ identifier, password: credentials.password }),
+      });
+    },
+
+    async initiateRegister(data: InitiateRegisterRequest): Promise<OtpResponse> {
+      return request<OtpResponse>('/auth/register/initiate', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+
+    async verifyOtp(data: VerifyOtpRequest): Promise<AuthResponse> {
+      return request<AuthResponse>('/auth/register/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+
+    async guestLogin(data: GuestLoginRequest = {}): Promise<AuthResponse> {
+      return request<AuthResponse>('/auth/guest', {
+        method: 'POST',
+        body: JSON.stringify(data),
       });
     },
 

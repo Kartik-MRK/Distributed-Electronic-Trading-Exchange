@@ -27,8 +27,21 @@ export function getCurrentUser(): UserRecord | null {
 export function setAuthSession(auth: AuthResponse): void {
   if (typeof window === 'undefined') return;
   sessionStorage.setItem(TOKEN_KEY, auth.accessToken);
-  if (auth.user) {
-    sessionStorage.setItem(USER_KEY, JSON.stringify(auth.user));
+  const user: UserRecord = auth.user || {
+    userId: auth.userId || 'trader-user-id',
+    username: auth.username || 'trader',
+    email: '',
+    roles: ['ROLE_TRADER'],
+  };
+  sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+export function updateCurrentUser(partialUser: Partial<UserRecord>): void {
+  if (typeof window === 'undefined') return;
+  const current = getCurrentUser();
+  if (current) {
+    const updated = { ...current, ...partialUser };
+    sessionStorage.setItem(USER_KEY, JSON.stringify(updated));
   }
 }
 

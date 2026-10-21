@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Instrument } from '@/types';
-import { isAuthenticated, setCustomUserSession } from '@/lib/auth';
+import { isAuthenticated } from '@/lib/auth';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useAccount } from '@/hooks/useAccount';
 import { Header } from '@/components/header/Header';
@@ -26,17 +27,16 @@ const tabs: [ActivityTab, string][] = [
 ];
 
 export default function TerminalPage() {
+  const router = useRouter();
   const [ready, setReady] = useState(false);
+
   useEffect(() => {
-    if (!isAuthenticated())
-      setCustomUserSession('demo-jwt-token', {
-        userId: 'demo-user-id',
-        username: 'demo',
-        email: 'demo@dete.io',
-        roles: ['ROLE_TRADER'],
-      });
+    if (!isAuthenticated()) {
+      router.replace('/login?returnUrl=/terminal');
+      return;
+    }
     setReady(true);
-  }, []);
+  }, [router]);
   return (
     <ToastProvider>
       {ready ? (

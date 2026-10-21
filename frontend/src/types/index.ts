@@ -75,14 +75,52 @@ export interface UserRecord {
   username: string;
   email: string;
   roles: string[];
+  fullName?: string;
+  dateOfBirth?: string;
+  role?: string;
+  isVerified?: boolean;
+  isDemo?: boolean;
+  createdAt?: string;
 }
 
 export interface AuthResponse {
+  userId?: string;
+  username?: string;
   accessToken: string;
   refreshToken?: string;
   tokenType: string;
   expiresIn: number;
   user: UserRecord;
+}
+
+export interface InitiateRegisterRequest {
+  fullName: string;
+  dateOfBirth?: string;
+  email: string;
+  password: string;
+}
+
+export interface OtpResponse {
+  email: string;
+  message: string;
+  expiresInSeconds: number;
+  debugOtp?: string;
+}
+
+export interface VerifyOtpRequest {
+  email: string;
+  otp: string;
+}
+
+export interface GuestLoginRequest {
+  nickname?: string;
+}
+
+export interface LoginCredentials {
+  identifier?: string;
+  username?: string;
+  email?: string;
+  password: string;
 }
 
 export interface InstrumentMeta {
