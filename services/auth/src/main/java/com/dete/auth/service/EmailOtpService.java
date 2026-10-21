@@ -35,6 +35,7 @@ public class EmailOtpService {
   private final HttpClient httpClient;
   private final ObjectMapper objectMapper;
 
+  @Autowired
   public EmailOtpService(
       @Autowired(required = false) MailSender mailSender,
       @Value("${resend.api-key:}") String resendApiKey,
@@ -54,6 +55,11 @@ public class EmailOtpService {
   /** Convenience constructor for unit testing */
   public EmailOtpService(MailSender mailSender) {
     this(mailSender, null, null);
+  }
+
+  /** Default no-arg constructor */
+  public EmailOtpService() {
+    this(null, null, null);
   }
 
   public boolean isValidEmail(String email) {
