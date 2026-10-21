@@ -55,7 +55,7 @@ export function TradeTape({ instrument }: TradeTapeProps) {
     const primaryTopic = `/topic/trades.${backendInst}`;
     const altTopic = `/topic/trades.${instrument}`;
 
-    const handleIncomingTrade = (incoming: any) => {
+    const handleIncomingTrade = (incoming: Record<string, unknown>) => {
       if (!incoming) return;
       const meta = INSTRUMENT_METAS[instrument];
       const rawP = incoming.price;
@@ -74,18 +74,21 @@ export function TradeTape({ instrument }: TradeTapeProps) {
         instrument,
         price: pNum.toFixed(meta.priceDecimals),
         quantity: qNum.toFixed(meta.quantityDecimals),
-        makerSide: incoming.makerSide || (incoming.side === 'BUY' ? 'SELL' : 'BUY'),
-        takerSide: incoming.takerSide || incoming.side || 'BUY',
-        executedAt: incoming.timestamp || incoming.executedAt || new Date().toISOString(),
+        makerSide: (incoming.makerSide as 'BUY' | 'SELL') || (incoming.side === 'BUY' ? 'SELL' : 'BUY'),
+        takerSide: (incoming.takerSide as 'BUY' | 'SELL') || (incoming.side as 'BUY' | 'SELL') || 'BUY',
+        executedAt: (incoming.timestamp as string) || (incoming.executedAt as string) || new Date().toISOString(),
       };
 
       setTrades((prev) => [record, ...prev.slice(0, 49)]);
     };
 
-    const unsubscribePrimary = subscribe<any>(primaryTopic, handleIncomingTrade);
+    const unsubscribePrimary = subscribe<Record<string, unknown>>(
+      primaryTopic,
+      handleIncomingTrade
+    );
     const unsubscribeAlt =
       primaryTopic !== altTopic
-        ? subscribe<any>(altTopic, handleIncomingTrade)
+        ? subscribe<Record<string, unknown>>(altTopic, handleIncomingTrade)
         : () => {};
 
     return () => {

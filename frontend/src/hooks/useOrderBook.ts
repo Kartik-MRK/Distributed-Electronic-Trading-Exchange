@@ -90,14 +90,18 @@ export function useOrderBook(instrument: Instrument) {
     const primaryTopic = `/topic/orderbook.${backendInst}`;
     const altTopic = `/topic/orderbook.${instrument}`;
 
-    const handleIncomingBook = (incoming: any) => {
-      if (!incoming || !incoming.bids || !incoming.asks) return;
+    const handleIncomingBook = (incoming: Record<string, unknown>) => {
+      if (!incoming) return;
+      const rawBids = incoming.bids;
+      const rawAsks = incoming.asks;
+      if (!Array.isArray(rawBids) || !Array.isArray(rawAsks)) return;
 
       const meta = INSTRUMENT_METAS[instrument];
 
       // Compute cumulative totals and depth percentages
       let bidTotal = 0;
-      const computedBids = incoming.bids.slice(0, 15).map((b: any) => {
+      const computedBids = rawBids.slice(0, 15).map((bRecord: unknown) => {
+        const b = bRecord as Record<string, unknown>;
         const rawP = b.price;
         const pNum =
           typeof rawP === 'number' && rawP >= 100_000_000
@@ -117,7 +121,8 @@ export function useOrderBook(instrument: Instrument) {
       });
 
       let askTotal = 0;
-      const computedAsks = incoming.asks.slice(0, 15).map((a: any) => {
+      const computedAsks = rawAsks.slice(0, 15).map((aRecord: unknown) => {
+        const a = aRecord as Record<string, unknown>;
         const rawP = a.price;
         const pNum =
           typeof rawP === 'number' && rawP >= 100_000_000
@@ -168,7 +173,7 @@ export function useOrderBook(instrument: Instrument) {
 
       const updated: OrderBookData = {
         instrument,
-        sequenceNumber: incoming.sequenceNumber || 1,
+        sequenceNumber: (incoming.sequenceNumber as number) || 1,
         bids: computedBids,
         asks: computedAsks,
         spread: spreadVal,
@@ -179,10 +184,13 @@ export function useOrderBook(instrument: Instrument) {
       setOrderBook(updated);
     };
 
-    const unsubscribePrimary = subscribe<any>(primaryTopic, handleIncomingBook);
+    const unsubscribePrimary = subscribe<Record<string, unknown>>(
+      primaryTopic,
+      handleIncomingBook
+    );
     const unsubscribeAlt =
       primaryTopic !== altTopic
-        ? subscribe<any>(altTopic, handleIncomingBook)
+        ? subscribe<Record<string, unknown>>(altTopic, handleIncomingBook)
         : () => {};
 
     return () => {

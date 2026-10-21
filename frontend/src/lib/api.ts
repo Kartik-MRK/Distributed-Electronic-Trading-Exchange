@@ -10,6 +10,7 @@ import {
   OrderBookData,
   OrderRecord,
   OrderSide,
+  OrderStatus,
   OrderType,
   OtpResponse,
   TradeRecord,
@@ -21,7 +22,6 @@ import {
   toBackendInstrument,
   toFrontendInstrument,
   scaleToNanos,
-  unscaleFromNanos,
 } from './format';
 
 export function getGatewayBaseUrl(): string {
@@ -104,7 +104,7 @@ async function request<T>(
   }
 }
 
-export function normalizeOrderRecord(raw: any): OrderRecord {
+export function normalizeOrderRecord(raw: Record<string, unknown>): OrderRecord {
   if (!raw) {
     throw new Error('Invalid order payload');
   }
@@ -112,41 +112,41 @@ export function normalizeOrderRecord(raw: any): OrderRecord {
   const priceRaw = raw.price;
   let priceStr = 'MARKET';
   if (priceRaw != null && priceRaw !== 0 && priceRaw !== '0') {
-    const pNum = typeof priceRaw === 'number' ? priceRaw : parseFloat(priceRaw);
+    const pNum = typeof priceRaw === 'number' ? priceRaw : parseFloat(String(priceRaw));
     if (Number.isFinite(pNum) && pNum > 0) {
       priceStr = pNum >= 100_000_000 ? (pNum / 100_000_000).toFixed(2) : pNum.toFixed(2);
     }
   }
 
   const rawQty = raw.originalQty ?? raw.quantity ?? 0;
-  const qtyNum = typeof rawQty === 'number' ? rawQty : parseFloat(rawQty);
+  const qtyNum = typeof rawQty === 'number' ? rawQty : parseFloat(String(rawQty));
   const normalizedQty =
     qtyNum >= 100_000_000 ? (qtyNum / 100_000_000).toFixed(4) : qtyNum.toFixed(4);
 
   const rawFilled = raw.filledQty ?? raw.filledQuantity ?? 0;
-  const filledNum = typeof rawFilled === 'number' ? rawFilled : parseFloat(rawFilled);
+  const filledNum = typeof rawFilled === 'number' ? rawFilled : parseFloat(String(rawFilled));
   const normalizedFilled =
     filledNum >= 100_000_000 ? (filledNum / 100_000_000).toFixed(4) : filledNum.toFixed(4);
 
   const rawRemaining = raw.remainingQty ?? raw.remainingQuantity ?? 0;
-  const remainingNum = typeof rawRemaining === 'number' ? rawRemaining : parseFloat(rawRemaining);
+  const remainingNum = typeof rawRemaining === 'number' ? rawRemaining : parseFloat(String(rawRemaining));
   const normalizedRemaining =
     remainingNum >= 100_000_000 ? (remainingNum / 100_000_000).toFixed(4) : remainingNum.toFixed(4);
 
   return {
     orderId: String(raw.orderId),
     accountId: String(raw.accountId || ''),
-    instrument: toFrontendInstrument(raw.instrument || 'BTC_USD'),
-    side: raw.side,
-    type: raw.orderType || raw.type || 'LIMIT',
+    instrument: toFrontendInstrument(String(raw.instrument || 'BTC_USD')),
+    side: (raw.side as OrderSide) || 'BUY',
+    type: ((raw.orderType || raw.type) as OrderType) || 'LIMIT',
     price: priceStr,
     quantity: normalizedQty,
     filledQuantity: normalizedFilled,
     remainingQuantity: normalizedRemaining,
-    status: raw.status || 'SUBMITTED',
-    createdAt: raw.createdAt || new Date().toISOString(),
-    updatedAt: raw.updatedAt,
-    rejectionReason: raw.rejectReason || raw.rejectionReason,
+    status: (raw.status as OrderStatus) || 'SUBMITTED',
+    createdAt: (raw.createdAt as string) || new Date().toISOString(),
+    updatedAt: raw.updatedAt as string | undefined,
+    rejectionReason: (raw.rejectReason || raw.rejectionReason) as string | undefined,
   };
 }
 
@@ -199,7 +199,7 @@ export const api = {
   // Account / Balances API
   account: {
     async getBalances(): Promise<BalanceRecord[]> {
-      const data = await request<any[]>('/accounts/me/balances', {
+      const data = await request<Record<string, unknown>[]>('/accounts/me/balances', {
         method: 'GET',
       });
       if (!Array.isArray(data)) return [];
@@ -289,7 +289,7 @@ export const api = {
         requestBody.price = scaledPrice;
       }
 
-      const raw = await request<any>('/orders', {
+      const raw = await request<Record<string, unknown>>('/orders', {
         method: 'POST',
         headers: {
           'Idempotency-Key': idempotencyKey,
@@ -301,7 +301,7 @@ export const api = {
     },
 
     async getOrders(): Promise<OrderRecord[]> {
-      const list = await request<any[]>('/orders', {
+      const list = await request<Record<string, unknown>[]>('/orders', {
         method: 'GET',
       });
       if (!Array.isArray(list)) return [];
@@ -326,7 +326,7 @@ export const api = {
 
     async getRecentTrades(instrument: Instrument, limit = 50): Promise<TradeRecord[]> {
       const backendInst = toBackendInstrument(instrument);
-      const rawTrades = await request<any[]>(
+      const rawTrades = await request<Record<string, unknown>[]>(
         `/market-data/${backendInst}/trades?limit=${limit}`,
         {
           method: 'GET',
@@ -347,12 +347,12 @@ export const api = {
 
         return {
           tradeId: String(t.tradeId || t.eventId || `tr-${Date.now()}`),
-          instrument: toFrontendInstrument(t.instrument || instrument),
+          instrument: toFrontendInstrument(String(t.instrument || instrument)),
           price: pNum.toFixed(2),
           quantity: qNum.toFixed(4),
-          makerSide: t.makerSide || (t.side === 'BUY' ? 'SELL' : 'BUY'),
-          takerSide: t.takerSide || t.side || 'BUY',
-          executedAt: t.timestamp || t.executedAt || new Date().toISOString(),
+          makerSide: ((t.makerSide || (t.side === 'BUY' ? 'SELL' : 'BUY')) as OrderSide),
+          takerSide: ((t.takerSide || t.side || 'BUY') as OrderSide),
+          executedAt: String(t.timestamp || t.executedAt || new Date().toISOString()),
         };
       });
     },

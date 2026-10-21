@@ -62,13 +62,13 @@ export function useAccount() {
     const accountId = user?.userId || 'default';
 
     const orderTopic = `/topic/orders.${accountId}`;
-    const unsubscribeOrder = subscribe<any>(orderTopic, (incomingOrder) => {
+    const unsubscribeOrder = subscribe<Record<string, unknown>>(orderTopic, (incomingOrder) => {
       if (!incomingOrder) return;
       let updatedOrder: OrderRecord;
       try {
         updatedOrder = normalizeOrderRecord(incomingOrder);
       } catch {
-        updatedOrder = incomingOrder as OrderRecord;
+        updatedOrder = incomingOrder as unknown as OrderRecord;
       }
       if (!updatedOrder || !updatedOrder.orderId) return;
 
@@ -209,7 +209,7 @@ export function useAccount() {
         return simOrder;
       }
     },
-    [refreshBalances]
+    [refreshBalances, refreshOrders]
   );
 
   return {

@@ -154,7 +154,7 @@ export function PriceChart({ instrument }: PriceChartProps) {
     const primaryTopic = `/topic/candles.${backendInst}.${interval}`;
     const altTopic = `/topic/candles.${instrument}.${interval}`;
 
-    const handleIncomingCandle = (candle: any) => {
+    const handleIncomingCandle = (candle: Record<string, unknown>) => {
       if (!candle || !candleSeriesRef.current) return;
       const rawTime = candle.openTime ?? candle.time;
       const timeSec =
@@ -193,10 +193,13 @@ export function PriceChart({ instrument }: PriceChartProps) {
       }
     };
 
-    const unsubscribePrimary = subscribe<any>(primaryTopic, handleIncomingCandle);
+    const unsubscribePrimary = subscribe<Record<string, unknown>>(
+      primaryTopic,
+      handleIncomingCandle
+    );
     const unsubscribeAlt =
       primaryTopic !== altTopic
-        ? subscribe<any>(altTopic, handleIncomingCandle)
+        ? subscribe<Record<string, unknown>>(altTopic, handleIncomingCandle)
         : () => {};
 
     return () => {
