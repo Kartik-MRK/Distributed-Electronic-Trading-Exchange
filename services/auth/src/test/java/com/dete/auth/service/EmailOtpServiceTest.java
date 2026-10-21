@@ -67,4 +67,11 @@ class EmailOtpServiceTest {
     emailOtpService.dispatchOtpEmail("user@example.com", "654321", "Test Trader");
     verify(mailSender).send(any(SimpleMailMessage.class));
   }
+
+  @Test
+  @DisplayName("dispatchOtpEmail handles null mailSender and empty resend key gracefully without throwing")
+  void shouldHandleNullMailSenderGracefully() {
+    EmailOtpService noMailService = new EmailOtpService(null, "", null);
+    noMailService.dispatchOtpEmail("user@example.com", "654321", "Test Trader");
+  }
 }

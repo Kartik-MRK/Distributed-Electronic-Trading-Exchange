@@ -121,7 +121,7 @@ class AuthServiceUnitTest {
     OtpResponse response = authService.initiateRegistration(request);
 
     assertThat(response.email()).isEqualTo("alice@example.com");
-    assertThat(response.debugOtp()).isEqualTo("789123");
+    assertThat(response.debugOtp()).isNull();
     verify(emailOtpRepository).save(any(EmailOtp.class));
     verify(emailOtpService).dispatchOtpEmail("alice@example.com", "789123", "Alice Smith");
   }

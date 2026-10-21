@@ -56,6 +56,10 @@ auth:
     username: "demo"
     password: "DemoPassword123!"
 
+resend:
+  api-key: ${RESEND_API_KEY:}
+  from-email: ${RESEND_FROM_EMAIL:DETE Security <security@mail.kartik-mrk.me>}
+
 management:
   endpoints:
     web:

@@ -69,7 +69,6 @@ function AuthContent() {
   // OTP State
   const [otpValues, setOtpValues] = useState<string[]>(['', '', '', '', '', '']);
   const [otpNotice, setOtpNotice] = useState<string | null>(null);
-  const [debugOtp, setDebugOtp] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(60);
   const [isResending, setIsResending] = useState(false);
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
@@ -198,9 +197,6 @@ function AuthContent() {
       });
 
       setOtpNotice(res.message || `Verification code sent to ${email}`);
-      if (res.debugOtp) {
-        setDebugOtp(res.debugOtp);
-      }
       setCountdown(res.expiresInSeconds ? Math.min(res.expiresInSeconds, 60) : 60);
       setOtpValues(['', '', '', '', '', '']);
       setSignupStep('otp');
@@ -231,9 +227,6 @@ function AuthContent() {
         password: signupPassword,
       });
       setOtpNotice(res.message || `New code sent to ${email}`);
-      if (res.debugOtp) {
-        setDebugOtp(res.debugOtp);
-      }
       setCountdown(60);
       setOtpValues(['', '', '', '', '', '']);
       otpInputsRef.current[0]?.focus();
@@ -598,14 +591,6 @@ function AuthContent() {
             </div>
           )}
 
-          {debugOtp && (
-            <div className="notice" role="note" style={{ marginBottom: 18, background: 'rgba(228, 180, 76, 0.08)', borderColor: 'var(--accent-amber)' }}>
-              <span style={{ color: 'var(--accent-amber)', fontWeight: 600 }}>Development Mode OTP: </span>
-              <strong className="font-mono" style={{ color: 'var(--text-primary)', letterSpacing: '0.1em' }}>
-                {debugOtp}
-              </strong>
-            </div>
-          )}
 
           <form onSubmit={handleVerifyOtp} className="auth-form">
             <div className="otp-grid">

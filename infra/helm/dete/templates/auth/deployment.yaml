@@ -55,6 +55,14 @@ spec:
                   key: JWT_SECRET
             - name: ACCOUNT_SERVICE_URL
               value: "http://account:8082"
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: dete-secrets
+                  key: RESEND_API_KEY
+                  optional: true
+            - name: RESEND_FROM_EMAIL
+              value: {{ .Values.auth.resendFromEmail | quote }}
           resources:
             {{- toYaml .Values.auth.resources | nindent 12 }}
           startupProbe:

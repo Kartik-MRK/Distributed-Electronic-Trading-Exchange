@@ -69,6 +69,8 @@ auth:
   image: dete/auth:latest
   replicaCount: 1
   port: 8081
+  resendApiKey: ""
+  resendFromEmail: "DETE Security <security@mail.kartik-mrk.me>"
   resources:
     requests:
       cpu: 25m
