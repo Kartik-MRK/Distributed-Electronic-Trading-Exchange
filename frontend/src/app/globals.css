@@ -331,19 +331,6 @@ h2 {
   font-size: 17px;
   font-weight: 500;
 }
-.market-selector label {
-  display: block;
-}
-.market-selector select {
-  padding: 0 18px 0 0;
-  border: 0;
-  font-size: 16px;
-  font-weight: 600;
-  background: transparent;
-}
-.market-selector option {
-  background: var(--bg-panel);
-}
 .market-stats {
   display: flex;
   align-items: center;

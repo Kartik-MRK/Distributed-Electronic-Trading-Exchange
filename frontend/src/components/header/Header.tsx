@@ -4,6 +4,7 @@ import { Instrument } from '@/types';
 import { INSTRUMENT_METAS } from '@/lib/api';
 import { ConnectionState } from '@/lib/ws';
 import { AppHeader } from '@/components/common/AppHeader';
+import { MarketSelector } from './MarketSelector';
 
 interface HeaderProps {
   selectedInstrument: Instrument;
@@ -26,22 +27,10 @@ export function Header({
       <section className="market-bar" aria-label="Market overview">
         <div className="market-selector">
           <span className="asset-mark">{meta.baseAsset.slice(0, 1)}</span>
-          <div>
-            <label className="eyebrow" htmlFor="instrument">
-              Spot market
-            </label>
-            <select
-              id="instrument"
-              value={selectedInstrument}
-              onChange={(e) => onSelectInstrument(e.target.value as Instrument)}
-            >
-              {Object.keys(INSTRUMENT_METAS).map((instrument) => (
-                <option key={instrument} value={instrument}>
-                  {instrument.replace('_', ' / ')}
-                </option>
-              ))}
-            </select>
-          </div>
+          <MarketSelector
+            value={selectedInstrument}
+            onChange={onSelectInstrument}
+          />
           <span className="badge compact-feed-status">
             {connected ? 'Connected' : 'Preview'}
           </span>
