@@ -20,13 +20,25 @@ export function AccountPanel({ balances }: { balances: BalanceRecord[] }) {
           <div className="balance-row" key={balance.asset}>
             <strong>{balance.asset}</strong>
             <span className="font-mono">
-              {Number(balance.available).toLocaleString('en-US', {
-                maximumFractionDigits: 6,
+              {(balance.availableDisplay !== undefined
+                ? balance.availableDisplay
+                : Number(balance.available) >= 100_000_000
+                  ? Number(balance.available) / 100_000_000
+                  : Number(balance.available)
+              ).toLocaleString('en-US', {
+                minimumFractionDigits: balance.asset === 'USD' || balance.asset === 'USDT' ? 2 : 4,
+                maximumFractionDigits: balance.asset === 'USD' || balance.asset === 'USDT' ? 2 : 6,
               })}
             </span>
             <span className="font-mono muted">
-              {Number(balance.reserved).toLocaleString('en-US', {
-                maximumFractionDigits: 6,
+              {(balance.reservedDisplay !== undefined
+                ? balance.reservedDisplay
+                : Number(balance.reserved) >= 100_000_000
+                  ? Number(balance.reserved) / 100_000_000
+                  : Number(balance.reserved)
+              ).toLocaleString('en-US', {
+                minimumFractionDigits: balance.asset === 'USD' || balance.asset === 'USDT' ? 2 : 4,
+                maximumFractionDigits: balance.asset === 'USD' || balance.asset === 'USDT' ? 2 : 6,
               })}
             </span>
           </div>

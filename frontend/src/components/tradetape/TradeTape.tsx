@@ -5,6 +5,8 @@ import { Instrument, TradeRecord } from '../../types';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { INSTRUMENT_METAS } from '../../lib/api';
 
+import { toBackendInstrument } from '../../lib/format';
+
 interface TradeTapeProps {
   instrument: Instrument;
 }
@@ -49,14 +51,46 @@ export function TradeTape({ instrument }: TradeTapeProps) {
 
   // Subscribe to live trades
   useEffect(() => {
-    const topic = `/topic/trades.${instrument}`;
-    const unsubscribe = subscribe<TradeRecord>(topic, (incoming) => {
-      if (!incoming || !incoming.price) return;
-      setTrades((prev) => [incoming, ...prev.slice(0, 49)]);
-    });
+    const backendInst = toBackendInstrument(instrument);
+    const primaryTopic = `/topic/trades.${backendInst}`;
+    const altTopic = `/topic/trades.${instrument}`;
+
+    const handleIncomingTrade = (incoming: any) => {
+      if (!incoming) return;
+      const meta = INSTRUMENT_METAS[instrument];
+      const rawP = incoming.price;
+      const pNum =
+        typeof rawP === 'number' && rawP >= 100_000_000
+          ? rawP / 100_000_000
+          : Number(rawP);
+      const rawQ = incoming.quantity;
+      const qNum =
+        typeof rawQ === 'number' && rawQ >= 100_000_000
+          ? rawQ / 100_000_000
+          : Number(rawQ || 0);
+
+      const record: TradeRecord = {
+        tradeId: String(incoming.tradeId || incoming.eventId || `tr-${Date.now()}`),
+        instrument,
+        price: pNum.toFixed(meta.priceDecimals),
+        quantity: qNum.toFixed(meta.quantityDecimals),
+        makerSide: incoming.makerSide || (incoming.side === 'BUY' ? 'SELL' : 'BUY'),
+        takerSide: incoming.takerSide || incoming.side || 'BUY',
+        executedAt: incoming.timestamp || incoming.executedAt || new Date().toISOString(),
+      };
+
+      setTrades((prev) => [record, ...prev.slice(0, 49)]);
+    };
+
+    const unsubscribePrimary = subscribe<any>(primaryTopic, handleIncomingTrade);
+    const unsubscribeAlt =
+      primaryTopic !== altTopic
+        ? subscribe<any>(altTopic, handleIncomingTrade)
+        : () => {};
 
     return () => {
-      unsubscribe();
+      unsubscribePrimary();
+      unsubscribeAlt();
     };
   }, [instrument, subscribe]);
 

@@ -13,6 +13,7 @@ import {
 import { Instrument } from '../../types';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { INSTRUMENT_METAS } from '../../lib/api';
+import { toBackendInstrument } from '../../lib/format';
 import { Maximize2 } from 'lucide-react';
 
 interface PriceChartProps {
@@ -149,27 +150,58 @@ export function PriceChart({ instrument }: PriceChartProps) {
 
   // Subscribe to live candle ticks
   useEffect(() => {
-    const topic = `/topic/candles.${instrument}.${interval}`;
-    const unsubscribe = subscribe<{
-      time: number;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-    }>(topic, (candle) => {
+    const backendInst = toBackendInstrument(instrument);
+    const primaryTopic = `/topic/candles.${backendInst}.${interval}`;
+    const altTopic = `/topic/candles.${instrument}.${interval}`;
+
+    const handleIncomingCandle = (candle: any) => {
       if (!candle || !candleSeriesRef.current) return;
-      candleSeriesRef.current.update({
-        time: candle.time as unknown as Time,
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close,
-      });
-      setLastPrice(candle.close.toFixed(2));
-    });
+      const rawTime = candle.openTime ?? candle.time;
+      const timeSec =
+        typeof rawTime === 'number'
+          ? (rawTime > 1_000_000_000_000 ? Math.floor(rawTime / 1000) : rawTime)
+          : Math.floor(Date.now() / 1000);
+
+      const o =
+        typeof candle.open === 'number' && candle.open >= 100_000_000
+          ? candle.open / 100_000_000
+          : Number(candle.open);
+      const h =
+        typeof candle.high === 'number' && candle.high >= 100_000_000
+          ? candle.high / 100_000_000
+          : Number(candle.high);
+      const l =
+        typeof candle.low === 'number' && candle.low >= 100_000_000
+          ? candle.low / 100_000_000
+          : Number(candle.low);
+      const c =
+        typeof candle.close === 'number' && candle.close >= 100_000_000
+          ? candle.close / 100_000_000
+          : Number(candle.close);
+
+      try {
+        candleSeriesRef.current.update({
+          time: timeSec as unknown as Time,
+          open: o,
+          high: h,
+          low: l,
+          close: c,
+        });
+        setLastPrice(c.toFixed(2));
+      } catch {
+        // Safe catch for timestamp ordering differences
+      }
+    };
+
+    const unsubscribePrimary = subscribe<any>(primaryTopic, handleIncomingCandle);
+    const unsubscribeAlt =
+      primaryTopic !== altTopic
+        ? subscribe<any>(altTopic, handleIncomingCandle)
+        : () => {};
 
     return () => {
-      unsubscribe();
+      unsubscribePrimary();
+      unsubscribeAlt();
     };
   }, [instrument, interval, subscribe]);
 

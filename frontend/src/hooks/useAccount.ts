@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { BalanceRecord, OrderRecord, TradeRecord, Instrument, OrderSide, OrderType } from '../types';
-import { api, INITIAL_DEMO_BALANCES } from '../lib/api';
+import { api, INITIAL_DEMO_BALANCES, normalizeOrderRecord } from '../lib/api';
 import { getCurrentUser } from '../lib/auth';
 import { useWebSocket } from './useWebSocket';
 
@@ -62,7 +62,14 @@ export function useAccount() {
     const accountId = user?.userId || 'default';
 
     const orderTopic = `/topic/orders.${accountId}`;
-    const unsubscribeOrder = subscribe<OrderRecord>(orderTopic, (updatedOrder) => {
+    const unsubscribeOrder = subscribe<any>(orderTopic, (incomingOrder) => {
+      if (!incomingOrder) return;
+      let updatedOrder: OrderRecord;
+      try {
+        updatedOrder = normalizeOrderRecord(incomingOrder);
+      } catch {
+        updatedOrder = incomingOrder as OrderRecord;
+      }
       if (!updatedOrder || !updatedOrder.orderId) return;
 
       setOrders((prev) => {
@@ -75,8 +82,12 @@ export function useAccount() {
         return [updatedOrder, ...prev];
       });
 
-      // If order got filled or partially filled, refresh balances
-      if (updatedOrder.status === 'FILLED' || updatedOrder.status === 'PARTIALLY_FILLED') {
+      // If order got accepted, filled, or partially filled, refresh balances
+      if (
+        updatedOrder.status === 'FILLED' ||
+        updatedOrder.status === 'PARTIALLY_FILLED' ||
+        updatedOrder.status === 'ACCEPTED'
+      ) {
         refreshBalances();
         refreshTrades();
       }
@@ -126,12 +137,19 @@ export function useAccount() {
         const order = await api.orders.placeOrder(params);
         setOrders((prev) => [order, ...prev]);
         await refreshBalances();
+        await refreshOrders();
         return order;
       } catch (err) {
+        // If authenticated user, throw the actual error so user gets the real rejection reason
+        const currentUser = getCurrentUser();
+        if (currentUser && !currentUser.isDemo && currentUser.role !== 'ROLE_GUEST') {
+          throw err;
+        }
+
         // Fallback for standalone demo: simulate order lifecycle
         const simOrder: OrderRecord = {
           orderId: `ord-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          accountId: getCurrentUser()?.userId || 'demo-user-id',
+          accountId: currentUser?.userId || 'demo-user-id',
           instrument: params.instrument,
           side: params.side,
           type: params.type,

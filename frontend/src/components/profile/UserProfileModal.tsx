@@ -102,11 +102,20 @@ export function UserProfileModal({
     }, 2000);
   };
 
-  const usdtBalance = balances.find((b) => b.asset === 'USDT') || {
+  const usdtBalance = balances.find((b) => b.asset === 'USDT') || balances.find((b) => b.asset === 'USD') || {
     asset: 'USDT',
     available: '50000.00',
     reserved: '0.00',
     total: '50000.00',
+  };
+
+  const getBalNum = (b: BalanceRecord | undefined, field: 'available' | 'reserved' | 'total'): number => {
+    if (!b) return 0;
+    if (field === 'available' && b.availableDisplay !== undefined) return b.availableDisplay;
+    if (field === 'reserved' && b.reservedDisplay !== undefined) return b.reservedDisplay;
+    if (field === 'total' && b.totalDisplay !== undefined) return b.totalDisplay;
+    const num = Number(b[field] || 0);
+    return num >= 100_000_000 ? num / 100_000_000 : num;
   };
 
   const isGuest = user?.isDemo || user?.role === 'ROLE_GUEST' || user?.username?.startsWith('guest_');
@@ -255,7 +264,7 @@ export function UserProfileModal({
                   <span>Total USDT Equity</span>
                 </div>
                 <div className="profile-balance-figure font-mono">
-                  ${Number(usdtBalance.total || usdtBalance.available).toLocaleString('en-US', {
+                  ${(getBalNum(usdtBalance, 'total') || getBalNum(usdtBalance, 'available')).toLocaleString('en-US', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
@@ -267,7 +276,7 @@ export function UserProfileModal({
                 <div>
                   <span className="profile-split-label">Available for Trading</span>
                   <span className="profile-split-val font-mono positive">
-                    {Number(usdtBalance.available).toLocaleString('en-US', {
+                    {getBalNum(usdtBalance, 'available').toLocaleString('en-US', {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
                     })} USDT
@@ -276,7 +285,7 @@ export function UserProfileModal({
                 <div>
                   <span className="profile-split-label">In Open Orders</span>
                   <span className="profile-split-val font-mono muted">
-                    {Number(usdtBalance.reserved).toLocaleString('en-US', {
+                    {getBalNum(usdtBalance, 'reserved').toLocaleString('en-US', {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
                     })} USDT
@@ -287,19 +296,19 @@ export function UserProfileModal({
           </div>
 
           {/* Other Balances */}
-          {balances.filter((b) => b.asset !== 'USDT').length > 0 && (
+          {balances.filter((b) => b.asset !== 'USDT' && b.asset !== 'USD').length > 0 && (
             <div className="profile-section">
               <span className="eyebrow" style={{ marginBottom: 8, display: 'block' }}>
                 Crypto Holdings
               </span>
               <div className="profile-crypto-list">
                 {balances
-                  .filter((b) => b.asset !== 'USDT')
+                  .filter((b) => b.asset !== 'USDT' && b.asset !== 'USD')
                   .map((b) => (
                     <div key={b.asset} className="profile-crypto-row">
                       <span className="profile-crypto-asset">{b.asset}</span>
                       <span className="font-mono">
-                        {Number(b.available).toLocaleString('en-US', { maximumFractionDigits: 4 })}
+                        {getBalNum(b, 'available').toLocaleString('en-US', { maximumFractionDigits: 4 })}
                       </span>
                     </div>
                   ))}

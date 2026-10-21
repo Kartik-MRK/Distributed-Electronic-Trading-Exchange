@@ -17,6 +17,12 @@ import {
   VerifyOtpRequest,
 } from '../types';
 import { getAuthToken } from './auth';
+import {
+  toBackendInstrument,
+  toFrontendInstrument,
+  scaleToNanos,
+  unscaleFromNanos,
+} from './format';
 
 export function getGatewayBaseUrl(): string {
   if (process.env.NEXT_PUBLIC_GATEWAY_URL) {
@@ -98,9 +104,51 @@ async function request<T>(
   }
 }
 
-/* =========================================================================
-   REST API Calls
-   ========================================================================= */
+export function normalizeOrderRecord(raw: any): OrderRecord {
+  if (!raw) {
+    throw new Error('Invalid order payload');
+  }
+
+  const priceRaw = raw.price;
+  let priceStr = 'MARKET';
+  if (priceRaw != null && priceRaw !== 0 && priceRaw !== '0') {
+    const pNum = typeof priceRaw === 'number' ? priceRaw : parseFloat(priceRaw);
+    if (Number.isFinite(pNum) && pNum > 0) {
+      priceStr = pNum >= 100_000_000 ? (pNum / 100_000_000).toFixed(2) : pNum.toFixed(2);
+    }
+  }
+
+  const rawQty = raw.originalQty ?? raw.quantity ?? 0;
+  const qtyNum = typeof rawQty === 'number' ? rawQty : parseFloat(rawQty);
+  const normalizedQty =
+    qtyNum >= 100_000_000 ? (qtyNum / 100_000_000).toFixed(4) : qtyNum.toFixed(4);
+
+  const rawFilled = raw.filledQty ?? raw.filledQuantity ?? 0;
+  const filledNum = typeof rawFilled === 'number' ? rawFilled : parseFloat(rawFilled);
+  const normalizedFilled =
+    filledNum >= 100_000_000 ? (filledNum / 100_000_000).toFixed(4) : filledNum.toFixed(4);
+
+  const rawRemaining = raw.remainingQty ?? raw.remainingQuantity ?? 0;
+  const remainingNum = typeof rawRemaining === 'number' ? rawRemaining : parseFloat(rawRemaining);
+  const normalizedRemaining =
+    remainingNum >= 100_000_000 ? (remainingNum / 100_000_000).toFixed(4) : remainingNum.toFixed(4);
+
+  return {
+    orderId: String(raw.orderId),
+    accountId: String(raw.accountId || ''),
+    instrument: toFrontendInstrument(raw.instrument || 'BTC_USD'),
+    side: raw.side,
+    type: raw.orderType || raw.type || 'LIMIT',
+    price: priceStr,
+    quantity: normalizedQty,
+    filledQuantity: normalizedFilled,
+    remainingQuantity: normalizedRemaining,
+    status: raw.status || 'SUBMITTED',
+    createdAt: raw.createdAt || new Date().toISOString(),
+    updatedAt: raw.updatedAt,
+    rejectionReason: raw.rejectReason || raw.rejectionReason,
+  };
+}
 
 export const api = {
   // Auth API
@@ -151,8 +199,43 @@ export const api = {
   // Account / Balances API
   account: {
     async getBalances(): Promise<BalanceRecord[]> {
-      return request<BalanceRecord[]>('/accounts/me/balances', {
+      const data = await request<any[]>('/accounts/me/balances', {
         method: 'GET',
+      });
+      if (!Array.isArray(data)) return [];
+      return data.map((b) => {
+        const availNum =
+          b.availableDisplay !== undefined
+            ? Number(b.availableDisplay)
+            : typeof b.available === 'number' && b.available >= 100_000_000
+              ? b.available / 100_000_000
+              : Number(b.available || 0);
+
+        const resNum =
+          b.reservedDisplay !== undefined
+            ? Number(b.reservedDisplay)
+            : typeof b.reserved === 'number' && b.reserved >= 100_000_000
+              ? b.reserved / 100_000_000
+              : Number(b.reserved || 0);
+
+        const totalNum =
+          b.totalDisplay !== undefined
+            ? Number(b.totalDisplay)
+            : availNum + resNum;
+
+        const assetSymbol = String(b.asset);
+        // Format to 2 decimals for fiat/stables (USD, USDT), 4 decimals for crypto
+        const decimals = assetSymbol === 'USD' || assetSymbol === 'USDT' ? 2 : 4;
+
+        return {
+          asset: assetSymbol,
+          available: availNum.toFixed(decimals),
+          reserved: resNum.toFixed(decimals),
+          total: totalNum.toFixed(decimals),
+          availableDisplay: availNum,
+          reservedDisplay: resNum,
+          totalDisplay: totalNum,
+        };
       });
     },
 
@@ -185,25 +268,44 @@ export const api = {
           ? crypto.randomUUID()
           : `idem-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
 
-      return request<OrderRecord>('/orders', {
+      const backendInstrument = toBackendInstrument(params.instrument);
+      const scaledQty = scaleToNanos(params.quantity);
+      // For BUY market orders, backend requires price for pre-trade fund reservation
+      const scaledPrice =
+        params.type === 'MARKET'
+          ? params.side === 'BUY' && params.price
+            ? scaleToNanos(params.price)
+            : null
+          : scaleToNanos(params.price);
+
+      const requestBody: Record<string, unknown> = {
+        instrument: backendInstrument,
+        side: params.side,
+        orderType: params.type,
+        quantity: scaledQty,
+      };
+
+      if (scaledPrice != null && scaledPrice > 0) {
+        requestBody.price = scaledPrice;
+      }
+
+      const raw = await request<any>('/orders', {
         method: 'POST',
         headers: {
           'Idempotency-Key': idempotencyKey,
         },
-        body: JSON.stringify({
-          instrument: params.instrument,
-          side: params.side,
-          type: params.type,
-          price: params.price,
-          quantity: params.quantity,
-        }),
+        body: JSON.stringify(requestBody),
       });
+
+      return normalizeOrderRecord(raw);
     },
 
     async getOrders(): Promise<OrderRecord[]> {
-      return request<OrderRecord[]>('/orders', {
+      const list = await request<any[]>('/orders', {
         method: 'GET',
       });
+      if (!Array.isArray(list)) return [];
+      return list.map(normalizeOrderRecord);
     },
 
     async cancelOrder(orderId: string): Promise<{ orderId: string; status: string }> {
@@ -216,14 +318,42 @@ export const api = {
   // Market Data API
   marketData: {
     async getOrderBook(instrument: Instrument): Promise<OrderBookData> {
-      return request<OrderBookData>(`/marketdata/orderbook/${instrument}`, {
+      const backendInst = toBackendInstrument(instrument);
+      return request<OrderBookData>(`/market-data/${backendInst}/orderbook`, {
         method: 'GET',
       });
     },
 
     async getRecentTrades(instrument: Instrument, limit = 50): Promise<TradeRecord[]> {
-      return request<TradeRecord[]>(`/marketdata/trades/${instrument}?limit=${limit}`, {
-        method: 'GET',
+      const backendInst = toBackendInstrument(instrument);
+      const rawTrades = await request<any[]>(
+        `/market-data/${backendInst}/trades?limit=${limit}`,
+        {
+          method: 'GET',
+        }
+      );
+      if (!Array.isArray(rawTrades)) return [];
+      return rawTrades.map((t) => {
+        const rawP = t.price;
+        const pNum =
+          typeof rawP === 'number' && rawP >= 100_000_000
+            ? rawP / 100_000_000
+            : Number(rawP);
+        const rawQ = t.quantity;
+        const qNum =
+          typeof rawQ === 'number' && rawQ >= 100_000_000
+            ? rawQ / 100_000_000
+            : Number(rawQ || 0);
+
+        return {
+          tradeId: String(t.tradeId || t.eventId || `tr-${Date.now()}`),
+          instrument: toFrontendInstrument(t.instrument || instrument),
+          price: pNum.toFixed(2),
+          quantity: qNum.toFixed(4),
+          makerSide: t.makerSide || (t.side === 'BUY' ? 'SELL' : 'BUY'),
+          takerSide: t.takerSide || t.side || 'BUY',
+          executedAt: t.timestamp || t.executedAt || new Date().toISOString(),
+        };
       });
     },
 
@@ -232,8 +362,9 @@ export const api = {
       interval = '1m',
       limit = 100
     ): Promise<CandleData[]> {
+      const backendInst = toBackendInstrument(instrument);
       return request<CandleData[]>(
-        `/market-data/${instrument}/candles?interval=${interval}&limit=${limit}`,
+        `/market-data/${backendInst}/candles?interval=${interval}&limit=${limit}`,
         {
           method: 'GET',
         }
@@ -246,12 +377,13 @@ export const api = {
       to?: number,
       limit = 500
     ): Promise<import('../types').ReplayTradeRecord[]> {
+      const backendInst = toBackendInstrument(instrument);
       const query = new URLSearchParams();
       if (from) query.set('from', from.toString());
       if (to) query.set('to', to.toString());
       query.set('limit', limit.toString());
       return request<import('../types').ReplayTradeRecord[]>(
-        `/market-data/${instrument}/replay?${query.toString()}`,
+        `/market-data/${backendInst}/replay?${query.toString()}`,
         { method: 'GET' }
       );
     },

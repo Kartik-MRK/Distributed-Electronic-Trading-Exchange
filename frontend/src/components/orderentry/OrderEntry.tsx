@@ -44,9 +44,14 @@ export function OrderEntry({
     setPrice(meta.lastPrice);
   }, [instrument, meta.lastPrice]);
 
-  // Compute available balance for current side
+  // Compute available balance for current side (support USD or USDT quote assets)
   const relevantAsset = side === 'BUY' ? meta.quoteAsset : meta.baseAsset;
-  const balanceRecord = balances.find((b) => b.asset === relevantAsset);
+  const balanceRecord = balances.find(
+    (b) =>
+      b.asset === relevantAsset ||
+      (relevantAsset === 'USDT' && b.asset === 'USD') ||
+      (relevantAsset === 'USD' && b.asset === 'USDT')
+  );
   const availableBal = parseFloat(balanceRecord?.available || '0');
 
   // Calculate order total
@@ -90,8 +95,8 @@ export function OrderEntry({
     if (side === 'BUY' && parseFloat(estimatedTotal) > availableBal) {
       showToast(
         'warning',
-        'Insufficient USDT Balance',
-        `Requires $${estimatedTotal}, available $${availableBal}`,
+        `Insufficient ${relevantAsset} Balance`,
+        `Requires $${estimatedTotal}, available $${availableBal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       );
       return;
     }
@@ -99,7 +104,7 @@ export function OrderEntry({
       showToast(
         'warning',
         `Insufficient ${meta.baseAsset} Balance`,
-        `Requires ${numQty}, available ${availableBal}`,
+        `Requires ${numQty}, available ${availableBal.toLocaleString('en-US', { maximumFractionDigits: 4 })}`,
       );
       return;
     }
@@ -226,7 +231,8 @@ export function OrderEntry({
             <dt>Available</dt>
             <dd>
               {availableBal.toLocaleString('en-US', {
-                maximumFractionDigits: 6,
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 4,
               })}{' '}
               <span>{relevantAsset}</span>
             </dd>

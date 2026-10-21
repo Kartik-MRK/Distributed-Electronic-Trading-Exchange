@@ -68,6 +68,9 @@ export interface BalanceRecord {
   available: string;
   reserved: string;
   total: string;
+  availableDisplay?: number;
+  reservedDisplay?: number;
+  totalDisplay?: number;
 }
 
 export interface UserRecord {
