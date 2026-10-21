@@ -36,25 +36,25 @@ jobs:
             exit 1
           fi
           mkdir -p ~/.ssh
-          python3 -c "
-          import os, re
-          raw = os.environ.get('SSH_KEY', '').strip().strip('\'\"`')
-          m = re.search(r'(-----BEGIN [A-Z0-9 ]+PRIVATE KEY-----)(.*?)(-----END [A-Z0-9 ]+PRIVATE KEY-----)', raw, re.DOTALL)
-          if m:
-              h = m.group(1).strip()
-              b = re.sub(r'\s+', '', m.group(2))
-              f = m.group(3).strip()
-          else:
-              b = re.sub(r'\s+', '', raw)
-              h = '-----BEGIN OPENSSH PRIVATE KEY-----'
-              f = '-----END OPENSSH PRIVATE KEY-----'
-          lines = [b[i:i+64] for i in range(0, len(b), 64)]
-          fixed = h + '\n' + '\n'.join(lines) + '\n' + f + '\n'
-          path = os.path.expanduser('~/.ssh/id_rsa')
-          with open(path, 'w') as out:
-              out.write(fixed)
-          print(f'Successfully formatted SSH key with {len(lines) + 2} lines.')
-          "
+          python3 - << 'PYEOF'
+import os, re
+raw = os.environ.get('SSH_KEY', '').strip().strip('\'"`')
+m = re.search(r'(-----BEGIN [A-Z0-9 ]+PRIVATE KEY-----)(.*?)(-----END [A-Z0-9 ]+PRIVATE KEY-----)', raw, re.DOTALL)
+if m:
+    h = m.group(1).strip()
+    b = re.sub(r'\s+', '', m.group(2))
+    f = m.group(3).strip()
+else:
+    b = re.sub(r'\s+', '', raw)
+    h = '-----BEGIN OPENSSH PRIVATE KEY-----'
+    f = '-----END OPENSSH PRIVATE KEY-----'
+lines = [b[i:i+64] for i in range(0, len(b), 64)]
+fixed = h + '\n' + '\n'.join(lines) + '\n' + f + '\n'
+path = os.path.expanduser('~/.ssh/id_rsa')
+with open(path, 'w') as out:
+    out.write(fixed)
+print(f'Successfully formatted SSH key with {len(lines) + 2} lines.')
+PYEOF
           chmod 600 ~/.ssh/id_rsa
           if ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub 2>/tmp/keygen_err.log; then
             FP=$(ssh-keygen -l -f ~/.ssh/id_rsa.pub)
@@ -134,25 +134,25 @@ jobs:
           VPS_HOST: ${{ secrets.ORACLE_VPS_HOST }}
         run: |
           mkdir -p ~/.ssh
-          python3 -c "
-          import os, re
-          raw = os.environ.get('SSH_KEY', '').strip().strip('\'\"`')
-          m = re.search(r'(-----BEGIN [A-Z0-9 ]+PRIVATE KEY-----)(.*?)(-----END [A-Z0-9 ]+PRIVATE KEY-----)', raw, re.DOTALL)
-          if m:
-              h = m.group(1).strip()
-              b = re.sub(r'\s+', '', m.group(2))
-              f = m.group(3).strip()
-          else:
-              b = re.sub(r'\s+', '', raw)
-              h = '-----BEGIN OPENSSH PRIVATE KEY-----'
-              f = '-----END OPENSSH PRIVATE KEY-----'
-          lines = [b[i:i+64] for i in range(0, len(b), 64)]
-          fixed = h + '\n' + '\n'.join(lines) + '\n' + f + '\n'
-          path = os.path.expanduser('~/.ssh/id_rsa')
-          with open(path, 'w') as out:
-              out.write(fixed)
-          print(f'Successfully formatted SSH key with {len(lines) + 2} lines.')
-          "
+          python3 - << 'PYEOF'
+import os, re
+raw = os.environ.get('SSH_KEY', '').strip().strip('\'"`')
+m = re.search(r'(-----BEGIN [A-Z0-9 ]+PRIVATE KEY-----)(.*?)(-----END [A-Z0-9 ]+PRIVATE KEY-----)', raw, re.DOTALL)
+if m:
+    h = m.group(1).strip()
+    b = re.sub(r'\s+', '', m.group(2))
+    f = m.group(3).strip()
+else:
+    b = re.sub(r'\s+', '', raw)
+    h = '-----BEGIN OPENSSH PRIVATE KEY-----'
+    f = '-----END OPENSSH PRIVATE KEY-----'
+lines = [b[i:i+64] for i in range(0, len(b), 64)]
+fixed = h + '\n' + '\n'.join(lines) + '\n' + f + '\n'
+path = os.path.expanduser('~/.ssh/id_rsa')
+with open(path, 'w') as out:
+    out.write(fixed)
+print(f'Successfully formatted SSH key with {len(lines) + 2} lines.')
+PYEOF
           chmod 600 ~/.ssh/id_rsa
           if ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub 2>/tmp/keygen_err.log; then
             FP=$(ssh-keygen -l -f ~/.ssh/id_rsa.pub)
