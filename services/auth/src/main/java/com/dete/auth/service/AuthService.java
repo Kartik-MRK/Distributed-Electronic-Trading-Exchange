@@ -123,8 +123,7 @@ public class AuthService {
     auditProducerService.publishAuthAuditEvent(
         "OTP_GENERATED", UUID.randomUUID(), "{\"email\":\"" + email + "\"}");
 
-    return OtpResponse.of(
-        email, "Verification one-time passcode sent to " + email, expirySeconds);
+    return OtpResponse.of(email, "Verification one-time passcode sent to " + email, expirySeconds);
   }
 
   /** Phase 1 Step 2: Verify OTP and create user with 50,000 USDT pre-funding. */

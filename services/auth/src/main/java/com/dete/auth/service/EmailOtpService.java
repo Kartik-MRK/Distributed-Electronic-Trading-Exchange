@@ -47,8 +47,7 @@ public class EmailOtpService {
         (resendFromEmail != null && !resendFromEmail.isBlank())
             ? resendFromEmail.trim()
             : "DETE Security <security@mail.kartik-mrk.me>";
-    this.httpClient =
-        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+    this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
     this.objectMapper = new ObjectMapper();
   }
 
@@ -117,11 +116,7 @@ public class EmailOtpService {
   }
 
   private void sendViaResend(
-      String recipientEmail,
-      String otpCode,
-      String greeting,
-      String subject,
-      String plainText)
+      String recipientEmail, String otpCode, String greeting, String subject, String plainText)
       throws Exception {
     String htmlBody = buildHtmlEmail(greeting, otpCode);
 
@@ -208,6 +203,7 @@ public class EmailOtpService {
           </div>
         </body>
         </html>
-        """.formatted(greeting, otpCode);
+        """
+        .formatted(greeting, otpCode);
   }
 }
