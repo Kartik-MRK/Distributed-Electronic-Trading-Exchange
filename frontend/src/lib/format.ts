@@ -43,3 +43,18 @@ export function toFrontendInstrument(inst: string): Instrument {
   if (inst === 'SOL_USD' || inst === 'SOL-USD' || inst === 'SOL_USDT') return 'SOL_USDT';
   return 'BTC_USDT';
 }
+
+/**
+ * Generates an RFC4122 version 4 compliant UUID string.
+ * Works across all environments, including non-secure HTTP contexts where crypto.randomUUID is undefined.
+ */
+export function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}

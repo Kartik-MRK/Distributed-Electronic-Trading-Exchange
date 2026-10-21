@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { BalanceRecord, OrderRecord, TradeRecord, Instrument, OrderSide, OrderType } from '../types';
 import { api, INITIAL_DEMO_BALANCES, normalizeOrderRecord } from '../lib/api';
-import { getCurrentUser } from '../lib/auth';
+import { getCurrentUser, getAuthToken } from '../lib/auth';
 import { useWebSocket } from './useWebSocket';
 
 export function useAccount() {
@@ -138,18 +138,22 @@ export function useAccount() {
         setOrders((prev) => [order, ...prev]);
         await refreshBalances();
         await refreshOrders();
+        // Trigger follow-up refreshes to capture matching engine executions and trade settlements
+        setTimeout(() => { void refreshBalances(); void refreshOrders(); void refreshTrades(); }, 600);
+        setTimeout(() => { void refreshBalances(); void refreshOrders(); void refreshTrades(); }, 1800);
+        setTimeout(() => { void refreshBalances(); void refreshOrders(); void refreshTrades(); }, 3500);
         return order;
       } catch (err) {
-        // If authenticated user, throw the actual error so user gets the real rejection reason
-        const currentUser = getCurrentUser();
-        if (currentUser && !currentUser.isDemo && currentUser.role !== 'ROLE_GUEST') {
+        // If user is authenticated with a token, always surface real exchange rejection/error
+        const token = getAuthToken();
+        if (token) {
           throw err;
         }
 
         // Fallback for standalone demo: simulate order lifecycle
         const simOrder: OrderRecord = {
           orderId: `ord-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          accountId: currentUser?.userId || 'demo-user-id',
+          accountId: getCurrentUser()?.userId || 'demo-user-id',
           instrument: params.instrument,
           side: params.side,
           type: params.type,
@@ -209,7 +213,7 @@ export function useAccount() {
         return simOrder;
       }
     },
-    [refreshBalances, refreshOrders]
+    [refreshBalances, refreshOrders, refreshTrades]
   );
 
   return {

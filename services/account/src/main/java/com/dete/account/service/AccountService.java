@@ -153,6 +153,16 @@ public class AccountService {
 
     int rowsUpdated = balanceRepository.reserve(accountId, asset, amount);
     if (rowsUpdated == 0) {
+      String sibling =
+          "USD".equalsIgnoreCase(asset) ? "USDT" : ("USDT".equalsIgnoreCase(asset) ? "USD" : null);
+      if (sibling != null) {
+        rowsUpdated = balanceRepository.reserve(accountId, sibling, amount);
+        if (rowsUpdated > 0) {
+          asset = sibling;
+        }
+      }
+    }
+    if (rowsUpdated == 0) {
       Balance current =
           balanceRepository
               .getBalance(accountId, asset)
@@ -161,6 +171,11 @@ public class AccountService {
           String.format(
               "Insufficient available balance to reserve %d %s (available: %d)",
               amount, asset, current.available()));
+    }
+    String siblingQuote =
+        "USD".equalsIgnoreCase(asset) ? "USDT" : ("USDT".equalsIgnoreCase(asset) ? "USD" : null);
+    if (siblingQuote != null && balanceRepository.getBalance(accountId, siblingQuote).isPresent()) {
+      balanceRepository.reserve(accountId, siblingQuote, amount);
     }
 
     long seq = ledgerRepository.getNextSequenceNum(accountId);
@@ -217,6 +232,16 @@ public class AccountService {
 
     int rowsUpdated = balanceRepository.release(accountId, asset, amount);
     if (rowsUpdated == 0) {
+      String sibling =
+          "USD".equalsIgnoreCase(asset) ? "USDT" : ("USDT".equalsIgnoreCase(asset) ? "USD" : null);
+      if (sibling != null) {
+        rowsUpdated = balanceRepository.release(accountId, sibling, amount);
+        if (rowsUpdated > 0) {
+          asset = sibling;
+        }
+      }
+    }
+    if (rowsUpdated == 0) {
       Balance current =
           balanceRepository
               .getBalance(accountId, asset)
@@ -225,6 +250,11 @@ public class AccountService {
           String.format(
               "Insufficient reserved balance to release %d %s (reserved: %d)",
               amount, asset, current.reserved()));
+    }
+    String siblingQuote =
+        "USD".equalsIgnoreCase(asset) ? "USDT" : ("USDT".equalsIgnoreCase(asset) ? "USD" : null);
+    if (siblingQuote != null && balanceRepository.getBalance(accountId, siblingQuote).isPresent()) {
+      balanceRepository.release(accountId, siblingQuote, amount);
     }
 
     long seq = ledgerRepository.getNextSequenceNum(accountId);
@@ -294,11 +324,21 @@ public class AccountService {
     // 2. Double-entry balance state updates
     // Buyer: debited quote amount from reserved, credited base asset to available
     balanceRepository.debitReserved(buyerId, quoteAsset, quoteAmount);
+    String siblingQuote =
+        "USD".equalsIgnoreCase(quoteAsset)
+            ? "USDT"
+            : ("USDT".equalsIgnoreCase(quoteAsset) ? "USD" : null);
+    if (siblingQuote != null && balanceRepository.getBalance(buyerId, siblingQuote).isPresent()) {
+      balanceRepository.debitReserved(buyerId, siblingQuote, quoteAmount);
+    }
     balanceRepository.creditAvailable(buyerId, baseAsset, quantity);
 
     // Seller: debited base asset from reserved, credited quote asset to available
     balanceRepository.debitReserved(sellerId, baseAsset, quantity);
     balanceRepository.creditAvailable(sellerId, quoteAsset, quoteAmount);
+    if (siblingQuote != null && balanceRepository.getBalance(sellerId, siblingQuote).isPresent()) {
+      balanceRepository.creditAvailable(sellerId, siblingQuote, quoteAmount);
+    }
 
     // 3. Write 4 double-entry ledger entries
     long buyerSeq1 = ledgerRepository.getNextSequenceNum(buyerId);

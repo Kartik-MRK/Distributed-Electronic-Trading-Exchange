@@ -22,6 +22,7 @@ import {
   toBackendInstrument,
   toFrontendInstrument,
   scaleToNanos,
+  generateUUID,
 } from './format';
 
 export function getGatewayBaseUrl(): string {
@@ -202,41 +203,72 @@ export const api = {
       const data = await request<Record<string, unknown>[]>('/accounts/me/balances', {
         method: 'GET',
       });
-      if (!Array.isArray(data)) return [];
-      return data.map((b) => {
-        const availNum =
-          b.availableDisplay !== undefined
-            ? Number(b.availableDisplay)
-            : typeof b.available === 'number' && b.available >= 100_000_000
-              ? b.available / 100_000_000
-              : Number(b.available || 0);
+      const records: BalanceRecord[] = Array.isArray(data)
+        ? data.map((b) => {
+            const availNum =
+              b.availableDisplay !== undefined
+                ? Number(b.availableDisplay)
+                : typeof b.available === 'number' && b.available >= 100_000_000
+                  ? b.available / 100_000_000
+                  : Number(b.available || 0);
 
-        const resNum =
-          b.reservedDisplay !== undefined
-            ? Number(b.reservedDisplay)
-            : typeof b.reserved === 'number' && b.reserved >= 100_000_000
-              ? b.reserved / 100_000_000
-              : Number(b.reserved || 0);
+            const resNum =
+              b.reservedDisplay !== undefined
+                ? Number(b.reservedDisplay)
+                : typeof b.reserved === 'number' && b.reserved >= 100_000_000
+                  ? b.reserved / 100_000_000
+                  : Number(b.reserved || 0);
 
-        const totalNum =
-          b.totalDisplay !== undefined
-            ? Number(b.totalDisplay)
-            : availNum + resNum;
+            const totalNum =
+              b.totalDisplay !== undefined
+                ? Number(b.totalDisplay)
+                : availNum + resNum;
 
-        const assetSymbol = String(b.asset);
-        // Format to 2 decimals for fiat/stables (USD, USDT), 4 decimals for crypto
-        const decimals = assetSymbol === 'USD' || assetSymbol === 'USDT' ? 2 : 4;
+            const assetSymbol = String(b.asset);
+            const decimals = assetSymbol === 'USD' || assetSymbol === 'USDT' ? 2 : 4;
 
-        return {
-          asset: assetSymbol,
-          available: availNum.toFixed(decimals),
-          reserved: resNum.toFixed(decimals),
-          total: totalNum.toFixed(decimals),
-          availableDisplay: availNum,
-          reservedDisplay: resNum,
-          totalDisplay: totalNum,
-        };
-      });
+            return {
+              asset: assetSymbol,
+              available: availNum.toFixed(decimals),
+              reserved: resNum.toFixed(decimals),
+              total: totalNum.toFixed(decimals),
+              availableDisplay: availNum,
+              reservedDisplay: resNum,
+              totalDisplay: totalNum,
+            };
+          })
+        : [];
+
+      // Ensure standard trading assets always exist in balances so users can see BTC, ETH, SOL rows
+      const standardAssets = ['USDT', 'USD', 'BTC', 'ETH', 'SOL'];
+      const assetMap = new Map<string, BalanceRecord>(records.map((r) => [r.asset, r]));
+
+      // If USDT is missing or 0 but USD has a balance, mirror USD to USDT for the frontend
+      const usdRecord = assetMap.get('USD');
+      const usdtRecord = assetMap.get('USDT');
+      if (usdRecord && (!usdtRecord || usdtRecord.availableDisplay === 0)) {
+        assetMap.set('USDT', {
+          ...usdRecord,
+          asset: 'USDT',
+        });
+      }
+
+      for (const asset of standardAssets) {
+        if (!assetMap.has(asset)) {
+          const decimals = asset === 'USD' || asset === 'USDT' ? 2 : 4;
+          assetMap.set(asset, {
+            asset,
+            available: (0).toFixed(decimals),
+            reserved: (0).toFixed(decimals),
+            total: (0).toFixed(decimals),
+            availableDisplay: 0,
+            reservedDisplay: 0,
+            totalDisplay: 0,
+          });
+        }
+      }
+
+      return Array.from(assetMap.values());
     },
 
     async getLedger(limit = 50): Promise<unknown[]> {
@@ -262,11 +294,7 @@ export const api = {
       quantity: string;
       idempotencyKey?: string;
     }): Promise<OrderRecord> {
-      const idempotencyKey =
-        params.idempotencyKey ||
-        (typeof crypto !== 'undefined' && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `idem-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
+      const idempotencyKey = params.idempotencyKey || generateUUID();
 
       const backendInstrument = toBackendInstrument(params.instrument);
       const scaledQty = scaleToNanos(params.quantity);

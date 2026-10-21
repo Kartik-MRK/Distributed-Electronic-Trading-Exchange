@@ -38,10 +38,16 @@ public class OrderController {
       @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKeyHeader,
       @Valid @RequestBody CreateOrderRequest request) {
     UUID accountId = resolveAccountId(principal);
-    UUID idempotencyKey =
-        idempotencyKeyHeader != null && !idempotencyKeyHeader.isBlank()
-            ? UUID.fromString(idempotencyKeyHeader.trim())
-            : UUID.randomUUID();
+    UUID idempotencyKey = UUID.randomUUID();
+    if (idempotencyKeyHeader != null && !idempotencyKeyHeader.isBlank()) {
+      try {
+        idempotencyKey = UUID.fromString(idempotencyKeyHeader.trim());
+      } catch (IllegalArgumentException e) {
+        idempotencyKey =
+            UUID.nameUUIDFromBytes(
+                idempotencyKeyHeader.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      }
+    }
 
     OrderResponse response = orderService.placeOrder(request, accountId, idempotencyKey);
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
