@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 160" fill="none">
+  <defs>
+    <linearGradient id="dete-custom-a" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="65%" stop-color="#CBD5E1" />
+      <stop offset="100%" stop-color="#475569" />
+    </linearGradient>
+    <linearGradient id="dete-custom-b" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F8FAFC" />
+      <stop offset="100%" stop-color="#334155" />
+    </linearGradient>
+  </defs>
+  <path d="M 32 42 L 175 42" stroke="url(#dete-custom-a)" stroke-width="11.5" stroke-linecap="square" />
+  <path d="M 68 74 L 68 122 L 106 122 C 136 122 148 102 148 82 C 148 62 134 42 106 42" stroke="url(#dete-custom-b)" stroke-width="11.5" stroke-linecap="square" stroke-linejoin="miter" />
+  <path d="M 178 42 L 228 42 M 178 68 L 178 122 L 228 122 M 178 82 L 216 82" stroke="url(#dete-custom-b)" stroke-width="11.5" stroke-linecap="square" />
+  <path d="M 250 42 L 310 42 M 280 64 L 280 122" stroke="url(#dete-custom-b)" stroke-width="11.5" stroke-linecap="square" />
+  <path d="M 332 42 L 386 42 M 332 68 L 332 122 L 386 122 M 332 82 L 372 82" stroke="url(#dete-custom-a)" stroke-width="11.5" stroke-linecap="square" />
+</svg>

@@ -8,21 +8,20 @@
   letter-spacing: 0.025em;
 }
 .mark {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 34px;
   height: 34px;
-  border: 1px solid #344251;
-  border-radius: 8px;
-  background: #101923;
-  color: #c4d4e3;
-  transition:
-    border-color 200ms,
-    background-color 200ms;
+  flex-shrink: 0;
+  transition: filter 200ms;
+}
+.wordmark {
+  display: block;
+  width: 104px;
+  height: auto;
+  flex-shrink: 0;
 }
 .brand:hover .mark {
-  border-color: #7192aa;
-  background: #162330;
+  filter: brightness(1.12);
 }
 .caption {
   font-size: 9px;
@@ -36,6 +35,9 @@
   }
 }
 @media (max-width: 760px) {
+  .wordmark {
+    width: 92px;
+  }
   .brand {
     font-size: 19px;
   }

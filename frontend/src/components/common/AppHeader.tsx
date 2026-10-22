@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Activity, LogIn, LogOut, UserRound } from 'lucide-react';
+import { LogIn, LogOut, UserRound } from 'lucide-react';
+import { ExchangeLogo } from './ExchangeLogo';
+import { ExchangeWordmark } from './ExchangeWordmark';
 import { useEffect, useState } from 'react';
 import { clearAuthSession, getCurrentUser } from '@/lib/auth';
 import { UserRecord } from '@/types';
@@ -24,12 +26,9 @@ export function AppHeader() {
     <>
       <header className="app-header">
         <Link href="/terminal" className="brand" aria-label="DETE home">
-          <span className="brand-mark">
-            <Activity size={19} strokeWidth={1.7} />
-          </span>
-          <span>
-            DETE<span className="brand-caption">EXCHANGE</span>
-          </span>
+          <ExchangeLogo className="brand-mark" />
+          <ExchangeWordmark className="brand-wordmark" />
+          <span className="brand-caption">EXCHANGE</span>
         </Link>
         <nav className="primary-nav" aria-label="Main navigation">
           {[
