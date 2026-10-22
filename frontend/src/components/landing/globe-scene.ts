@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createMeteorShower } from './meteor-shower';
 
 /** A decorative, asset-free globe. No per-frame React work or postprocessing. */
 export function createGlobe(
@@ -35,6 +36,7 @@ export function createGlobe(
     phase: number;
   }[] = [];
   const nodeMeshes: THREE.Mesh[] = [];
+  let meteors: ReturnType<typeof createMeteorShower> | undefined;
 
   const render = () => {
     if (!disposed && !lost) renderer.render(scene, camera);
@@ -59,12 +61,14 @@ export function createGlobe(
     nodeMeshes.forEach((node, index) =>
       node.scale.setScalar(1 + Math.sin(elapsed * 1.1 + index) * 0.12),
     );
+    meteors?.update(elapsed);
     render();
   };
   const syncMotion = () => {
     if (disposed || lost) return;
     previousTime = 0;
     const animateScene = !motion.matches && inView && !document.hidden;
+    if (!animateScene) meteors?.hide();
     renderer.setAnimationLoop(animateScene ? animate : null);
     host.dataset.motion = animateScene ? 'rotating' : 'still';
     render();
@@ -282,6 +286,8 @@ export function createGlobe(
       globe.add(signal);
       signals.push({ mesh: signal, from: nodes[from], to: nodes[to], phase });
     });
+
+    meteors = createMeteorShower(scene, host, keep);
 
     const resize = () => {
       if (disposed || lost) return;

@@ -102,7 +102,7 @@
   margin-bottom: 24px;
 }
 
-.eyebrow > span {
+.eyebrowDot {
   width: 5px;
   height: 5px;
   background: #83bddb;
@@ -158,7 +158,7 @@
   background: #2a2e35;
 }
 
-/* The moving reflection is masked to a one-pixel rim. */
+/* The moving reflection is masked to a slightly thicker metallic rim. */
 .primary,
 .navLaunch {
   position: relative;
@@ -171,7 +171,7 @@
   position: absolute;
   inset: -1px;
   border-radius: inherit;
-  padding: 1px;
+  padding: 1.5px;
   pointer-events: none;
   background: linear-gradient(
     110deg,

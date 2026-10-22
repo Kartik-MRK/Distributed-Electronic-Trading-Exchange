@@ -1,3 +1,10 @@
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+/* Keep the existing site reset instead of introducing Tailwind Preflight. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   color-scheme: dark;
   --bg-canvas: #141416;
@@ -30,10 +37,12 @@
   --font-mono: var(--font-sans);
   --panel-radius: 8px;
 }
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 }
 html {
   min-height: 100%;

@@ -3,6 +3,7 @@ import { ArrowDown, ArrowRight, ArrowUpRight } from 'lucide-react';
 import { Globe } from './Globe';
 import { LandingNav } from './LandingNav';
 import { ExchangeBrand } from '../common/ExchangeBrand';
+import { HyperText } from '@/components/ui/hyper-text';
 import styles from './LandingPage.module.css';
 
 const documentation =
@@ -30,17 +31,18 @@ export function LandingPage() {
 
         <div className={styles.heroContent} id="hero-content">
           <p className={styles.eyebrow}>
-            <span /> DISTRIBUTED BY DESIGN
+            <span className={styles.eyebrowDot} aria-hidden="true" />
+            <HyperText text="DISTRIBUTED BY DESIGN" />
           </p>
           <h1 id="hero-title">
-            The next generation
+            <HyperText text="The Next Generation" />
             <br />
-            of electronic trading.
+            <HyperText text="Of Electronic Trading." />
           </h1>
           <p className={styles.description}>
-            Distributed trading infrastructure engineered
-            <br className={styles.desktopBreak} /> for speed, precision, and
-            reliability.
+            <HyperText text="Distributed trading infrastructure engineered" />
+            <br className={styles.desktopBreak} />{' '}
+            <HyperText text="for speed, precision, and reliability." />
           </p>
           <div className={styles.actions}>
             <Link href="/login" className={styles.primary}>
