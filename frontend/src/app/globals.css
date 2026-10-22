@@ -1990,3 +1990,15 @@ nextjs-portal,
   pointer-events: none !important;
 }
 
+/* Hide TradingView attribution logo from charts */
+#tv-attr-logo,
+a#tv-attr-logo,
+[id="tv-attr-logo"],
+.tv-attr-logo {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+

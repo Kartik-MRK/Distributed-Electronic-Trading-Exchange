@@ -83,6 +83,7 @@ export function PriceChart({ instrument }: PriceChartProps) {
         background: { type: ColorType.Solid, color: '#1c1c1e' },
         textColor: '#9b9b9f',
         fontSize: 11,
+        attributionLogo: false,
       },
       grid: {
         vertLines: { color: 'rgba(255, 255, 255, 0.03)' },
