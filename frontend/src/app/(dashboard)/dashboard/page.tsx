@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { MarketSelector } from '@/components/header/MarketSelector';
 import { AppHeader } from '@/components/common/AppHeader';
 import { Loader } from '@/components/common/Loader';
 import { api } from '@/lib/api';
@@ -268,17 +269,12 @@ export default function SystemDashboardPage() {
           <section className="panel">
             <div className="panel-heading">
               <h2>Recent market trades</h2>
-              <select
-                aria-label="Trade feed instrument"
+              <MarketSelector
+                label="Trade feed instrument"
+                showLabel={false}
                 value={instrument}
-                onChange={(e) => setInstrument(e.target.value as Instrument)}
-              >
-                {['BTC_USDT', 'ETH_USDT', 'SOL_USDT'].map((pair) => (
-                  <option key={pair} value={pair}>
-                    {pair.replace('_', '/')}
-                  </option>
-                ))}
-              </select>
+                onChange={setInstrument}
+              />
             </div>
             <div style={{ height: 210 }}>
               {lastUpdated && (

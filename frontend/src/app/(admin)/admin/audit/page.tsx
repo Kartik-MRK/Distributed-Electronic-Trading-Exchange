@@ -1,6 +1,8 @@
 'use client';
 
 import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Select } from '@/components/common/Select';
+import { MARKET_OPTIONS } from '@/components/header/MarketSelector';
 import { AppHeader } from '@/components/common/AppHeader';
 import { Loader } from '@/components/common/Loader';
 import { api } from '@/lib/api';
@@ -141,42 +143,45 @@ export default function AuditLogViewerPage() {
           </div>
           <div className="field">
             <label htmlFor="event-type">Event type</label>
-            <select
+            <Select
               id="event-type"
+              label="Event type"
+              variant="field"
               value={filters.eventType}
-              onChange={(e) => updateFilter('eventType', e.target.value)}
-            >
-              <option value="">All events</option>
-              {[
-                'ORDER_PLACED',
-                'ORDER_CANCELLED',
-                'ORDER_FILLED',
-                'ORDER_REJECTED',
-                'TRADE_EXECUTED',
-                'USER_REGISTERED',
-                'USER_LOGIN',
-                'USER_LOGOUT',
-                'BALANCE_RESERVED',
-                'BALANCE_SETTLED',
-              ].map((type) => (
-                <option key={type}>{type}</option>
-              ))}
-            </select>
+              onChange={(value) => updateFilter('eventType', value)}
+              options={[
+                { value: '', label: 'All events' },
+                ...[
+                  'ORDER_PLACED',
+                  'ORDER_CANCELLED',
+                  'ORDER_FILLED',
+                  'ORDER_REJECTED',
+                  'TRADE_EXECUTED',
+                  'USER_REGISTERED',
+                  'USER_LOGIN',
+                  'USER_LOGOUT',
+                  'BALANCE_RESERVED',
+                  'BALANCE_SETTLED',
+                ].map((value) => ({
+                  value,
+                  label: value
+                    .toLowerCase()
+                    .replaceAll('_', ' ')
+                    .replace(/^./, (letter) => letter.toUpperCase()),
+                })),
+              ]}
+            />
           </div>
           <div className="field">
             <label htmlFor="audit-instrument">Instrument</label>
-            <select
+            <Select
               id="audit-instrument"
+              label="Instrument"
+              variant="field"
               value={filters.instrument}
-              onChange={(e) => updateFilter('instrument', e.target.value)}
-            >
-              <option value="">All markets</option>
-              {['BTC_USDT', 'ETH_USDT', 'SOL_USDT'].map((pair) => (
-                <option key={pair} value={pair}>
-                  {pair.replace('_', '/')}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => updateFilter('instrument', value)}
+              options={[{ value: '', label: 'All markets' }, ...MARKET_OPTIONS]}
+            />
           </div>
           <div className="field">
             <label htmlFor="trace-id">Trace ID</label>
@@ -340,24 +345,25 @@ export default function AuditLogViewerPage() {
             >
               Previous
             </button>
-            <label className="toolbar muted">
-              Rows per page{' '}
-              <select
-                aria-label="Rows per page"
-                value={query.limit}
-                onChange={(event) =>
+            <div className="toolbar muted">
+              <label htmlFor="audit-page-size">Rows per page</label>
+              <Select
+                id="audit-page-size"
+                label="Rows per page"
+                value={String(query.limit ?? 50)}
+                onChange={(value) =>
                   setQuery((current) => ({
                     ...current,
-                    limit: Number(event.target.value),
+                    limit: Number(value),
                     offset: 0,
                   }))
                 }
-              >
-                {[25, 50, 100].map((size) => (
-                  <option key={size}>{size}</option>
-                ))}
-              </select>
-            </label>
+                options={[25, 50, 100].map((size) => ({
+                  value: String(size),
+                  label: String(size),
+                }))}
+              />
+            </div>
             <button
               className="button"
               disabled={loading || logs.length < (query.limit ?? 50)}

@@ -1600,25 +1600,6 @@ h2 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.header-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-weight: 500;
-}
-.tag-guest {
-  background: rgba(228, 180, 76, 0.12);
-  color: var(--accent-amber);
-  border: 1px solid rgba(228, 180, 76, 0.25);
-}
-.tag-verified {
-  background: var(--bid-green-bg);
-  color: var(--bid-green);
-  border: 1px solid rgba(38, 201, 154, 0.25);
-}
 
 /* =========================================================================
    User Profile Modal & Drawer
@@ -1667,7 +1648,7 @@ h2 {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #2a2a2e 0%, #171719 100%);
+  background: var(--bg-card);
   border: 1px solid var(--border-light);
   display: flex;
   align-items: center;
@@ -1684,41 +1665,6 @@ h2 {
   font-weight: 600;
   letter-spacing: -0.02em;
   margin-bottom: 4px;
-}
-
-.profile-badge-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.profile-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-weight: 500;
-}
-
-.pill-guest {
-  background: rgba(228, 180, 76, 0.12);
-  color: var(--accent-amber);
-  border: 1px solid rgba(228, 180, 76, 0.3);
-}
-
-.pill-verified {
-  background: var(--bid-green-bg);
-  color: var(--bid-green);
-  border: 1px solid rgba(38, 201, 154, 0.3);
-}
-
-.pill-neutral {
-  background: var(--bg-input);
-  color: var(--text-muted);
-  border: 1px solid var(--border-subtle);
 }
 
 .profile-close-btn {
@@ -1825,8 +1771,8 @@ h2 {
 
 /* Portfolio USDT Liquidity Card */
 .profile-balance-card {
-  background: linear-gradient(135deg, rgba(38, 201, 154, 0.06) 0%, rgba(20, 20, 22, 0.8) 100%);
-  border: 1px solid rgba(38, 201, 154, 0.25);
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 16px 18px;
   display: flex;
@@ -1845,7 +1791,7 @@ h2 {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--bid-green);
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
@@ -1969,5 +1915,78 @@ h2 {
   to {
     transform: rotate(360deg);
   }
+}
+
+.profile-account-type {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.profile-section-heading {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.profile-header-meta,
+.profile-header-meta > div:last-child {
+  min-width: 0;
+}
+.profile-name,
+.profile-info-value {
+  overflow-wrap: anywhere;
+}
+.profile-balance-figure {
+  flex-wrap: wrap;
+  font-weight: 500;
+}
+.profile-signout-btn {
+  color: var(--text-secondary);
+  border-color: var(--border-light);
+}
+.profile-signout-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  border-color: var(--border-accent);
+}
+@media (max-width: 480px) {
+  .profile-modal-backdrop {
+    padding: 12px;
+  }
+  .profile-modal-header,
+  .profile-modal-body,
+  .profile-modal-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .profile-modal-footer {
+    flex-wrap: wrap;
+  }
+  .profile-balance-card {
+    padding: 14px;
+  }
+  .profile-balance-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .profile-copy-box {
+    flex-wrap: wrap;
+  }
+  .profile-info-item {
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+}
+
+/* Hide Next.js development badge / indicator */
+nextjs-portal,
+[data-nextjs-toast],
+[data-nextjs-dev-tools-indicator],
+[data-nextjs-toast-wrapper] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 

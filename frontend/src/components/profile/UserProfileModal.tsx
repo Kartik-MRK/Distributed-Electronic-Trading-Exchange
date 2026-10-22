@@ -1,15 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   X,
   Copy,
   Check,
-  ShieldCheck,
-  Sparkles,
   Wallet,
-  ArrowUpRight,
+  RefreshCw,
   LogOut,
   Calendar,
   Mail,
@@ -37,6 +35,7 @@ export function UserProfileModal({
   const [isCopied, setIsCopied] = useState(false);
   const [isLoadingBalances, setIsLoadingBalances] = useState(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -47,13 +46,37 @@ export function UserProfileModal({
   }, [isOpen]);
 
   useEffect(() => {
+    if (!isOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    cardRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
         onClose();
+      } else if (e.key === 'Tab') {
+        const controls = cardRef.current?.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), a[href], input:not(:disabled), [tabindex="0"]',
+        );
+        if (!controls?.length) return;
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
+    };
   }, [isOpen, onClose]);
 
   const fetchBalances = async () => {
@@ -81,9 +104,9 @@ export function UserProfileModal({
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
     } catch {
-      // Fallback
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
+      setActionNotice(
+        'Could not copy the account ID. Please select and copy it manually.',
+      );
     }
   };
 
@@ -93,48 +116,60 @@ export function UserProfileModal({
     router.push('/login');
   };
 
-  const handleDepositMockFunds = async () => {
-    setActionNotice('Funded +10,000 USDT liquidity to trading balance!');
-    setTimeout(() => {
-      setActionNotice(null);
-      fetchBalances();
-      if (onRefreshBalances) onRefreshBalances();
-    }, 2000);
+  const handleRefreshBalances = async () => {
+    setActionNotice(null);
+    await fetchBalances();
+    onRefreshBalances?.();
   };
 
-  const usdtBalance = balances.find((b) => b.asset === 'USDT') || balances.find((b) => b.asset === 'USD') || {
-    asset: 'USDT',
-    available: '50000.00',
-    reserved: '0.00',
-    total: '50000.00',
-  };
+  const usdtBalance = balances.find((b) => b.asset === 'USDT') ||
+    balances.find((b) => b.asset === 'USD') || {
+      asset: 'USDT',
+      available: '50000.00',
+      reserved: '0.00',
+      total: '50000.00',
+    };
 
-  const getBalNum = (b: BalanceRecord | undefined, field: 'available' | 'reserved' | 'total'): number => {
+  const getBalNum = (
+    b: BalanceRecord | undefined,
+    field: 'available' | 'reserved' | 'total',
+  ): number => {
     if (!b) return 0;
-    if (field === 'available' && b.availableDisplay !== undefined) return b.availableDisplay;
-    if (field === 'reserved' && b.reservedDisplay !== undefined) return b.reservedDisplay;
-    if (field === 'total' && b.totalDisplay !== undefined) return b.totalDisplay;
+    if (field === 'available' && b.availableDisplay !== undefined)
+      return b.availableDisplay;
+    if (field === 'reserved' && b.reservedDisplay !== undefined)
+      return b.reservedDisplay;
+    if (field === 'total' && b.totalDisplay !== undefined)
+      return b.totalDisplay;
     const num = Number(b[field] || 0);
     return num >= 100_000_000 ? num / 100_000_000 : num;
   };
 
-  const isGuest = user?.isDemo || user?.role === 'ROLE_GUEST' || user?.username?.startsWith('guest_');
-  const isVerified = user?.isVerified || !isGuest;
+  const isGuest =
+    user?.role === 'ROLE_GUEST' ||
+    user?.roles?.includes('ROLE_GUEST') ||
+    user?.username?.startsWith('guest_');
+  const isDemo = user?.isDemo || isGuest;
   const displayName = user?.fullName || user?.username || 'Trader';
-  const displayEmail = user?.email || (isGuest ? 'Ephemeral Session (Demo)' : 'Not Provided');
-  const displayDob = user?.dateOfBirth ? new Date(user.dateOfBirth).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }) : (isGuest ? 'Not required for Guest' : 'Verified Tier 1');
+  const displayEmail = isGuest
+    ? 'Not linked to an email'
+    : user?.email || 'Not provided';
+  const displayDob = user?.dateOfBirth
+    ? new Date(user.dateOfBirth).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      })
+    : 'Not provided';
 
-  const initials = displayName
-    .split(' ')
-    .map((n) => n[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join('')
-    .toUpperCase() || 'TR';
+  const initials =
+    displayName
+      .split(' ')
+      .map((n) => n[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'TR';
 
   return (
     <div
@@ -146,35 +181,27 @@ export function UserProfileModal({
       aria-modal="true"
       aria-labelledby="profile-modal-title"
     >
-      <div className="profile-modal-card">
+      <div className="profile-modal-card" ref={cardRef}>
         {/* Modal Header */}
         <div className="profile-modal-header">
           <div className="profile-header-meta">
-            <div className="profile-avatar-circle">
-              {initials}
-            </div>
+            <div className="profile-avatar-circle">{initials}</div>
             <div>
               <h2 id="profile-modal-title" className="profile-name">
                 {displayName}
               </h2>
-              <div className="profile-badge-row">
-                {isGuest ? (
-                  <span className="profile-pill pill-guest">
-                    <Sparkles size={12} />
-                    <span>Guest Demo Account</span>
-                  </span>
-                ) : isVerified ? (
-                  <span className="profile-pill pill-verified">
-                    <ShieldCheck size={12} />
-                    <span>Tier 1 Verified Trader</span>
-                  </span>
-                ) : (
-                  <span className="profile-pill pill-neutral">
-                    <span>Trader Account</span>
-                  </span>
-                )}
-                <span className="profile-pill pill-neutral">Spot Exchange</span>
-              </div>
+              <p className="profile-account-type">
+                {isGuest
+                  ? 'Guest session'
+                  : isDemo
+                    ? 'Demo account'
+                    : 'Trading account'}
+                {isDemo
+                  ? ' · Demo funds'
+                  : user?.isVerified
+                    ? ' · Email verified'
+                    : ''}
+              </p>
             </div>
           </div>
           <button
@@ -188,7 +215,11 @@ export function UserProfileModal({
         </div>
 
         {actionNotice && (
-          <div className="notice" role="status" style={{ margin: '14px 20px 0' }}>
+          <div
+            className="notice"
+            role="status"
+            style={{ margin: '14px 20px 0' }}
+          >
             {actionNotice}
           </div>
         )}
@@ -197,14 +228,17 @@ export function UserProfileModal({
         <div className="profile-modal-body">
           {/* Account Details Section */}
           <div className="profile-section">
-            <span className="eyebrow" style={{ marginBottom: 8, display: 'block' }}>
-              Trader Identification
+            <span
+              className="eyebrow"
+              style={{ marginBottom: 8, display: 'block' }}
+            >
+              Account details
             </span>
             <div className="profile-info-grid">
               <div className="profile-info-item">
                 <span className="profile-info-label">
                   <Hash size={13} />
-                  <span>Account UUID</span>
+                  <span>Account ID</span>
                 </span>
                 <div className="profile-copy-box">
                   <span className="font-mono profile-uuid-text">
@@ -216,7 +250,11 @@ export function UserProfileModal({
                     title="Copy Account ID"
                     aria-label="Copy Account ID"
                   >
-                    {isCopied ? <Check size={14} color="var(--bid-green)" /> : <Copy size={14} />}
+                    {isCopied ? (
+                      <Check size={14} color="var(--bid-green)" />
+                    ) : (
+                      <Copy size={14} />
+                    )}
                     <span>{isCopied ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
@@ -233,15 +271,17 @@ export function UserProfileModal({
               <div className="profile-info-item">
                 <span className="profile-info-label">
                   <User size={13} />
-                  <span>Username / Handle</span>
+                  <span>Username</span>
                 </span>
-                <span className="profile-info-value font-mono">@{user?.username || 'trader'}</span>
+                <span className="profile-info-value font-mono">
+                  @{user?.username || 'trader'}
+                </span>
               </div>
 
               <div className="profile-info-item">
                 <span className="profile-info-label">
                   <Calendar size={13} />
-                  <span>Date of Birth / KYC</span>
+                  <span>Date of birth</span>
                 </span>
                 <span className="profile-info-value">{displayDob}</span>
               </div>
@@ -250,10 +290,14 @@ export function UserProfileModal({
 
           {/* Portfolio & USDT Liquidity Snapshot */}
           <div className="profile-section">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span className="eyebrow">Portfolio Liquidity</span>
+            <div className="profile-section-heading">
+              <span className="eyebrow">Balances</span>
               <span className="profile-subtext">
-                {isLoadingBalances ? 'Updating balances...' : 'Pre-funded exchange liquidity'}
+                {isLoadingBalances
+                  ? 'Updating balances...'
+                  : isDemo
+                    ? 'Demo funds'
+                    : 'Account balances'}
               </span>
             </div>
 
@@ -261,10 +305,14 @@ export function UserProfileModal({
               <div className="profile-balance-main">
                 <div className="profile-balance-tag">
                   <Wallet size={16} />
-                  <span>Total USDT Equity</span>
+                  <span>USDT balance</span>
                 </div>
                 <div className="profile-balance-figure font-mono">
-                  ${(getBalNum(usdtBalance, 'total') || getBalNum(usdtBalance, 'available')).toLocaleString('en-US', {
+                  $
+                  {(
+                    getBalNum(usdtBalance, 'total') ||
+                    getBalNum(usdtBalance, 'available')
+                  ).toLocaleString('en-US', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
@@ -274,21 +322,31 @@ export function UserProfileModal({
 
               <div className="profile-balance-split">
                 <div>
-                  <span className="profile-split-label">Available for Trading</span>
-                  <span className="profile-split-val font-mono positive">
-                    {getBalNum(usdtBalance, 'available').toLocaleString('en-US', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })} USDT
+                  <span className="profile-split-label">
+                    Available for Trading
+                  </span>
+                  <span className="profile-split-val font-mono">
+                    {getBalNum(usdtBalance, 'available').toLocaleString(
+                      'en-US',
+                      {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      },
+                    )}{' '}
+                    USDT
                   </span>
                 </div>
                 <div>
                   <span className="profile-split-label">In Open Orders</span>
                   <span className="profile-split-val font-mono muted">
-                    {getBalNum(usdtBalance, 'reserved').toLocaleString('en-US', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })} USDT
+                    {getBalNum(usdtBalance, 'reserved').toLocaleString(
+                      'en-US',
+                      {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      },
+                    )}{' '}
+                    USDT
                   </span>
                 </div>
               </div>
@@ -296,10 +354,14 @@ export function UserProfileModal({
           </div>
 
           {/* Other Balances */}
-          {balances.filter((b) => b.asset !== 'USDT' && b.asset !== 'USD').length > 0 && (
+          {balances.filter((b) => b.asset !== 'USDT' && b.asset !== 'USD')
+            .length > 0 && (
             <div className="profile-section">
-              <span className="eyebrow" style={{ marginBottom: 8, display: 'block' }}>
-                Crypto Holdings
+              <span
+                className="eyebrow"
+                style={{ marginBottom: 8, display: 'block' }}
+              >
+                Other assets
               </span>
               <div className="profile-crypto-list">
                 {balances
@@ -308,7 +370,9 @@ export function UserProfileModal({
                     <div key={b.asset} className="profile-crypto-row">
                       <span className="profile-crypto-asset">{b.asset}</span>
                       <span className="font-mono">
-                        {getBalNum(b, 'available').toLocaleString('en-US', { maximumFractionDigits: 4 })}
+                        {getBalNum(b, 'available').toLocaleString('en-US', {
+                          maximumFractionDigits: 4,
+                        })}
                       </span>
                     </div>
                   ))}
@@ -321,11 +385,14 @@ export function UserProfileModal({
         <div className="profile-modal-footer">
           <button
             className="button profile-action-btn"
-            onClick={handleDepositMockFunds}
-            title="Request additional demo USDT funds"
+            onClick={handleRefreshBalances}
+            disabled={isLoadingBalances}
+            title="Refresh account balances"
           >
-            <ArrowUpRight size={14} />
-            <span>Deposit Test USDT</span>
+            <RefreshCw size={14} />
+            <span>
+              {isLoadingBalances ? 'Refreshing...' : 'Refresh balances'}
+            </span>
           </button>
           <button
             className="button profile-signout-btn"

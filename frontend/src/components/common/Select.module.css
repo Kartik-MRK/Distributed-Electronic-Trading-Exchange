@@ -2,6 +2,25 @@
   position: relative;
   display: grid;
   gap: 3px;
+  min-width: 0;
+  max-width: 100%;
+}
+.field {
+  width: 100%;
+}
+.field .trigger {
+  width: 100%;
+  min-height: 40px;
+  font-size: 12px;
+  font-weight: 400;
+  padding: 10px 12px;
+  background: var(--bg-input);
+}
+.value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .trigger {
@@ -34,12 +53,10 @@
 }
 
 .options {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  z-index: 30;
-  width: 210px;
-  max-width: calc(100vw - 80px);
+  position: fixed;
+  z-index: 200;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 5px;
   border: 1px solid var(--border-light);
   border-radius: 7px;
@@ -61,6 +78,7 @@
   font-size: 12px;
   font-weight: 500;
   text-align: left;
+  gap: 12px;
 }
 
 .option[aria-selected='true'] {
@@ -76,9 +94,4 @@
 
 .option:focus-visible {
   outline-offset: -2px;
-}
-
-.quote {
-  color: var(--text-muted);
-  font-weight: 400;
 }

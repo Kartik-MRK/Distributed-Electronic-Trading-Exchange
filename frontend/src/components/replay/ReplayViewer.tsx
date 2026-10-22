@@ -1,6 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { Instrument, ReplayTradeRecord } from '@/types';
+import { MarketSelector } from '@/components/header/MarketSelector';
+import { Select } from '@/components/common/Select';
 import { api } from '@/lib/api';
 import { Loader } from '@/components/common/Loader';
 
@@ -80,28 +82,21 @@ export function ReplayViewer({
           </p>
         </div>
         <div className="toolbar">
-          <select
-            aria-label="Replay instrument"
+          <MarketSelector
+            label="Replay instrument"
+            showLabel={false}
             value={instrument}
-            onChange={(e) => setInstrument(e.target.value as Instrument)}
-          >
-            {['BTC_USDT', 'ETH_USDT', 'SOL_USDT'].map((pair) => (
-              <option key={pair} value={pair}>
-                {pair.replace('_', '/')}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Replay time window"
-            value={timeWindowMinutes}
-            onChange={(e) => setTimeWindowMinutes(Number(e.target.value))}
-          >
-            {[5, 15, 30, 60].map((minutes) => (
-              <option key={minutes} value={minutes}>
-                Past {minutes} minutes
-              </option>
-            ))}
-          </select>
+            onChange={setInstrument}
+          />
+          <Select
+            label="Replay time window"
+            value={String(timeWindowMinutes)}
+            onChange={(value) => setTimeWindowMinutes(Number(value))}
+            options={[5, 15, 30, 60].map((minutes) => ({
+              value: String(minutes),
+              label: `Past ${minutes} minutes`,
+            }))}
+          />
           {onClose && (
             <button className="button" onClick={onClose}>
               Close

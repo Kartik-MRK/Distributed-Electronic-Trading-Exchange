@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Activity, LogIn, LogOut, UserRound, Sparkles, ShieldCheck } from 'lucide-react';
+import { Activity, LogIn, LogOut, UserRound } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { clearAuthSession, getCurrentUser } from '@/lib/auth';
 import { UserRecord } from '@/types';
@@ -18,7 +18,6 @@ export function AppHeader() {
     setUser(getCurrentUser());
   }, []);
 
-  const isGuest = user?.isDemo || user?.role === 'ROLE_GUEST' || user?.username?.startsWith('guest_');
   const displayName = user?.fullName || user?.username || '';
 
   return (
@@ -59,18 +58,13 @@ export function AppHeader() {
                 <UserRound size={13} />
               </div>
               <span className="account-text">{displayName || 'Trader'}</span>
-              {isGuest ? (
-                <span className="header-tag tag-guest">
-                  <Sparkles size={10} /> Demo
-                </span>
-              ) : (
-                <span className="header-tag tag-verified">
-                  <ShieldCheck size={10} /> Verified
-                </span>
-              )}
             </button>
           ) : (
-            <Link href="/login" className="account-name" style={{ cursor: 'pointer' }}>
+            <Link
+              href="/login"
+              className="account-name"
+              style={{ cursor: 'pointer' }}
+            >
               <UserRound size={14} />
               <span>Sign in</span>
             </Link>
