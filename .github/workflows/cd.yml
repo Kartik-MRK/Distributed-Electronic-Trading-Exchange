@@ -130,6 +130,6 @@ jobs:
           echo "### 🚀 DETE Deployment Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Host**: \`$TARGET_HOST\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Trading Web UI**: http://$TARGET_HOST/" >> $GITHUB_STEP_SUMMARY
-          echo "- **Grafana Telemetry**: http://$TARGET_HOST/grafana/" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trading Web UI**: https://dete.kartik-mrk.me/" >> $GITHUB_STEP_SUMMARY
+          echo "- **Grafana Telemetry**: https://dete.kartik-mrk.me/grafana/" >> $GITHUB_STEP_SUMMARY
 
