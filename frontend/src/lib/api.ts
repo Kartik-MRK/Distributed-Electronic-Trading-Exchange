@@ -35,7 +35,7 @@ export function getGatewayBaseUrl(): string {
       return 'http://localhost:8080';
     }
     // In all other environments (deployed VPS, production, reverse proxy), use relative path
-    // so requests hit the current host (e.g. http://141.148.223.82/auth/...) and Nginx reverse proxy
+    // so requests hit the current host (e.g. https://dete.kartik-mrk.me/auth/...) and Nginx reverse proxy
     return '';
   }
   return process.env.GATEWAY_URL || 'http://localhost:8080';

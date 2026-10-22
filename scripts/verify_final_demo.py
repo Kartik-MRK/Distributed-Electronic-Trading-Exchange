@@ -23,8 +23,9 @@ import urllib.request
 import urllib.error
 import uuid
 
-TARGET_HOST = "141.148.223.82"
-BASE_URL = f"http://{TARGET_HOST}"
+TARGET_HOST = "dete.kartik-mrk.me"
+BASE_URL = f"https://{TARGET_HOST}"
+SSH_HOST = "141.148.223.82"
 SSH_KEY = "E:/VPS/openssh_private_key"
 SCALE = 100_000_000
 
@@ -61,7 +62,7 @@ def run_ssh_command(cmd):
         "ssh", "-i", SSH_KEY,
         "-o", "StrictHostKeyChecking=no",
         "-o", "UserKnownHostsFile=/dev/null",
-        f"ubuntu@{TARGET_HOST}",
+        f"ubuntu@{SSH_HOST}",
         cmd
     ]
     res = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=60)

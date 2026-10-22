@@ -66,17 +66,16 @@
   gap: 16px;
   min-height: 38px;
   padding: 8px 15px;
-  border: 1px solid #3b4b5a;
+  border: 1px solid #55585e;
   border-radius: 5px;
-  background: #14202b;
-  color: #e4edf5;
+  background: #181a1e;
+  color: #eef0f3;
   font-size: 11px;
   font-weight: 500;
 }
 
 .navLaunch:hover {
-  background: #1e3040;
-  border-color: #6a879f;
+  background: #23262b;
 }
 
 .heroContent {
@@ -150,14 +149,71 @@
 }
 
 .primary {
-  background: #d7e8f4;
-  border-color: #d7e8f4;
-  color: #0e1a25;
+  background: #202329;
+  border-color: #686c74;
+  color: #f5f6f8;
 }
 
 .primary:hover {
-  background: #f0f8ff;
-  border-color: #f0f8ff;
+  background: #2a2e35;
+}
+
+/* The moving reflection is masked to a one-pixel rim. */
+.primary,
+.navLaunch {
+  position: relative;
+  box-shadow: inset 0 1px 0 #ffffff08;
+}
+
+.primary::before,
+.navLaunch::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    110deg,
+    #ffffff08 20%,
+    #ffffff24 35%,
+    #a5aab4 43%,
+    #ffffff 49%,
+    #b9bec7 53%,
+    #ffffff24 63%,
+    #ffffff08 80%
+  );
+  background-size: 250% 100%;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0.75;
+  animation: metalReflection 7s ease-in-out infinite;
+  transition: opacity 200ms;
+}
+
+.navLaunch::before {
+  animation-delay: -3.5s;
+}
+
+.primary:is(:hover, :focus-visible)::before,
+.navLaunch:is(:hover, :focus-visible)::before {
+  opacity: 1;
+}
+
+.landing :is(.primary, .navLaunch):focus-visible {
+  outline-color: #d8dce3;
+}
+
+@keyframes metalReflection {
+  0%,
+  100% {
+    background-position: 100% 50%;
+  }
+  50% {
+    background-position: 0% 50%;
+  }
 }
 
 .secondary {
@@ -628,7 +684,7 @@
     transform: translateY(-2px);
   }
   .primary:hover {
-    box-shadow: 0 6px 24px #9bcbe91c;
+    box-shadow: inset 0 1px 0 #ffffff0d, 0 4px 16px #00000030;
   }
   .primary:hover svg,
   .navLaunch:hover svg {
@@ -646,6 +702,12 @@
   box-shadow: none;
 }
 @media (prefers-reduced-motion: reduce) {
+  .primary::before,
+  .navLaunch::before {
+    animation: none;
+    background-position: 50% 50%;
+    transition: none;
+  }
   .landing a,
   .landing a svg,
   .nav a::after {

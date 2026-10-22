@@ -1,7 +1,7 @@
 # Distributed Electronic Trading Exchange (DETE) — Operational Runbook
 
 > **Audience:** Exchange Site Reliability Engineers (SRE), DevOps Engineers, Platform Administrators  
-> **Target Environment:** Kubernetes / K3s Production Cluster (`oraclevps`: `141.148.223.82`, Namespace: `dete`)  
+> **Target Environment:** Kubernetes / K3s Production Cluster (`https://dete.kartik-mrk.me`, Namespace: `dete`)  
 > **Version:** 1.0.0 (Production Release)
 
 ---
@@ -58,13 +58,13 @@ The DETE Matching Engine is an in-memory single-writer deterministic state machi
 3. **Manual Trigger of State Replay (if offset drifted):**
    If state verification indicates a desynchronization, replay can be triggered dynamically via admin REST endpoint:
    ```bash
-   curl -X POST http://141.148.223.82/matching/replay
+   curl -X POST https://dete.kartik-mrk.me/matching/replay
    ```
 
 4. **Verify Invariants Post-Recovery:**
    - Order book is uncrossed (`bestBid < bestAsk`):
      ```bash
-     curl -s http://141.148.223.82/matching/orderbook/BTC_USD?depth=5 | jq .
+     curl -s https://dete.kartik-mrk.me/matching/orderbook/BTC_USD?depth=5 | jq .
      ```
    - Outbound duplicate trade check: Outgoing trades emitted during replay are suppressed by checking the highest processed sequence number, ensuring zero duplicate `TradeExecutedEvent`s dispatched to `trade.executions`.
 
@@ -84,7 +84,7 @@ Any difference ($\text{drift} \neq 0$) indicates data corruption, race condition
 ### Manual Run & Verification
 1. **Trigger Immediate Reconciliation:**
    ```bash
-   curl -X POST http://141.148.223.82/accounts/reconciliation/run \
+   curl -X POST https://dete.kartik-mrk.me/accounts/reconciliation/run \
      -H "Content-Type: application/json" | jq .
    ```
 
@@ -125,7 +125,7 @@ When a poisoned message or unparseable payload is encountered by Kafka consumers
 ### Inspection Procedure
 1. **Query DLQ Messages:**
    ```bash
-   curl -s http://141.148.223.82/admin/dlq/messages?topic=order.events.DLQ&limit=10 | jq .
+   curl -s https://dete.kartik-mrk.me/admin/dlq/messages?topic=order.events.DLQ&limit=10 | jq .
    ```
 
 2. **Inspect Poison Header:**
@@ -138,13 +138,13 @@ When a poisoned message or unparseable payload is encountered by Kafka consumers
 1. **Fix Upstream Data / Deploy Hotfix** (if schema evolution issue).
 2. **Replay DLQ Messages back to Main Topic:**
    ```bash
-   curl -X POST http://141.148.223.82/admin/dlq/reprocess \
+   curl -X POST https://dete.kartik-mrk.me/admin/dlq/reprocess \
      -H "Content-Type: application/json" \
      -d '{"topic": "order.events.DLQ", "batchSize": 50}'
    ```
 3. **Verify DLQ Depth Drops to Zero:**
    ```bash
-   curl -s http://141.148.223.82/admin/dlq/messages?topic=order.events.DLQ | jq '. | length'
+   curl -s https://dete.kartik-mrk.me/admin/dlq/messages?topic=order.events.DLQ | jq '. | length'
    ```
 
 ---
@@ -177,9 +177,9 @@ DETE uses asymmetric RS256 JWT tokens. `auth` service signs tokens using the pri
 
 4. **Verify Token Issuance & Validation:**
    ```bash
-   TOKEN=$(curl -s -X POST http://141.148.223.82/auth/login -H "Content-Type: application/json" \
+   TOKEN=$(curl -s -X POST https://dete.kartik-mrk.me/auth/login -H "Content-Type: application/json" \
      -d '{"username":"demo","password":"DemoPassword123!"}' | jq -r .accessToken)
-   curl -s http://141.148.223.82/accounts/balance -H "Authorization: Bearer $TOKEN" | jq .
+   curl -s https://dete.kartik-mrk.me/accounts/balance -H "Authorization: Bearer $TOKEN" | jq .
    ```
 
 ### 5.2 Redis Password Rotation
@@ -210,7 +210,7 @@ To add a new instrument (e.g. `AVAX_USD`):
 ## 7. Grafana Telemetry & Alert Response Runbook
 
 ### Primary Dashboard URL
-`http://141.148.223.82/grafana/` (Credentials: `admin` / `admin`)
+`https://dete.kartik-mrk.me/grafana/` (Credentials: `admin` / `admin`)
 
 ### Key Metrics & Action Thresholds
 

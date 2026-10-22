@@ -18,13 +18,13 @@
 
 | Service | Access Endpoint | Credentials / Details |
 |---|---|---|
-| **Trading Terminal (Web UI)** | [http://141.148.223.82](http://141.148.223.82) | Next.js 14 Dark-Mode Terminal & Depth Chart |
-| **Demo User Login** | `http://141.148.223.82/auth/login` | Username: `demo` \| Password: `DemoPassword123!` |
-| **Market Maker Bot** | `http://141.148.223.82/auth/login` | Username: `bot_maker` \| Password: `BotPassword123!` |
-| **API Gateway** | `http://141.148.223.82` (Reverse Proxy) | Port `80` routing `/auth`, `/orders`, `/accounts`, `/market-data` |
-| **Live WebSocket Feed** | `ws://141.148.223.82/ws/` | STOMP/SockJS topic: `/ws/topic/market-data.{symbol}` |
-| **Grafana Telemetry** | [http://141.148.223.82/grafana/](http://141.148.223.82/grafana/) | Username: `admin` \| Password: `admin` |
-| **Prometheus Metrics** | `http://141.148.223.82:9090` | Internal Cluster Scrapes across all 10 Services |
+| **Trading Terminal (Web UI)** | [https://dete.kartik-mrk.me](https://dete.kartik-mrk.me) | Next.js Dark-Mode Trading Terminal & Real-Time Price Charts |
+| **Demo User Login** | `https://dete.kartik-mrk.me/login` | Username: `demo` \| Password: `DemoPassword123!` |
+| **Market Maker Bot** | `https://dete.kartik-mrk.me/login` | Username: `bot_maker` \| Password: `BotPassword123!` |
+| **API Gateway** | `https://dete.kartik-mrk.me` | Unified ingress routing `/auth`, `/orders`, `/accounts`, `/market-data` |
+| **Live WebSocket Feed** | `wss://dete.kartik-mrk.me/ws/` | Secure STOMP/WebSocket: `/topic/candles.{symbol}.{interval}` |
+| **Grafana Telemetry** | [https://dete.kartik-mrk.me/grafana/](https://dete.kartik-mrk.me/grafana/) | Username: `admin` \| Password: `admin` |
+| **Prometheus Metrics** | `Internal K3s Cluster` | Internal Scrapes across all 10 Services (Shielded Origin) |
 
 ---
 
@@ -146,8 +146,8 @@ Evaluated under OpenJDK 21 LTS:
 | **Price Ladder (`TreeMap` vs `SkipList`)** | **`TreeMap` 67.59M ops/s** | — | **+91.8% faster** than `ConcurrentSkipListMap` |
 | **Fixed-Point vs `BigDecimal`** | **Scaled long 3.60B ops/s** | — | **152x faster** than `java.math.BigDecimal` |
 
-### 2. Distributed k6 Load Tests on Live VPS
-Conducted against the Oracle Cloud ARM64 cluster (`141.148.223.82`):
+### 2. Distributed k6 Load Tests on Live Production Cluster
+Conducted against the live Oracle Cloud ARM64 cluster (`https://dete.kartik-mrk.me`):
 
 - **Order Placement (100 Concurrent VUs):** Average latency **44.67 ms**, P95 **94.75 ms**, P99 < 150 ms (100% success rate).
 - **WebSocket Streaming Stress (200 Concurrent Clients):** 200/200 connected (**100% success**), **49,946 depth messages streamed (1,882 msgs/s)**, **64 MB transferred**, **0 drops, 0 disconnects**.
