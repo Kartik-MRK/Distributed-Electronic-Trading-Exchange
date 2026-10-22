@@ -6,10 +6,10 @@ NGINX_CONF = """map $http_upgrade $connection_upgrade {
 }
 
 server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
+    listen 127.0.0.1:80 default_server;
+    listen [::1]:80 default_server;
 
-    server_name _;
+    server_name dete.kartik-mrk.me localhost 127.0.0.1;
 
     # API Gateway routes (matches exact /orders or /orders/...)
     location ~ ^/(api|auth|orders|accounts|market-data|internal|admin|actuator|matching)(/|$) {
