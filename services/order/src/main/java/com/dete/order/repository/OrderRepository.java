@@ -136,10 +136,21 @@ public class OrderRepository {
             remaining_qty = COALESCE(?, remaining_qty),
             reject_reason = COALESCE(?, reject_reason),
             updated_at = now()
-        WHERE order_id = ?
+        WHERE order_id = ? AND status NOT IN ('FILLED', 'CANCELLED', 'REJECTED')
+          AND (? <> 'ACCEPTED' OR status = 'SUBMITTED')
+          AND (CAST(? AS BIGINT) IS NULL OR remaining_qty >= ?)
         """;
     int updated =
-        jdbcTemplate.update(sql, status.name(), filledQty, remainingQty, rejectReason, orderId);
+        jdbcTemplate.update(
+            sql,
+            status.name(),
+            filledQty,
+            remainingQty,
+            rejectReason,
+            orderId,
+            status.name(),
+            remainingQty,
+            remainingQty);
     return updated > 0;
   }
 }

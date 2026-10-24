@@ -50,7 +50,7 @@ export default function TerminalPage() {
 }
 
 function TradingWorkspace() {
-  const [instrument, setInstrument] = useState<Instrument>('BTC_USDT');
+  const [instrument, setInstrument] = useState<Instrument>('BTC_USD');
   const [selectedPrice, setSelectedPrice] = useState<string>();
   const [activeTab, setActiveTab] = useState<ActivityTab>('open');
   const [marketTab, setMarketTab] = useState<'book' | 'tape'>('book');

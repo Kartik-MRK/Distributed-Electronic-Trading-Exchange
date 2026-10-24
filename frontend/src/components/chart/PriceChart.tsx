@@ -12,7 +12,7 @@ import {
 } from 'lightweight-charts';
 import { Instrument } from '../../types';
 import { useWebSocket } from '../../hooks/useWebSocket';
-import { INSTRUMENT_METAS } from '../../lib/api';
+import { api } from '../../lib/api';
 import { toBackendInstrument } from '../../lib/format';
 import { Maximize2 } from 'lucide-react';
 
@@ -22,50 +22,12 @@ interface PriceChartProps {
 
 type Interval = '1m' | '5m' | '15m' | '1h';
 
-function generateCandles(
-  instrument: Instrument,
-  count = 120,
-  intervalMinutes = 5,
-): CandlestickData<Time>[] {
-  const meta = INSTRUMENT_METAS[instrument];
-  const mid = parseFloat(meta.lastPrice);
-  const candles: CandlestickData<Time>[] = [];
-  const nowSec =
-    Math.floor(Date.now() / (intervalMinutes * 60000)) * intervalMinutes * 60;
-  const stepSec = intervalMinutes * 60;
-  let currentPrice = mid * 0.995;
-
-  for (let i = count; i >= 0; i--) {
-    const time = (nowSec - i * stepSec) as unknown as Time;
-    const volatility = currentPrice * 0.0035;
-    const open = currentPrice;
-    const change = (Math.random() - 0.49) * volatility;
-    const close = Math.max(1, open + change);
-    const high = Math.max(open, close) + Math.random() * (volatility * 0.6);
-    const low = Math.min(open, close) - Math.random() * (volatility * 0.6);
-
-    candles.push({
-      time,
-      open: parseFloat(open.toFixed(meta.priceDecimals)),
-      high: parseFloat(high.toFixed(meta.priceDecimals)),
-      low: parseFloat(low.toFixed(meta.priceDecimals)),
-      close: parseFloat(close.toFixed(meta.priceDecimals)),
-    });
-
-    currentPrice = close;
-  }
-
-  return candles;
-}
-
 export function PriceChart({ instrument }: PriceChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const [interval, setInterval] = useState<Interval>('5m');
-  const [lastPrice, setLastPrice] = useState<string>(
-    INSTRUMENT_METAS[instrument].lastPrice,
-  );
+  const [lastPrice, setLastPrice] = useState<string>('');
   const { subscribe, connectionState } = useWebSocket();
 
   // Create chart instance
@@ -116,18 +78,28 @@ export function PriceChart({ instrument }: PriceChartProps) {
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
 
-    // Load initial candles
-    const intervalMin =
-      interval === '1m'
-        ? 1
-        : interval === '5m'
-          ? 5
-          : interval === '15m'
-            ? 15
-            : 60;
-    const initialData = generateCandles(instrument, 100, intervalMin);
-    candleSeries.setData(initialData);
-    chart.timeScale().fitContent();
+    let active = true;
+    setLastPrice('');
+    void api.marketData.getCandles(instrument, interval).then((candles) => {
+      if (!active) return;
+      const history = candles.map((candle) => ({
+        time: Math.floor(Number(candle.openTime) / 1000) as Time,
+        open: Number(candle.open) / 100_000_000,
+        high: Number(candle.high) / 100_000_000,
+        low: Number(candle.low) / 100_000_000,
+        close: Number(candle.close) / 100_000_000,
+      }));
+      const merged = new Map<number, CandlestickData<Time>>();
+      history.forEach((candle) => merged.set(Number(candle.time), candle));
+      // Preserve ticks that arrived while history was loading.
+      candleSeries.data().forEach((candle) => {
+        if ('open' in candle) merged.set(Number(candle.time), candle);
+      });
+      const data = [...merged.values()].sort((a, b) => Number(a.time) - Number(b.time));
+      candleSeries.setData(data);
+      if (data.length) setLastPrice(data[data.length - 1].close.toFixed(2));
+      chart.timeScale().fitContent();
+    }).catch(() => { /* Live ticks may still populate the chart. */ });
 
     // Handle container resize
     const handleResize = () => {
@@ -143,6 +115,7 @@ export function PriceChart({ instrument }: PriceChartProps) {
     resizeObserver.observe(containerRef.current);
 
     return () => {
+      active = false;
       resizeObserver.disconnect();
       chart.remove();
       chartRef.current = null;
@@ -165,21 +138,13 @@ export function PriceChart({ instrument }: PriceChartProps) {
           : Math.floor(Date.now() / 1000);
 
       const o =
-        typeof candle.open === 'number' && candle.open >= 100_000_000
-          ? candle.open / 100_000_000
-          : Number(candle.open);
+        Number(candle.open) / 100_000_000;
       const h =
-        typeof candle.high === 'number' && candle.high >= 100_000_000
-          ? candle.high / 100_000_000
-          : Number(candle.high);
+        Number(candle.high) / 100_000_000;
       const l =
-        typeof candle.low === 'number' && candle.low >= 100_000_000
-          ? candle.low / 100_000_000
-          : Number(candle.low);
+        Number(candle.low) / 100_000_000;
       const c =
-        typeof candle.close === 'number' && candle.close >= 100_000_000
-          ? candle.close / 100_000_000
-          : Number(candle.close);
+        Number(candle.close) / 100_000_000;
 
       try {
         candleSeriesRef.current.update({
@@ -210,45 +175,6 @@ export function PriceChart({ instrument }: PriceChartProps) {
     };
   }, [instrument, interval, subscribe]);
 
-  // Only animate sample ticks while the live feed is unavailable.
-  useEffect(() => {
-    if (connectionState === 'connected') return;
-    const intervalId = window.setInterval(() => {
-      if (!candleSeriesRef.current) return;
-      const meta = INSTRUMENT_METAS[instrument];
-      const mid = parseFloat(meta.lastPrice);
-      const delta = (Math.random() - 0.49) * (mid * 0.0004);
-      const updatedClose = parseFloat(
-        (mid + delta).toFixed(meta.priceDecimals),
-      );
-      const step =
-        (interval === '1m'
-          ? 1
-          : interval === '5m'
-            ? 5
-            : interval === '15m'
-              ? 15
-              : 60) * 60;
-      const nowSec = (Math.floor(Date.now() / (step * 1000)) *
-        step) as unknown as Time;
-
-      try {
-        candleSeriesRef.current.update({
-          time: nowSec,
-          open: mid,
-          high: Math.max(mid, updatedClose) + 0.5,
-          low: Math.min(mid, updatedClose) - 0.5,
-          close: updatedClose,
-        });
-        setLastPrice(updatedClose.toFixed(meta.priceDecimals));
-      } catch {
-        // Safe catch if timestamp ordering differs
-      }
-    }, 4000);
-
-    return () => window.clearInterval(intervalId);
-  }, [instrument, interval, connectionState]);
-
   return (
     <div className="panel price-chart">
       <div className="chart-toolbar">
@@ -258,10 +184,10 @@ export function PriceChart({ instrument }: PriceChartProps) {
             <span className="muted">/ Spot</span>
           </h2>
           <p className="chart-quote font-mono">
-            {Number(lastPrice).toLocaleString('en-US', {
+            {lastPrice ? Number(lastPrice).toLocaleString('en-US', {
               minimumFractionDigits: 2,
-            })}{' '}
-            <span>USDT</span>
+            }) : '?'}{' '}
+            <span>USD</span>
           </p>
         </div>
         <div className="chart-actions">
@@ -289,7 +215,7 @@ export function PriceChart({ instrument }: PriceChartProps) {
       <div className="chart-canvas" ref={containerRef} />
       <div className="chart-caption">
         <span>Candlestick chart</span>
-        <span>Sample history / Scroll to zoom</span>
+        <span>{connectionState === 'connected' ? 'Exchange history / Scroll to zoom' : 'Feed unavailable'}</span>
       </div>
     </div>
   );

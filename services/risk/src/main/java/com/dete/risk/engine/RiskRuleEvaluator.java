@@ -156,7 +156,7 @@ public class RiskRuleEvaluator {
     // -------------------------------------------------------------
     // RULE 6: Self-Trade Prevention Check
     // -------------------------------------------------------------
-    if (accountState.hasCrossingRestingOrder(request.side(), request.price())) {
+    if (accountState.hasCrossingRestingOrder(instrument, request.side(), request.price())) {
       return ValidateOrderResponse.reject(
           String.format(
               "Rule 6 Violation: Self-trade detected for account %s on %s with resting opposite order",
@@ -168,7 +168,7 @@ public class RiskRuleEvaluator {
     if (request.orderId() != null) {
       orderToAccount.put(request.orderId(), request.accountId());
       if (price != null && price > 0 && request.orderType() == OrderType.LIMIT) {
-        accountState.addRestingOrder(request.orderId(), request.side(), price);
+        accountState.addRestingOrder(request.orderId(), instrument, request.side(), price);
       }
     }
 

@@ -280,4 +280,34 @@ class AccountIntegrationTest extends FullStackTestBase {
     assertThat(finalBalance.reserved()).isEqualTo(initialBalance);
     assertThat(finalBalance.total()).isEqualTo(initialBalance);
   }
+
+  @Test
+  void sellerDebitFailureRollsBackBuyerDebitAndDoesNotCreateSettlement() {
+    UUID buyer = UUID.randomUUID();
+    UUID seller = UUID.randomUUID();
+    long quote = 60_000L * FixedPoint.SCALE;
+    accountService.deposit(buyer, "USD", quote, null);
+    accountService.reserveFunds(new ReserveFundsRequest(buyer, UUID.randomUUID(), "USD", quote));
+    TradeExecutedEvent event =
+        new TradeExecutedEvent(
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            Instrument.BTC_USD,
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            buyer,
+            seller,
+            quote,
+            FixedPoint.SCALE,
+            1L,
+            Instant.now(),
+            1);
+    assertThatThrownBy(() -> accountService.settleTrade(event))
+        .isInstanceOf(InsufficientFundsException.class);
+    assertThat(accountService.getBalance(buyer, "USD").reserved()).isEqualTo(quote);
+    assertThat(accountService.getBalance(buyer, "BTC").available()).isZero();
+    assertThat(accountService.getBalance(seller, "USD").available()).isZero();
+    assertThat(settlementRepository.existsByTradeId(event.tradeId())).isFalse();
+    assertThat(ledgerRepository.findByAccountId(buyer, 10, 0)).hasSize(2);
+  }
 }

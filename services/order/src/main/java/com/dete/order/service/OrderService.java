@@ -4,7 +4,6 @@ import com.dete.common.domain.enums.OrderSide;
 import com.dete.common.domain.enums.OrderStatus;
 import com.dete.common.domain.types.FixedPoint;
 import com.dete.common.events.order.OrderCancelCommand;
-import com.dete.common.events.order.OrderModifyCommand;
 import com.dete.common.events.order.OrderPlacedEvent;
 import com.dete.order.client.AccountClient;
 import com.dete.order.client.PreTradeRiskValidator;
@@ -83,6 +82,7 @@ public class OrderService {
     // 1. Idempotency check via Redis
     Optional<OrderResponse> cached = idempotencyService.getCachedOrder(idempotencyKey);
     if (cached.isPresent()) {
+      validateIdempotentRequest(cached.get(), request, accountId);
       log.info("Returning cached order response for idempotency key {}", idempotencyKey);
       return cached.get();
     }
@@ -91,6 +91,7 @@ public class OrderService {
     Optional<OrderRecord> existingDbOrder = orderRepository.findByIdempotencyKey(idempotencyKey);
     if (existingDbOrder.isPresent()) {
       OrderResponse response = OrderResponse.fromRecord(existingDbOrder.get());
+      validateIdempotentRequest(response, request, accountId);
       idempotencyService.cacheOrder(idempotencyKey, response);
       return response;
     }
@@ -154,7 +155,19 @@ public class OrderService {
     }
 
     OrderResponse response = OrderResponse.fromRecord(order);
-    idempotencyService.cacheOrder(idempotencyKey, response);
+    if (org.springframework.transaction.support.TransactionSynchronizationManager
+        .isSynchronizationActive()) {
+      org.springframework.transaction.support.TransactionSynchronizationManager
+          .registerSynchronization(
+              new org.springframework.transaction.support.TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                  idempotencyService.cacheOrder(idempotencyKey, response);
+                }
+              });
+    } else {
+      idempotencyService.cacheOrder(idempotencyKey, response);
+    }
 
     if (orderMetrics != null) {
       orderMetrics.recordOrderPlaced(request.instrument(), request.side(), request.orderType());
@@ -213,20 +226,9 @@ public class OrderService {
           String.format("Order %s in status %s cannot be modified", orderId, order.status()));
     }
 
-    long newPrice = request.newPrice() != null ? request.newPrice() : order.price();
-    long newQty = request.newQuantity() > 0 ? request.newQuantity() : order.originalQty();
-
-    OrderModifyCommand command =
-        OrderModifyCommand.of(orderId, accountId, order.instrument(), newPrice, newQty);
-    try {
-      String payload = objectMapper.writeValueAsString(command);
-      outboxRepository.save(TOPIC_ORDER_COMMANDS, order.instrument().name(), payload);
-    } catch (JsonProcessingException e) {
-      throw new IllegalStateException("Failed to serialize OrderModifyCommand", e);
-    }
-
-    log.info("Dispatched modification command for order {} on {}", orderId, order.instrument());
-    return OrderResponse.fromRecord(order);
+    // The current command does not adjust reservations or persist the replacement terms.
+    throw new InvalidOrderException(
+        "Order modification is unavailable. Cancel the order, wait for cancellation, then place a new order.");
   }
 
   public OrderResponse getOrder(UUID orderId, UUID accountId) {
@@ -274,8 +276,20 @@ public class OrderService {
 
   @Transactional
   public void handleOrderPartiallyFilled(UUID orderId, long filledQty, long remainingQty) {
-    orderRepository.updateStatusAndFills(
-        orderId, OrderStatus.PARTIALLY_FILLED, filledQty, remainingQty, null);
+    orderRepository
+        .findById(orderId)
+        .ifPresent(
+            order -> {
+              if (remainingQty < 0 || remainingQty > order.originalQty()) {
+                throw new InvalidOrderException("Invalid remaining quantity for order " + orderId);
+              }
+              orderRepository.updateStatusAndFills(
+                  orderId,
+                  OrderStatus.PARTIALLY_FILLED,
+                  order.originalQty() - remainingQty,
+                  remainingQty,
+                  null);
+            });
     log.debug(
         "Updated order {} status to PARTIALLY_FILLED (filled={}, remaining={})",
         orderId,
@@ -289,7 +303,7 @@ public class OrderService {
         .findById(orderId)
         .ifPresent(
             order -> {
-              if (order.status() == OrderStatus.CANCELLED) {
+              if (order.status().isTerminal()) {
                 return; // Idempotent
               }
 
@@ -308,7 +322,7 @@ public class OrderService {
         .findById(orderId)
         .ifPresent(
             order -> {
-              if (order.status() == OrderStatus.REJECTED) {
+              if (order.status() != OrderStatus.SUBMITTED) {
                 return; // Idempotent
               }
 
@@ -351,6 +365,20 @@ public class OrderService {
       }
     } catch (Exception e) {
       log.error("Failed to release funds for order {}", order.orderId(), e);
+      throw e;
+    }
+  }
+
+  private void validateIdempotentRequest(
+      OrderResponse existing, CreateOrderRequest request, UUID accountId) {
+    if (!existing.accountId().equals(accountId)
+        || existing.instrument() != request.instrument()
+        || existing.side() != request.side()
+        || existing.orderType() != request.orderType()
+        || !java.util.Objects.equals(existing.price(), request.price())
+        || existing.originalQty() != request.quantity()) {
+      throw new InvalidOrderException(
+          "Idempotency key has already been used for a different request");
     }
   }
 }

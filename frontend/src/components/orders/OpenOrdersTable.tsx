@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { OrderRecord } from '../../types';
 import { X, Clock } from 'lucide-react';
+import { useToast } from '../common/ToastContext';
 
 interface OpenOrdersTableProps {
   orders: OrderRecord[];
@@ -13,6 +14,19 @@ export function OpenOrdersTable({
   orders,
   onCancelOrder,
 }: OpenOrdersTableProps) {
+  const { showToast } = useToast();
+  const [pending, setPending] = useState<string | null>(null);
+  const requestCancellation = async (orderId: string) => {
+    setPending(orderId);
+    try {
+      await onCancelOrder(orderId);
+      showToast('success', 'Cancellation requested', 'Waiting for the exchange to confirm cancellation.');
+    } catch (error) {
+      showToast('error', 'Cancellation failed', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setPending(null);
+    }
+  };
   const openOrders = orders.filter(
     (o) =>
       o.status === 'SUBMITTED' ||
@@ -198,7 +212,8 @@ export function OpenOrdersTable({
                 </td>
                 <td style={{ padding: '0 8px', textAlign: 'center' }}>
                   <button
-                    onClick={() => onCancelOrder(order.orderId)}
+                    onClick={() => void requestCancellation(order.orderId)}
+                    disabled={pending !== null}
                     title="Cancel Order"
                     style={{
                       background: 'var(--ask-red-bg)',

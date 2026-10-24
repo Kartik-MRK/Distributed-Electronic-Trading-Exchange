@@ -377,8 +377,7 @@ class OrderIntegrationTest extends FullStackTestBase {
 
   @Test
   @Order(5)
-  @DisplayName(
-      "Order Modification: PUT /orders/{id} modifies order price & quantity and dispatches command")
+  @DisplayName("Order Modification: unsafe replacement is rejected")
   void testOrderModification() {
     UUID accountId = UUID.randomUUID();
     String token = generateAuthToken(accountId, "trader_eve");
@@ -401,15 +400,15 @@ class OrderIntegrationTest extends FullStackTestBase {
         new ModifyOrderRequest(155L * FixedPoint.SCALE, 12L * FixedPoint.SCALE);
 
     HttpHeaders headers = createHeaders(token, null);
-    ResponseEntity<OrderResponse> modResp =
+    ResponseEntity<String> modResp =
         restTemplate.exchange(
             "/orders/" + orderId,
             HttpMethod.PUT,
             new HttpEntity<>(modifyRequest, headers),
-            OrderResponse.class);
+            String.class);
 
-    assertThat(modResp.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(modResp.getBody().orderId()).isEqualTo(orderId);
+    assertThat(modResp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(modResp.getBody()).contains("Order modification is unavailable");
   }
 
   @Test
@@ -446,5 +445,41 @@ class OrderIntegrationTest extends FullStackTestBase {
     assertThat(reprocessResp.getBody().get("status")).isEqualTo("SUCCESS");
     assertThat(((Number) reprocessResp.getBody().get("reprocessedCount")).intValue())
         .isGreaterThanOrEqualTo(1);
+  }
+
+  @Test
+  void repositoryCannotRegressTerminalOrdersOrFilledQuantity() {
+    UUID orderId = UUID.randomUUID();
+    orderRepository.save(
+        OrderRecord.createNew(
+            orderId,
+            UUID.randomUUID(),
+            Instrument.BTC_USD,
+            OrderSide.BUY,
+            OrderType.LIMIT,
+            60000L * FixedPoint.SCALE,
+            100L,
+            UUID.randomUUID()));
+    assertThat(
+            orderRepository.updateStatusAndFills(orderId, OrderStatus.ACCEPTED, null, null, null))
+        .isTrue();
+    assertThat(
+            orderRepository.updateStatusAndFills(
+                orderId, OrderStatus.PARTIALLY_FILLED, 60L, 40L, null))
+        .isTrue();
+    assertThat(
+            orderRepository.updateStatusAndFills(
+                orderId, OrderStatus.PARTIALLY_FILLED, 30L, 70L, null))
+        .isFalse();
+    assertThat(
+            orderRepository.updateStatusAndFills(orderId, OrderStatus.ACCEPTED, null, null, null))
+        .isFalse();
+    assertThat(orderRepository.updateStatusAndFills(orderId, OrderStatus.FILLED, 100L, 0L, null))
+        .isTrue();
+    assertThat(
+            orderRepository.updateStatusAndFills(orderId, OrderStatus.CANCELLED, null, null, null))
+        .isFalse();
+    assertThat(orderRepository.findById(orderId).orElseThrow().status())
+        .isEqualTo(OrderStatus.FILLED);
   }
 }

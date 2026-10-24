@@ -66,7 +66,7 @@ subprojects {
             showStandardStreams = false
         }
         // Exclude heavy Docker integration tests from fast CI/unit runs
-        if (project.hasProperty("excludeIntegration") || System.getenv("CI") == "true") {
+        if (project.hasProperty("excludeIntegration")) {
             exclude("**/*IntegrationTest*")
             exclude("**/OrderRiskCircuitBreakerTest*")
         }

@@ -153,16 +153,6 @@ public class AccountService {
 
     int rowsUpdated = balanceRepository.reserve(accountId, asset, amount);
     if (rowsUpdated == 0) {
-      String sibling =
-          "USD".equalsIgnoreCase(asset) ? "USDT" : ("USDT".equalsIgnoreCase(asset) ? "USD" : null);
-      if (sibling != null) {
-        rowsUpdated = balanceRepository.reserve(accountId, sibling, amount);
-        if (rowsUpdated > 0) {
-          asset = sibling;
-        }
-      }
-    }
-    if (rowsUpdated == 0) {
       Balance current =
           balanceRepository
               .getBalance(accountId, asset)
@@ -226,16 +216,6 @@ public class AccountService {
     }
 
     int rowsUpdated = balanceRepository.release(accountId, asset, amount);
-    if (rowsUpdated == 0) {
-      String sibling =
-          "USD".equalsIgnoreCase(asset) ? "USDT" : ("USDT".equalsIgnoreCase(asset) ? "USD" : null);
-      if (sibling != null) {
-        rowsUpdated = balanceRepository.release(accountId, sibling, amount);
-        if (rowsUpdated > 0) {
-          asset = sibling;
-        }
-      }
-    }
     if (rowsUpdated == 0) {
       Balance current =
           balanceRepository
@@ -302,10 +282,17 @@ public class AccountService {
     String quoteAsset = instrument.quoteAsset();
     long price = event.price();
     long quantity = event.quantity();
+    if (price <= 0 || quantity <= 0 || buyerId.equals(sellerId)) {
+      throw new IllegalArgumentException(
+          "Settlement requires positive price/quantity and distinct accounts");
+    }
 
     // Notional quote amount = price * quantity / SCALE using 128-bit intermediate
     long quoteAmount =
         FixedPoint.ofScaled(price).multiply(FixedPoint.ofScaled(quantity)).scaledValue();
+    if (quoteAmount <= 0) {
+      throw new IllegalArgumentException("Settlement notional must be positive");
+    }
 
     // Ensure accounts exist
     accountRepository.createAccount(buyerId);
@@ -315,18 +302,14 @@ public class AccountService {
     // Buyer: debited quote amount from reserved, credited base asset to available
     int buyerDebited = balanceRepository.debitReserved(buyerId, quoteAsset, quoteAmount);
     if (buyerDebited == 0) {
-      String sibling =
-          "USD".equalsIgnoreCase(quoteAsset)
-              ? "USDT"
-              : ("USDT".equalsIgnoreCase(quoteAsset) ? "USD" : null);
-      if (sibling != null) {
-        balanceRepository.debitReserved(buyerId, sibling, quoteAmount);
-      }
+      throw new InsufficientFundsException("Insufficient buyer reserved " + quoteAsset);
     }
-    balanceRepository.creditAvailable(buyerId, baseAsset, quantity);
 
     // Seller: debited base asset from reserved, credited quote asset to available
-    balanceRepository.debitReserved(sellerId, baseAsset, quantity);
+    if (balanceRepository.debitReserved(sellerId, baseAsset, quantity) == 0) {
+      throw new InsufficientFundsException("Insufficient seller reserved " + baseAsset);
+    }
+    balanceRepository.creditAvailable(buyerId, baseAsset, quantity);
     balanceRepository.creditAvailable(sellerId, quoteAsset, quoteAmount);
 
     // 3. Write 4 double-entry ledger entries

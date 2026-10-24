@@ -6,11 +6,12 @@
 [![Kafka](https://img.shields.io/badge/Apache%20Kafka-3.7.1-black.svg)](https://kafka.apache.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue.svg)](https://www.postgresql.org/)
 [![Kubernetes](https://img.shields.io/badge/K3s-v1.30-326ce5.svg)](https://k3s.io/)
-[![Next.js](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 
-> **DETE** is an institutional-grade, low-latency, event-driven Distributed Electronic Trading Exchange built for high-throughput crypto spot trading (`BTC_USD`, `ETH_USD`, `SOL_USD`).  
-> Engineered with a **single-writer thread model**, **in-memory deterministic order book**, **Kafka event sourcing**, **64-bit fixed-point financial math**, and **append-only double-entry ledger bookkeeping**.
+> **DETE** is an educational, event-driven Distributed Electronic Trading Exchange built for high-throughput crypto spot trading (`BTC_USD`, `ETH_USD`, `SOL_USD`).
+> Uses a **single-writer thread model**, **in-memory deterministic order book**, **Kafka event sourcing**, **64-bit fixed-point financial math**, and **append-only double-entry ledger bookkeeping**.
+
+**Review status (2026-10-23):** Known recovery, reservation, and security gaps remain. This is a simulated-funds demo, not a production exchange. See the [code audit and remaining work](docs/project_review.md) for verified checks, fixes, and limitations.
 
 ---
 
@@ -24,7 +25,7 @@
 | **API Gateway** | `https://dete.kartik-mrk.me` | Unified ingress routing `/auth`, `/orders`, `/accounts`, `/market-data` |
 | **Live WebSocket Feed** | `wss://dete.kartik-mrk.me/ws/` | Secure STOMP/WebSocket: `/topic/candles.{symbol}.{interval}` |
 | **Grafana Telemetry** | [https://dete.kartik-mrk.me/grafana/](https://dete.kartik-mrk.me/grafana/) | Username: `admin` \| Password: `admin` |
-| **Prometheus Metrics** | `Internal K3s Cluster` | Internal Scrapes across all 10 Services (Shielded Origin) |
+| **Prometheus Metrics** | `Internal K3s Cluster` | Internal Scrapes across all 10 Services |
 
 ---
 
@@ -33,7 +34,7 @@
 ```mermaid
 flowchart TB
     subgraph Clients["Clients & Presentation Layer"]
-        UI["Next.js 14 Web Terminal<br/>(Lightweight Charts / TradingView)"]
+        UI["Next.js 16 Web Terminal<br/>(Lightweight Charts / TradingView)"]
         BOT["Market-Maker Bot Simulator<br/>(Avellaneda-Stoikov / Spread Spanning)"]
         WS_CLIENT["WebSocket Clients<br/>(L2 Live Depth / Trade Tape)"]
     end
@@ -53,7 +54,7 @@ flowchart TB
         ME["Matching Engine (8084)<br/>- Single-Writer Thread Model<br/>- Deterministic Memory OrderBook<br/>- Price-Time FIFO Priority<br/>- Kafka Log Replay State Reconstruction"]
         ACC["Account / Ledger Service (8082)<br/>- Immutable Double-Entry Ledger<br/>- Two-Phase Fund Reservation<br/>- Nightly Reconciliation Job"]
         MD["Market Data Service (8087)<br/>- L2 Aggregated Depth<br/>- Real-time STOMP WebSockets<br/>- Multi-Interval OHLCV Candles"]
-        AUDIT["Audit Service (8086)<br/>- Append-Only Compliance Log<br/>- Cryptographic Hash Chains"]
+        AUDIT["Audit Service (8086)<br/>- Append-Only Compliance Log<br/>- Append-only SQL storage"]
     end
 
     subgraph EventStreaming["Event Streaming Fabric (Apache Kafka)"]
@@ -67,7 +68,7 @@ flowchart TB
 
     subgraph DataStorage["Persistence & State"]
         PG[(PostgreSQL 16 Multi-Schema<br/>- account<br/>- order_svc<br/>- audit<br/>- DB Immutability Triggers)]
-        REDIS[(Redis 7 Cluster<br/>- Distributed Idempotency 24h<br/>- Rate Limiter Buckets)]
+        REDIS[(Redis 7<br/>- Distributed Idempotency 24h<br/>- Rate Limiter Buckets)]
     end
 
     UI --> NGINX
@@ -105,20 +106,20 @@ flowchart TB
 
 1. **Deterministic Single-Writer Thread Model:**
    - Dedicated single-threaded executor per trading instrument (`BTC_USD`, `ETH_USD`, `SOL_USD`).
-   - Zero locks, zero synchronized blocks, and zero database roundtrips on the matching hot path.
-   - 100% deterministic execution order.
+   - The in-memory order book is owned by one executor thread per instrument; surrounding services perform I/O and use synchronization.
+   - FIFO processing within each instrument; generated trade IDs and timestamps are not deterministic across replay.
 
 2. **Strict Financial Precision (No Floating-Point):**
-   - Floating-point primitives (`float`, `double`) are banned across all financial and matching components (enforced by ArchUnit).
+   - Domain amounts use scaled integers. Risk thresholds and display DTOs still use floating-point values.
    - All monetary amounts, asset quantities, and order prices use 64-bit integer fixed-point arithmetic (`SCALE = 100_000_000L`, 8 decimal places).
 
 3. **Two-Tier Distributed Idempotency:**
    - **Fast Path:** Redis cache with 24-hour TTL keyed by client `Idempotency-Key`.
-   - **Persistence Path:** PostgreSQL unique database constraints guaranteeing exact-once order placement and zero duplicate fund reservations.
+   - **Persistence Path:** PostgreSQL unique database constraints guaranteeing duplicate local order-row prevention; cross-service reservation recovery remains incomplete.
 
 4. **Reliable Transactional Outbox:**
    - Outbox messages written atomically inside application database transactions.
-   - Polling workers query unpublished messages using `SELECT ... FOR UPDATE SKIP LOCKED`, preventing race conditions across concurrent application replicas.
+   - Polling workers hold `SELECT ... FOR UPDATE SKIP LOCKED` locks within a database transaction. Delivery remains at least once; global order across multiple publishers is not guaranteed.
 
 5. **Append-Only Immutable Double-Entry Ledger:**
    - Database-level PostgreSQL triggers strictly prevent `UPDATE` and `DELETE` on `account.ledger_entries`.
@@ -140,7 +141,7 @@ Evaluated under OpenJDK 21 LTS:
 | Benchmark Method | Operations / Sec | Latency Percentiles | Notes |
 |---|---|---|---|
 | **Limit Order Resting Insert** | **1,593,983 ops/s** | P50: 500 ns, P99: 1.80 μs | Exceeded >100k target by **15.9x** |
-| **O(1) Order Cancellation** | **1,296,389 ops/s** | P50: 800 ns, P99: 2.10 μs | Exceeded >100k target by **12.9x** |
+| **Order Cancellation** | **1,296,389 ops/s** | P50: 800 ns, P99: 2.10 μs | Exceeded >100k target by **12.9x** |
 | **Maker / Taker Match Cycle** | **465,756 match/s** | **P50: 2.20 μs, P99: 6.40 μs** | Exceeded <1ms target by **156x** |
 | **Primitive Scaled Math** | **1,203,919,536 ops/s** | < 1 ns | **Zero heap allocation** on hot path |
 | **Price Ladder (`TreeMap` vs `SkipList`)** | **`TreeMap` 67.59M ops/s** | — | **+91.8% faster** than `ConcurrentSkipListMap` |
@@ -173,7 +174,7 @@ Conducted against the live Oracle Cloud ARM64 cluster (`https://dete.kartik-mrk.
 | **RPC & Networking** | gRPC / Netty | 1.66.0 | Ultra-low latency pre-trade risk checks |
 | **Resilience** | Resilience4j | 2.2.0 | Circuit breakers, bulkheads, rate limiters |
 | **Container Platform** | K3s & Helm | v1.30 / 3.x | Lightweight Kubernetes orchestration |
-| **Frontend Framework** | Next.js & React | 14.x / 18.x | Trading terminal & real-time charting |
+| **Frontend Framework** | Next.js & React | 16.3.8 / 19.2.8 | Trading terminal & real-time charting |
 | **Telemetry & Observability**| Prometheus & Grafana | 2.54 / 11.2 | Metrics scraping, latency heatmaps, alerting |
 | **Tracing** | OpenTelemetry | 2.8.0 | Distributed trace propagation |
 | **Load Testing** | k6 & JMH | 0.52.0 / 1.37 | Distributed load generation & microbenchmarking |
@@ -186,7 +187,7 @@ Conducted against the live Oracle Cloud ARM64 cluster (`https://dete.kartik-mrk.
 ### Prerequisites
 - Java 21 LTS (`java -version`)
 - Docker & Docker Compose
-- Node.js 18+ (for frontend)
+- Node.js 20.9+ (for frontend)
 
 ### 1. Clone & Build
 ```bash
@@ -222,10 +223,10 @@ docker-compose up -d
 
 ## 📖 Operational Documentation & Runbooks
 
-- [**Operational Runbook (`docs/runbook.md`)**](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/docs/runbook.md): Disaster recovery, Matching Engine Kafka replay, balance drift remediation, secret rotation, DLQ reprocessing, and adding new instruments.
-- [**Matching Engine Benchmark Report (`benchmarks/results/2026-10-07_matching.md`)**](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/benchmarks/results/2026-10-07_matching.md): In-depth JMH microbenchmark data and percentile distributions.
-- [**k6 Load Testing Report (`benchmarks/results/2026-10-07_k6_load.md`)**](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/benchmarks/results/2026-10-07_k6_load.md): Multi-scenario load test results on live VPS cluster.
-- [**Garbage Collection Tuning Guide (`benchmarks/gc_tuning.md`)**](file:///e:/College_Documents/GITHUB/Distributed%20Electronic%20Trading%20Exchange/benchmarks/gc_tuning.md): Container GC ergonomics analysis and G1GC configuration.
+- [**Operational Runbook (`docs/runbook.md`)**](docs/runbook.md): Disaster recovery, Matching Engine Kafka replay, balance drift remediation, secret rotation, DLQ reprocessing, and adding new instruments.
+- [**Matching Engine Benchmark Report (`benchmarks/results/2026-10-07_matching.md`)**](benchmarks/results/2026-10-07_matching.md): In-depth JMH microbenchmark data and percentile distributions.
+- [**k6 Load Testing Report (`benchmarks/results/2026-10-07_k6_load.md`)**](benchmarks/results/2026-10-07_k6_load.md): Multi-scenario load test results on live VPS cluster.
+- [**Garbage Collection Tuning Guide (`benchmarks/gc_tuning.md`)**](benchmarks/gc_tuning.md): Container GC ergonomics analysis and G1GC configuration.
 
 ---
 
@@ -254,4 +255,4 @@ docker-compose up -d
 
 ---
 
-*Engineered with precision for institutional-scale distributed electronic trading.*
+*A distributed-systems learning project using simulated balances.*

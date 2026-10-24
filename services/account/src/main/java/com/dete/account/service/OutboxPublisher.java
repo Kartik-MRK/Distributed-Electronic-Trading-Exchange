@@ -22,12 +22,12 @@ public class OutboxPublisher {
   private static final Logger log = LoggerFactory.getLogger(OutboxPublisher.class);
 
   private final OutboxRepository outboxRepository;
-  private final KafkaTemplate<String, Object> kafkaTemplate;
+  private final KafkaTemplate<String, String> kafkaTemplate;
   private final int batchSize;
 
   public OutboxPublisher(
       OutboxRepository outboxRepository,
-      KafkaTemplate<String, Object> kafkaTemplate,
+      KafkaTemplate<String, String> kafkaTemplate,
       @Value("${account.outbox.batch-size:50}") int batchSize) {
     this.outboxRepository = outboxRepository;
     this.kafkaTemplate = kafkaTemplate;
@@ -35,6 +35,7 @@ public class OutboxPublisher {
   }
 
   @Scheduled(fixedDelayString = "${account.outbox.fixed-delay-ms:100}")
+  @org.springframework.transaction.annotation.Transactional
   public void publishOutboxMessages() {
     List<OutboxMessage> pendingMessages = outboxRepository.findUnpublished(batchSize);
     if (pendingMessages.isEmpty()) {
@@ -54,6 +55,7 @@ public class OutboxPublisher {
             message.outboxId(),
             message.topic(),
             e.getMessage());
+        break;
       }
     }
   }

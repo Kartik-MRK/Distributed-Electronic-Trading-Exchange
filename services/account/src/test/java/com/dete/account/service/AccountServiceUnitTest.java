@@ -199,6 +199,8 @@ class AccountServiceUnitTest {
     when(ledgerRepository.getNextSequenceNum(buyerId)).thenReturn(1L, 2L);
     when(ledgerRepository.getNextSequenceNum(sellerId)).thenReturn(1L, 2L);
 
+    when(balanceRepository.debitReserved(buyerId, "USD", quoteAmount)).thenReturn(1);
+    when(balanceRepository.debitReserved(sellerId, "BTC", quantity)).thenReturn(1);
     accountService.settleTrade(event);
 
     // 1. Buyer balance updates: debit reserved quote (USD), credit available base (BTC)
@@ -247,5 +249,42 @@ class AccountServiceUnitTest {
     verify(ledgerRepository, never()).save(any());
     verify(settlementRepository, never()).save(any());
     verify(outboxRepository, never()).save(any());
+  }
+
+  @Test
+  void settlementMustNotCreditEitherPartyWhenBuyerDebitFails() {
+    TradeExecutedEvent event = settlementEvent();
+    assertThatThrownBy(() -> accountService.settleTrade(event))
+        .isInstanceOf(InsufficientFundsException.class);
+    verify(balanceRepository, never()).creditAvailable(any(), any(), anyLong());
+    verify(balanceRepository, never()).debitReserved(event.buyAccountId(), "USDT", event.price());
+    verify(settlementRepository, never()).save(any());
+  }
+
+  @Test
+  void settlementMustNotCreditEitherPartyWhenSellerDebitFails() {
+    TradeExecutedEvent event = settlementEvent();
+    when(balanceRepository.debitReserved(event.buyAccountId(), "USD", event.price())).thenReturn(1);
+    assertThatThrownBy(() -> accountService.settleTrade(event))
+        .isInstanceOf(InsufficientFundsException.class);
+    verify(balanceRepository, never()).creditAvailable(any(), any(), anyLong());
+    verify(ledgerRepository, never()).save(any());
+    verify(settlementRepository, never()).save(any());
+  }
+
+  private TradeExecutedEvent settlementEvent() {
+    return new TradeExecutedEvent(
+        UUID.randomUUID(),
+        UUID.randomUUID(),
+        Instrument.BTC_USD,
+        UUID.randomUUID(),
+        UUID.randomUUID(),
+        UUID.randomUUID(),
+        UUID.randomUUID(),
+        60000L * FixedPoint.SCALE,
+        FixedPoint.SCALE,
+        1L,
+        Instant.now(),
+        1);
   }
 }

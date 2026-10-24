@@ -44,14 +44,8 @@ export function OrderEntry({
     setPrice(meta.lastPrice);
   }, [instrument, meta.lastPrice]);
 
-  // Compute available balance for current side (support USD or USDT quote assets)
   const relevantAsset = side === 'BUY' ? meta.quoteAsset : meta.baseAsset;
-  const balanceRecord = balances.find(
-    (b) =>
-      b.asset === relevantAsset ||
-      (relevantAsset === 'USDT' && b.asset === 'USD') ||
-      (relevantAsset === 'USD' && b.asset === 'USDT')
-  );
+  const balanceRecord = balances.find((b) => b.asset === relevantAsset);
   const availableBal = parseFloat(balanceRecord?.available || '0');
 
   // Calculate order total

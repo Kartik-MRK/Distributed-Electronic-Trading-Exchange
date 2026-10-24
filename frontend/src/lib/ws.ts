@@ -14,13 +14,9 @@ export class WebSocketManager {
   private latencyListeners: Set<(latencyMs: number) => void> = new Set();
   private topicSubscriptions: Map<string, StompSubscription> = new Map();
   private topicListeners: Map<string, Set<WSListener>> = new Map();
-  private pingIntervalId: ReturnType<typeof setInterval> | null = null;
   private reconnectAttempts = 0;
   private maxReconnectDelay = 10000;
   private baseReconnectDelay = 1000;
-  private pingStart = 0;
-  private isSimulating = false;
-  private simulationIntervalId: ReturnType<typeof setInterval> | null = null;
 
   constructor(private brokerUrl: string = 'ws://localhost:8080/ws') {}
 
@@ -43,41 +39,27 @@ export class WebSocketManager {
         onConnect: () => {
           this.reconnectAttempts = 0;
           this.updateState('connected');
-          this.stopSimulation();
           this.resubscribeAll();
-          this.startPingMonitor();
         },
         onDisconnect: () => {
           this.updateState('disconnected');
-          this.stopPingMonitor();
         },
         onStompError: () => {
           this.updateState('reconnecting');
-          this.startSimulationIfNeeded();
         },
         onWebSocketClose: () => {
           this.updateState('reconnecting');
-          this.startSimulationIfNeeded();
         },
       });
 
       this.client.activate();
     } catch {
       this.updateState('disconnected');
-      this.startSimulationIfNeeded();
     }
 
-    // Fallback: If after 2 seconds no server is responding, trigger simulation so terminal is immediately interactive
-    setTimeout(() => {
-      if (this.connectionState !== 'connected') {
-        this.startSimulationIfNeeded();
-      }
-    }, 2000);
   }
 
   public disconnect(): void {
-    this.stopPingMonitor();
-    this.stopSimulation();
     if (this.client) {
       this.client.deactivate();
       this.client = null;
@@ -140,6 +122,7 @@ export class WebSocketManager {
 
   private updateState(state: ConnectionState): void {
     this.connectionState = state;
+    if (state !== 'connected') this.topicSubscriptions.clear();
     this.stateListeners.forEach((fn) => fn(state));
   }
 
@@ -176,79 +159,6 @@ export class WebSocketManager {
     return delay;
   }
 
-  private startPingMonitor(): void {
-    this.stopPingMonitor();
-    this.pingIntervalId = setInterval(() => {
-      if (this.client && this.client.connected) {
-        this.pingStart = performance.now();
-        // Send a ping to server if ping endpoint is supported or simulate STOMP roundtrip
-        const latency = Math.round(15 + Math.random() * 25);
-        this.latencyListeners.forEach((fn) => fn(latency));
-      }
-    }, 5000);
-  }
-
-  private stopPingMonitor(): void {
-    if (this.pingIntervalId) {
-      clearInterval(this.pingIntervalId);
-      this.pingIntervalId = null;
-    }
-  }
-
-  /* =========================================================================
-     Dynamic Client Simulation (Ensures UI remains lively & testable)
-     ========================================================================= */
-  private startSimulationIfNeeded(): void {
-    if (this.isSimulating) return;
-    this.isSimulating = true;
-    this.updateState('preview'); // Keep simulated data distinct from a live connection
-
-    // Emit simulated latency (e.g. 18-35ms)
-    this.latencyListeners.forEach((fn) =>
-      fn(Math.floor(18 + Math.random() * 15)),
-    );
-
-    this.simulationIntervalId = setInterval(() => {
-      // Broadcast synthetic micro-market adjustments to active topics
-      this.topicListeners.forEach((listeners, topic) => {
-        if (topic.includes('trades.')) {
-          const isBtc = topic.includes('BTC');
-          const isEth = topic.includes('ETH');
-          const basePrice = isBtc ? 67420 : isEth ? 3540 : 158;
-          const delta = (Math.random() - 0.49) * (basePrice * 0.0006);
-          const price = (basePrice + delta).toFixed(2);
-          const qty = isBtc
-            ? (0.01 + Math.random() * 0.45).toFixed(4)
-            : (0.1 + Math.random() * 3.5).toFixed(3);
-          const side = Math.random() > 0.5 ? 'BUY' : 'SELL';
-
-          const trade = {
-            tradeId: `t-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-            instrument: isBtc ? 'BTC_USDT' : isEth ? 'ETH_USDT' : 'SOL_USDT',
-            price,
-            quantity: qty,
-            makerSide: side === 'BUY' ? 'SELL' : 'BUY',
-            takerSide: side,
-            executedAt: new Date().toISOString(),
-          };
-
-          listeners.forEach((fn) => fn(trade));
-        }
-      });
-
-      // Update latency display periodically
-      const lat = Math.floor(16 + Math.random() * 14);
-      this.latencyListeners.forEach((fn) => fn(lat));
-    }, 2500);
-  }
-
-  private stopSimulation(): void {
-    this.isSimulating = false;
-    if (this.simulationIntervalId) {
-      clearInterval(this.simulationIntervalId);
-      this.simulationIntervalId = null;
-    }
-  }
 }
 
 export function getWebSocketUrl(): string {

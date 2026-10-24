@@ -1,5 +1,6 @@
 package com.dete.risk.model;
 
+import com.dete.common.domain.enums.Instrument;
 import com.dete.common.domain.enums.OrderSide;
 import java.util.Map;
 import java.util.UUID;
@@ -18,7 +19,7 @@ public class AccountRiskState {
   // orderId -> RestingOrderInfo
   private final Map<UUID, RestingOrderInfo> restingOrders = new ConcurrentHashMap<>();
 
-  public record RestingOrderInfo(OrderSide side, long price) {}
+  public record RestingOrderInfo(Instrument instrument, OrderSide side, long price) {}
 
   public AccountRiskState(UUID accountId) {
     this.accountId = accountId;
@@ -40,9 +41,9 @@ public class AccountRiskState {
     return openOrdersCount.updateAndGet(current -> Math.max(0, current - 1));
   }
 
-  public void addRestingOrder(UUID orderId, OrderSide side, long price) {
+  public void addRestingOrder(UUID orderId, Instrument instrument, OrderSide side, long price) {
     if (orderId != null && price > 0) {
-      restingOrders.put(orderId, new RestingOrderInfo(side, price));
+      restingOrders.put(orderId, new RestingOrderInfo(instrument, side, price));
     }
   }
 
@@ -56,12 +57,14 @@ public class AccountRiskState {
    * Check whether this account already has a resting order on the opposite side that would
    * immediately match/cross with an incoming order (Rule 6: Self-Trade Prevention).
    */
-  public boolean hasCrossingRestingOrder(OrderSide incomingSide, Long incomingPrice) {
+  public boolean hasCrossingRestingOrder(
+      Instrument instrument, OrderSide incomingSide, Long incomingPrice) {
     if (restingOrders.isEmpty()) {
       return false;
     }
 
     for (RestingOrderInfo resting : restingOrders.values()) {
+      if (resting.instrument() != instrument) continue;
       if (incomingSide == OrderSide.BUY && resting.side() == OrderSide.SELL) {
         // Buyer is willing to pay incomingPrice. If resting ask <= incomingPrice (or market order),
         // crosses!

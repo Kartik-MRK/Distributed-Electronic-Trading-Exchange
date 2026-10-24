@@ -3,30 +3,10 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '../../../lib/api';
-import {
-  setAuthSession,
-  setCustomUserSession,
-  DEMO_CREDENTIALS,
-} from '../../../lib/auth';
+import { setAuthSession } from '../../../lib/auth';
 import { ArrowRight, CheckCircle2, RefreshCw, ArrowLeft } from 'lucide-react';
 import { AuthLayout } from '@/components/common/AuthLayout';
 import { Loader } from '@/components/common/Loader';
-import { UserRecord } from '@/types';
-
-function createFallbackGuestUser(): UserRecord {
-  const seed = Date.now().toString(36);
-  return {
-    userId: `guest-uuid-${seed}`,
-    username: `guest_${seed}`,
-    email: `guest_${seed}@guest.dete.io`,
-    roles: ['ROLE_GUEST'],
-    fullName: 'Guest Trader',
-    role: 'ROLE_GUEST',
-    isVerified: false,
-    isDemo: true,
-  };
-}
-
 export default function LoginPage() {
   return (
     <AuthLayout>
@@ -41,7 +21,9 @@ function AuthContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab') === 'signup' ? 'signup' : 'signin';
-  const returnUrl = searchParams.get('returnUrl') || '/terminal';
+  const requestedReturnUrl = searchParams.get('returnUrl');
+  const returnUrl = requestedReturnUrl && /^\/(?![\/\\])/.test(requestedReturnUrl) && !/[\\\x00-\x20]/.test(requestedReturnUrl)
+    ? requestedReturnUrl : '/terminal';
 
   const [activeTab, setActiveTab] = useState<'signin' | 'signup'>(initialTab);
   const [signupStep, setSignupStep] = useState<'form' | 'otp'>('form');
@@ -120,29 +102,7 @@ function AuthContent() {
       setAuthSession(res);
       router.push(returnUrl);
     } catch (err) {
-      // In offline / standalone preview mode, allow demo login fallback
-      if (
-        (loginIdentifier === 'demo' || loginIdentifier === 'demo@dete.io') &&
-        loginPassword === DEMO_CREDENTIALS.password
-      ) {
-        setCustomUserSession('mock-jwt-token-demo', {
-          userId: 'demo-user-id',
-          username: 'demo',
-          email: 'demo@dete.io',
-          roles: ['ROLE_TRADER'],
-          fullName: 'Demo Trader',
-          role: 'ROLE_TRADER',
-          isVerified: true,
-          isDemo: true,
-        });
-        router.push(returnUrl);
-      } else {
-        setErrorMsg(
-          err instanceof Error
-            ? err.message
-            : 'Invalid credentials. Please verify your email and password.',
-        );
-      }
+      setErrorMsg(err instanceof Error ? err.message : 'Sign in failed. Please try again.');
     } finally {
       setPendingAction(null);
     }
@@ -161,11 +121,8 @@ function AuthContent() {
       });
       setAuthSession(res);
       router.push(returnUrl);
-    } catch {
-      // Instant standalone fallback if Gateway is not currently reachable locally
-      const fallbackGuest = createFallbackGuestUser();
-      setCustomUserSession('mock-jwt-guest-token', fallbackGuest);
-      router.push(returnUrl);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Guest sign in is unavailable. Please try again.');
     } finally {
       setPendingAction(null);
     }

@@ -17,7 +17,7 @@ export default function SystemDashboardPage() {
   const [unavailable, setUnavailable] = useState(false);
   const [simLoading, setSimLoading] = useState(false);
   const [error, setError] = useState('');
-  const [instrument, setInstrument] = useState<Instrument>('BTC_USDT');
+  const [instrument, setInstrument] = useState<Instrument>('BTC_USD');
   const fetchData = useCallback(async () => {
     try {
       setMetrics(await api.metrics.getSnapshot());
@@ -109,17 +109,17 @@ export default function SystemDashboardPage() {
         <section className="stats-grid" aria-label="System overview">
           <div className="panel stat-card">
             <span>Matching throughput</span>
-            <strong>{metrics?.matchingThroughput.toFixed(1) ?? '—'}</strong>
+            <strong>{metrics?.matchingThroughput?.toFixed(1) ?? '—'}</strong>
             <small>trades per second</small>
           </div>
           <div className="panel stat-card">
             <span>Median latency</span>
             <strong>
-              {metrics?.e2eLatency.p50Ms ?? '—'} <small>ms</small>
+              {metrics?.e2eLatency?.p50Ms ?? '—'} <small>ms</small>
             </strong>
             <small>
-              P95 {metrics?.e2eLatency.p95Ms ?? '—'} ms · P99{' '}
-              {metrics?.e2eLatency.p99Ms ?? '—'} ms
+              P95 {metrics?.e2eLatency?.p95Ms ?? '—'} ms · P99{' '}
+              {metrics?.e2eLatency?.p99Ms ?? '—'} ms
             </small>
           </div>
           <div className="panel stat-card">
@@ -211,7 +211,7 @@ export default function SystemDashboardPage() {
               <h2>Consumer lag</h2>
               <span className="eyebrow">Kafka</span>
             </div>
-            {metrics ? (
+            {metrics?.kafkaConsumerLag.length ? (
               <div className="detail-list content-pad">
                 {metrics.kafkaConsumerLag.map((item) => (
                   <div className="detail-row" key={item.topic}>
@@ -234,7 +234,7 @@ export default function SystemDashboardPage() {
               <h2>Memory utilization</h2>
               <span className="eyebrow">JVM heap</span>
             </div>
-            {metrics ? (
+            {metrics?.jvmMemory.length ? (
               <div className="detail-list content-pad">
                 {metrics.jvmMemory.map((memory) => (
                   <div key={memory.service}>

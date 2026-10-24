@@ -120,7 +120,7 @@ public class OrderEventConsumer {
           .headers()
           .add("X-Retry-Count", "3".getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
-      kafkaTemplate.send(dlqRecord);
+      kafkaTemplate.send(dlqRecord).get(5, java.util.concurrent.TimeUnit.SECONDS);
       log.info(
           "Sent failed message to DLQ topic {} with metadata headers (offset={}, error={})",
           TOPIC_ORDER_EVENTS_DLQ,
@@ -128,6 +128,10 @@ public class OrderEventConsumer {
           errorMessage);
     } catch (Exception dlqEx) {
       log.error("Fatal: failed to forward message to DLQ topic", dlqEx);
+      if (dlqEx instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
+      throw new IllegalStateException("Failed to durably forward order event to DLQ", dlqEx);
     }
   }
 }

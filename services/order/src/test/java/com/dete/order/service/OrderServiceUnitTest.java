@@ -1,6 +1,7 @@
 package com.dete.order.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -184,7 +185,7 @@ class OrderServiceUnitTest {
   }
 
   @Test
-  @DisplayName("Modify order enqueues OrderModifyCommand to outbox")
+  @DisplayName("Unsafe modification is rejected before publishing a command")
   void testModifyOrder() {
     UUID accountId = UUID.randomUUID();
     UUID orderId = UUID.randomUUID();
@@ -206,10 +207,9 @@ class OrderServiceUnitTest {
     ModifyOrderRequest modifyReq =
         new ModifyOrderRequest(52_000L * FixedPoint.SCALE, 3L * FixedPoint.SCALE);
 
-    OrderResponse modified = orderService.modifyOrder(orderId, accountId, modifyReq);
-
-    assertThat(modified.orderId()).isEqualTo(orderId);
-    verify(outboxRepository).save(eq("order.commands"), eq("BTC_USD"), any(String.class));
+    assertThatThrownBy(() -> orderService.modifyOrder(orderId, accountId, modifyReq))
+        .isInstanceOf(com.dete.order.exception.InvalidOrderException.class);
+    verify(outboxRepository, never()).save(any(), any(), any());
   }
 
   @Test
@@ -244,5 +244,70 @@ class OrderServiceUnitTest {
     // Remaining 1 BTC at $50,000 = $50,000 USD to release
     long expectedRelease = 50_000L * FixedPoint.SCALE;
     verify(accountClient).releaseFunds(accountId, orderId, "USD", expectedRelease);
+  }
+
+  @Test
+  void partialFillsAreCumulativeInsteadOfLastFillOnly() {
+    UUID orderId = UUID.randomUUID();
+    OrderRecord order =
+        OrderRecord.createNew(
+            orderId,
+            UUID.randomUUID(),
+            Instrument.BTC_USD,
+            OrderSide.BUY,
+            OrderType.LIMIT,
+            60000L * FixedPoint.SCALE,
+            3L * FixedPoint.SCALE,
+            UUID.randomUUID());
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+    orderService.handleOrderPartiallyFilled(orderId, FixedPoint.SCALE, FixedPoint.SCALE);
+    verify(orderRepository)
+        .updateStatusAndFills(
+            orderId, OrderStatus.PARTIALLY_FILLED, 2L * FixedPoint.SCALE, FixedPoint.SCALE, null);
+  }
+
+  @Test
+  void cachedIdempotencyKeyCannotExposeAnotherAccountsOrder() {
+    UUID key = UUID.randomUUID();
+    OrderRecord order =
+        OrderRecord.createNew(
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            Instrument.BTC_USD,
+            OrderSide.BUY,
+            OrderType.LIMIT,
+            60000L * FixedPoint.SCALE,
+            FixedPoint.SCALE,
+            key);
+    when(idempotencyService.getCachedOrder(key))
+        .thenReturn(Optional.of(OrderResponse.fromRecord(order)));
+    CreateOrderRequest request =
+        new CreateOrderRequest(
+            Instrument.BTC_USD, OrderSide.BUY, OrderType.LIMIT, order.price(), order.originalQty());
+    assertThatThrownBy(() -> orderService.placeOrder(request, UUID.randomUUID(), key))
+        .isInstanceOf(com.dete.order.exception.InvalidOrderException.class);
+    verify(accountClient, never()).reserveFunds(any(), any(), any(), any(Long.class));
+  }
+
+  @Test
+  void cancellationReleaseFailureMustRollBackInsteadOfReportingSuccess() {
+    UUID orderId = UUID.randomUUID();
+    UUID accountId = UUID.randomUUID();
+    OrderRecord order =
+        OrderRecord.createNew(
+            orderId,
+            accountId,
+            Instrument.BTC_USD,
+            OrderSide.SELL,
+            OrderType.LIMIT,
+            60000L * FixedPoint.SCALE,
+            FixedPoint.SCALE,
+            UUID.randomUUID());
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+    org.mockito.Mockito.doThrow(new IllegalStateException("Account service unavailable"))
+        .when(accountClient)
+        .releaseFunds(accountId, orderId, "BTC", FixedPoint.SCALE);
+    assertThatThrownBy(() -> orderService.handleOrderCancelled(orderId))
+        .isInstanceOf(IllegalStateException.class);
   }
 }

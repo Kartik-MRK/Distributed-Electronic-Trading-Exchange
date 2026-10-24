@@ -19,7 +19,7 @@ export function ReplayViewer({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [trades, setTrades] = useState<ReplayTradeRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [preview, setPreview] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
   const [timeWindowMinutes, setTimeWindowMinutes] = useState(15);
   useEffect(() => {
     let active = true;
@@ -38,13 +38,13 @@ export function ReplayViewer({
       .then((data) => {
         if (active) {
           setTrades(data);
-          setPreview(false);
+          setUnavailable(false);
         }
       })
       .catch(() => {
         if (active) {
-          setTrades(generateSyntheticTrades(instrument, 60));
-          setPreview(true);
+          setTrades([]);
+          setUnavailable(true);
         }
       })
       .finally(() => {
@@ -76,8 +76,8 @@ export function ReplayViewer({
           <p>
             {loading
               ? 'Loading events...'
-              : preview
-                ? 'Sample events / Illustrative depth around each execution.'
+              : unavailable
+                ? 'Replay data is unavailable. Please try again.'
                 : 'Recorded executions / Illustrative depth around each execution.'}
           </p>
         </div>
@@ -211,37 +211,4 @@ export function ReplayViewer({
       )}
     </div>
   );
-}
-
-function generateSyntheticTrades(
-  instrument: Instrument,
-  count: number,
-): ReplayTradeRecord[] {
-  const basePrice =
-    instrument === 'BTC_USDT' ? 65000 : instrument === 'ETH_USDT' ? 3500 : 150;
-  const list: ReplayTradeRecord[] = [];
-  const now = Date.now();
-
-  for (let i = 0; i < count; i++) {
-    const delta =
-      (Math.sin(i / 5) * 0.01 + (i % 3 === 0 ? 0.002 : -0.002)) * basePrice;
-    const price = Math.round((basePrice + delta) * 100000000);
-    const quantity = Math.round((0.01 + (i % 5) * 0.02) * 100000000);
-    const time = new Date(now - (count - i) * 2000).toISOString();
-
-    list.push({
-      tradeId: `trade-replay-${i + 1}`,
-      instrument,
-      sequenceNumber: 1000 + i,
-      price,
-      quantity,
-      buyOrderId: `order-b-${i}`,
-      sellOrderId: `order-s-${i}`,
-      buyAccountId: '00000000-0000-0000-0000-000000000001',
-      sellAccountId: '00000000-0000-0000-0000-000000000002',
-      executedAt: time,
-    });
-  }
-
-  return list;
 }

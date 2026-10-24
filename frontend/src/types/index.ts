@@ -1,4 +1,4 @@
-export type Instrument = 'BTC_USDT' | 'ETH_USDT' | 'SOL_USDT';
+export type Instrument = 'BTC_USD' | 'ETH_USD' | 'SOL_USD';
 
 export type OrderSide = 'BUY' | 'SELL';
 
@@ -39,7 +39,7 @@ export interface TradeRecord {
 }
 
 export interface CandleData {
-  time: number; // Unix timestamp in seconds for lightweight-charts
+  openTime: number; // Exchange window start in epoch milliseconds
   open: number;
   high: number;
   low: number;
@@ -163,15 +163,15 @@ export interface JvmMemoryInfo {
 
 export interface SystemMetricsSnapshot {
   timestamp: number;
-  matchingThroughput: number;
+  matchingThroughput: number | null;
   e2eLatency: {
     p50Ms: number;
     p95Ms: number;
     p99Ms: number;
-  };
+  } | null;
   kafkaConsumerLag: KafkaLagInfo[];
   servicesHealth: ServiceHealth[];
-  activeWebsocketConnections: number;
+  activeWebsocketConnections: number | null;
   jvmMemory: JvmMemoryInfo[];
 }
 

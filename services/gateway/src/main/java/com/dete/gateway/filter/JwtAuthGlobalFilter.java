@@ -86,7 +86,13 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
     List<String> roles = jwtTokenValidator.extractRoles(claims);
 
     // Enforce admin role if accessing admin routes
-    if (path.startsWith("/admin/") && (roles == null || !roles.contains("ADMIN"))) {
+    boolean adminOnly =
+        path.equals("/admin")
+            || path.startsWith("/admin/")
+            || path.equals("/accounts/deposit")
+            || (path.startsWith("/simulator/") && !path.equals("/simulator/status"));
+    if (adminOnly
+        && (roles == null || (!roles.contains("ADMIN") && !roles.contains("ROLE_ADMIN")))) {
       log.warn("Access denied to {}: user {} lacks ADMIN role", path, username);
       return forbiddenResponse(exchange, "Administrator role required");
     }
@@ -117,7 +123,7 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
         || path.startsWith("/actuator/")
         || path.startsWith("/fallback/")
         || path.startsWith("/internal/metrics/")
-        || path.startsWith("/simulator/")
+        || path.equals("/simulator/status")
         || path.equals("/internal/metrics/snapshot")
         || path.equals("/auth")
         || path.equals("/market-data")

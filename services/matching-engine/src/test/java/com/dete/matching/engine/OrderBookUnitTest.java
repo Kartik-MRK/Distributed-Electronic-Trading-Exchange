@@ -166,7 +166,12 @@ class OrderBookUnitTest {
 
     // Market buy for 2 BTC sweeps 1 BTC @ 50,000 and 1 BTC @ 51,000
     OrderPlacedEvent marketBuy =
-        createOrder(accountC, OrderSide.BUY, OrderType.MARKET, 0, 2 * FixedPoint.SCALE);
+        createOrder(
+            accountC,
+            OrderSide.BUY,
+            OrderType.MARKET,
+            51_000 * FixedPoint.SCALE,
+            2 * FixedPoint.SCALE);
     MatchResult result = orderBook.processOrder(marketBuy);
 
     assertThat(result.trades()).hasSize(2);
@@ -193,7 +198,12 @@ class OrderBookUnitTest {
 
     // Market buy for 3 BTC when only 1 BTC available
     OrderPlacedEvent marketBuy =
-        createOrder(accountB, OrderSide.BUY, OrderType.MARKET, 0, 3 * FixedPoint.SCALE);
+        createOrder(
+            accountB,
+            OrderSide.BUY,
+            OrderType.MARKET,
+            50_000 * FixedPoint.SCALE,
+            3 * FixedPoint.SCALE);
     MatchResult result = orderBook.processOrder(marketBuy);
 
     assertThat(result.trades()).hasSize(1);
@@ -430,5 +440,27 @@ class OrderBookUnitTest {
     assertThat(depth.asks()).hasSize(1);
     assertThat(depth.asks().get(0).price()).isEqualTo(50_100 * FixedPoint.SCALE);
     assertThat(depth.asks().get(0).volume()).isEqualTo(5 * FixedPoint.SCALE);
+  }
+
+  @Test
+  void marketBuyNeverExceedsReservedPriceCap() {
+    orderBook.processOrder(
+        createOrder(
+            accountA,
+            OrderSide.SELL,
+            OrderType.LIMIT,
+            51_000L * FixedPoint.SCALE,
+            FixedPoint.SCALE));
+    MatchResult result =
+        orderBook.processOrder(
+            createOrder(
+                accountB,
+                OrderSide.BUY,
+                OrderType.MARKET,
+                50_000L * FixedPoint.SCALE,
+                FixedPoint.SCALE));
+    assertThat(result.trades()).isEmpty();
+    assertThat(result.cancelledEvent().remainingQuantity()).isEqualTo(FixedPoint.SCALE);
+    assertThat(orderBook.totalAskVolume()).isEqualTo(FixedPoint.SCALE);
   }
 }

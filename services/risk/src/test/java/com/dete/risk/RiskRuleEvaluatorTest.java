@@ -375,7 +375,7 @@ class RiskRuleEvaluatorTest {
       // Resting SELL order at 60,000
       evaluator
           .getAccountState(accountId)
-          .addRestingOrder(order1, OrderSide.SELL, 60_000L * FixedPoint.SCALE);
+          .addRestingOrder(order1, Instrument.BTC_USD, OrderSide.SELL, 60_000L * FixedPoint.SCALE);
 
       // New BUY order at 60,000 (crosses resting sell)
       ValidateOrderRequest crossingBuy =
@@ -401,7 +401,7 @@ class RiskRuleEvaluatorTest {
       // Resting BUY order at 60,000
       evaluator
           .getAccountState(accountId)
-          .addRestingOrder(order1, OrderSide.BUY, 60_000L * FixedPoint.SCALE);
+          .addRestingOrder(order1, Instrument.BTC_USD, OrderSide.BUY, 60_000L * FixedPoint.SCALE);
 
       // New SELL order at 59,000 (crosses resting buy)
       ValidateOrderRequest crossingSell =
@@ -426,7 +426,7 @@ class RiskRuleEvaluatorTest {
       // Resting BUY order at 59,000
       evaluator
           .getAccountState(accountId)
-          .addRestingOrder(order1, OrderSide.BUY, 59_000L * FixedPoint.SCALE);
+          .addRestingOrder(order1, Instrument.BTC_USD, OrderSide.BUY, 59_000L * FixedPoint.SCALE);
 
       // New SELL order at 61,000 (does not cross)
       ValidateOrderRequest nonCrossingSell =
@@ -449,7 +449,7 @@ class RiskRuleEvaluatorTest {
       UUID order1 = UUID.randomUUID();
       evaluator
           .getAccountState(accountId)
-          .addRestingOrder(order1, OrderSide.SELL, 60_000L * FixedPoint.SCALE);
+          .addRestingOrder(order1, Instrument.BTC_USD, OrderSide.SELL, 60_000L * FixedPoint.SCALE);
 
       // Close the resting order
       evaluator.onOrderClosed(accountId, order1);
@@ -467,5 +467,24 @@ class RiskRuleEvaluatorTest {
       ValidateOrderResponse response = evaluator.evaluate(buyOrder);
       assertThat(response.approved()).isTrue();
     }
+  }
+
+  @Test
+  void selfTradePreventionDoesNotComparePricesAcrossInstruments() {
+    evaluator
+        .getAccountState(accountId)
+        .addRestingOrder(
+            UUID.randomUUID(), Instrument.ETH_USD, OrderSide.SELL, 3000L * FixedPoint.SCALE);
+    ValidateOrderResponse response =
+        evaluator.evaluate(
+            new ValidateOrderRequest(
+                UUID.randomUUID(),
+                accountId,
+                Instrument.BTC_USD,
+                OrderSide.BUY,
+                OrderType.LIMIT,
+                60000L * FixedPoint.SCALE,
+                FixedPoint.SCALE));
+    assertThat(response.approved()).isTrue();
   }
 }

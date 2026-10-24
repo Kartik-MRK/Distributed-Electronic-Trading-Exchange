@@ -1,17 +1,10 @@
 name: DETE CD — Continuous Deployment to Oracle Cloud
 
 on:
-  push:
-    branches: [ master, main ]
-    paths:
-      - 'services/**'
-      - 'libs/**'
-      - 'frontend/**'
-      - 'infra/**'
-      - 'scripts/**'
-      - 'benchmarks/**'
-      - 'build.gradle.kts'
-      - '.github/workflows/cd.yml'
+  workflow_run:
+    workflows: ["DETE CI — Continuous Integration"]
+    types: [completed]
+    branches: [master, main]
   workflow_dispatch:
 
 concurrency:
@@ -20,11 +13,18 @@ concurrency:
 
 jobs:
   deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     name: Deploy to K3s Cluster (Oracle VPS)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Configure SSH Key
         env:
@@ -56,12 +56,12 @@ jobs:
             set -e
             echo "=========================================================="
             echo " Starting DETE Automated Deployment on K3s Cluster"
-            echo " Commit: ${{ github.sha }}"
+            echo " Commit: ${{ github.event.workflow_run.head_sha || github.sha }}"
             echo "=========================================================="
 
             cd /home/ubuntu/dete
-            git fetch origin master
-            git reset --hard origin/master
+            git fetch origin ${{ github.event.workflow_run.head_sha || github.sha }}
+            git reset --hard ${{ github.event.workflow_run.head_sha || github.sha }}
             chmod +x ./gradlew ./scripts/*.sh ./scripts/chaos/*.sh ./scripts/*.py 2>/dev/null || true
 
             echo "--> Compiling Spring Boot Executable JARs..."
@@ -96,6 +96,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Configure SSH Key
         env:
@@ -129,7 +131,7 @@ jobs:
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           echo "### 🚀 DETE Deployment Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Host**: \`$TARGET_HOST\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: \`${{ github.event.workflow_run.head_sha || github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Trading Web UI**: https://dete.kartik-mrk.me/" >> $GITHUB_STEP_SUMMARY
           echo "- **Grafana Telemetry**: https://dete.kartik-mrk.me/grafana/" >> $GITHUB_STEP_SUMMARY
 

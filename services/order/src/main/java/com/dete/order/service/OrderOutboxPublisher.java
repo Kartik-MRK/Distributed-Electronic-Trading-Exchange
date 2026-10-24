@@ -39,6 +39,7 @@ public class OrderOutboxPublisher {
   @Scheduled(
       fixedDelayString = "${order.outbox.fixed-delay-ms:50}",
       initialDelayString = "${order.outbox.initial-delay-ms:500}")
+  @org.springframework.transaction.annotation.Transactional
   public void publishOutboxMessages() {
     List<OutboxRecord> records = outboxRepository.fetchUnpublished(batchSize);
     if (records.isEmpty()) {

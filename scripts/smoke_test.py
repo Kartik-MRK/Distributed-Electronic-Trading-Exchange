@@ -68,7 +68,7 @@ def run_smoke_test():
         print(f"  --> Gateway Health: UP ({health['elapsed_ms']:.1f}ms)")
     else:
         print(f"  [!] Gateway health returned status {health['status']}: {health['error']}")
-        # Don't fail immediately, continue to test services directly if needed
+        errors.append("Gateway health check failed")
 
     # 2. Authentication
     print("\n[STEP 2/7] Authenticating Test User 'demo'...")
@@ -77,14 +77,6 @@ def run_smoke_test():
         method="POST",
         data={"identifier": "demo", "password": "DemoPassword123!"}
     )
-    if login["status"] != 200:
-        # Fallback to direct auth service
-        login = http_call(
-            f"{AUTH_DIRECT_URL}/auth/login",
-            method="POST",
-            data={"identifier": "demo", "password": "DemoPassword123!"}
-        )
-    
     if login["status"] != 200 or not login["data"] or "accessToken" not in login["data"]:
         errors.append(f"Failed to authenticate user 'demo': HTTP {login['status']} - {login.get('error')}")
         print(f"  [FAIL] Login response: {login}")
@@ -100,14 +92,11 @@ def run_smoke_test():
         method="POST",
         data={"identifier": "bot_maker", "password": "BotMakerPass123!"}
     )
-    if bot_login["status"] != 200:
-        bot_login = http_call(
-            f"{AUTH_DIRECT_URL}/auth/login",
-            method="POST",
-            data={"identifier": "bot_maker", "password": "BotMakerPass123!"}
-        )
     bot_token = bot_login["data"]["accessToken"] if bot_login["status"] == 200 else None
     bot_id = bot_login["data"]["userId"] if bot_login["status"] == 200 else None
+    if not bot_token or not bot_id:
+        print("  [FAIL] Counterparty login failed; matching cannot be verified")
+        return False
 
     # 3. Check Initial Balances
     print("\n[STEP 3/7] Verifying Account Balances...")
@@ -140,9 +129,6 @@ def run_smoke_test():
     }
     buy_res = http_call(f"{BASE_URL}/orders", method="POST", data=buy_req, headers=buy_headers)
     if buy_res["status"] not in (200, 201, 202):
-        buy_res = http_call(f"{ORDER_DIRECT_URL}/orders", method="POST", data=buy_req, headers=buy_headers)
-        
-    if buy_res["status"] not in (200, 201, 202):
         errors.append(f"BUY order placement failed: HTTP {buy_res['status']} - {buy_res.get('error')}")
         print(f"  [FAIL] Order response: {buy_res}")
         return False
@@ -169,6 +155,9 @@ def run_smoke_test():
             sell_id = sell_res["data"].get("orderId") or sell_res["data"].get("id")
             print(f"  --> SELL Order submitted: {sell_id} in {sell_res['elapsed_ms']:.1f}ms")
     
+        else:
+            errors.append(f"SELL order failed: HTTP {sell_res['status']}")
+
     # 6. Verify Market Data & Order Book
     print("\n[STEP 6/7] Querying L2 Order Book & Trades...")
     time.sleep(0.5)
@@ -178,11 +167,26 @@ def run_smoke_test():
         asks = len(book["data"].get("asks", []))
         print(f"  --> L2 Order Book depth: {bids} bids, {asks} asks (seq={book['data'].get('sequenceNumber')})")
     else:
-        print(f"  [!] OrderBook lookup returned {book['status']}")
+        errors.append(f"OrderBook lookup returned {book['status']}")
 
     trades = http_call(f"{BASE_URL}/market-data/BTC_USD/trades")
     if trades["status"] == 200 and isinstance(trades["data"], list):
         print(f"  --> Recorded Trades on Tape: {len(trades['data'])} trades verified")
+
+    # Require an execution for this order and its matching account settlement.
+    settled = False
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        tape = http_call(f"{BASE_URL}/market-data/BTC_USD/trades?limit=500")
+        personal = http_call(f"{BASE_URL}/accounts/me/trades?limit=100", headers=auth_headers)
+        if tape["status"] == 200 and personal["status"] == 200:
+            trade_ids = {t.get("tradeId") for t in tape["data"] if t.get("buyOrderId") == buy_id}
+            if trade_ids and any(t.get("tradeId") in trade_ids for t in personal["data"]):
+                settled = True
+                break
+        time.sleep(0.5)
+    if not settled:
+        errors.append("No matching execution and settlement observed for the submitted BUY order")
 
     # 7. Post-Trade Balance Verification
     print("\n[STEP 7/7] Verifying Post-Trade Account Balances...")
@@ -194,6 +198,9 @@ def run_smoke_test():
                 post_usd = b.get("available")
         print(f"  --> Post-Trade USD Available: {post_usd / SCALE if post_usd else 'N/A'}")
     
+    else:
+        errors.append("Post-trade balance lookup failed")
+
     print("\n" + "=" * 65)
     if not errors:
         print("  SMOKE TESTS PASSED: Exchange is operational and ready.")

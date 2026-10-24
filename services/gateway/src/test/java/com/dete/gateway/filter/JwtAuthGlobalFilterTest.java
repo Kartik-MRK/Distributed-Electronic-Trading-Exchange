@@ -154,4 +154,42 @@ class JwtAuthGlobalFilterTest {
     StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
     assertThat(chainCalled).isTrue();
   }
+
+  @Test
+  void traderCannotMintFundsThroughGateway() {
+    String token = generateToken(UUID.randomUUID(), "trader", List.of("ROLE_TRADER"), 60000L);
+    var exchange =
+        MockServerWebExchange.from(
+            MockServerHttpRequest.post("/accounts/deposit")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .build());
+    StepVerifier.create(
+            filter.filter(
+                exchange,
+                ignored -> {
+                  throw new AssertionError("Deposit must not be forwarded");
+                }))
+        .verifyComplete();
+    assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  void prefixedAdminRoleCanAccessAdminRoute() {
+    String token = generateToken(UUID.randomUUID(), "admin", List.of("ROLE_ADMIN"), 60000L);
+    var exchange =
+        MockServerWebExchange.from(
+            MockServerHttpRequest.get("/admin/audit")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .build());
+    AtomicBoolean forwarded = new AtomicBoolean();
+    StepVerifier.create(
+            filter.filter(
+                exchange,
+                ignored -> {
+                  forwarded.set(true);
+                  return Mono.empty();
+                }))
+        .verifyComplete();
+    assertThat(forwarded).isTrue();
+  }
 }

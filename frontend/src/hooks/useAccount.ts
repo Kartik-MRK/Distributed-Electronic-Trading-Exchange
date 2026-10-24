@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { BalanceRecord, OrderRecord, TradeRecord, Instrument, OrderSide, OrderType } from '../types';
-import { api, INITIAL_DEMO_BALANCES, normalizeOrderRecord } from '../lib/api';
-import { getCurrentUser, getAuthToken } from '../lib/auth';
+import { api } from '../lib/api';
+import { getCurrentUser } from '../lib/auth';
 import { useWebSocket } from './useWebSocket';
 
 export function useAccount() {
   const { subscribe } = useWebSocket();
-  const [balances, setBalances] = useState<BalanceRecord[]>(INITIAL_DEMO_BALANCES);
+  const [balances, setBalances] = useState<BalanceRecord[]>([]);
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [orderHistory, setOrderHistory] = useState<OrderRecord[]>([]);
   const [tradeHistory, setTradeHistory] = useState<TradeRecord[]>([]);
@@ -18,7 +18,7 @@ export function useAccount() {
   const refreshBalances = useCallback(async () => {
     try {
       const data = await api.account.getBalances();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setBalances(data);
       }
     } catch {
@@ -70,6 +70,16 @@ export function useAccount() {
     refreshTrades();
   }, [refreshBalances, refreshOrders, refreshOrderHistory, refreshTrades]);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      void refreshBalances();
+      void refreshOrders();
+      void refreshOrderHistory();
+      void refreshTrades();
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [refreshBalances, refreshOrders, refreshOrderHistory, refreshTrades]);
+
   // Subscribe to real-time order and balance updates via WebSocket for current account
   useEffect(() => {
     const user = getCurrentUser();
@@ -78,65 +88,29 @@ export function useAccount() {
     const orderTopic = `/topic/orders.${accountId}`;
     const unsubscribeOrder = subscribe<Record<string, unknown>>(orderTopic, (incomingOrder) => {
       if (!incomingOrder) return;
-      let updatedOrder: OrderRecord;
-      try {
-        updatedOrder = normalizeOrderRecord(incomingOrder);
-      } catch {
-        updatedOrder = incomingOrder as unknown as OrderRecord;
-      }
-      if (!updatedOrder || !updatedOrder.orderId) return;
-
-      setOrders((prev) => {
-        const index = prev.findIndex((o) => o.orderId === updatedOrder.orderId);
-        if (index >= 0) {
-          const updated = [...prev];
-          updated[index] = updatedOrder;
-          return updated;
-        }
-        return [updatedOrder, ...prev];
-      });
-
-      // If order got accepted, filled, or partially filled, refresh balances
-      if (
-        updatedOrder.status === 'FILLED' ||
-        updatedOrder.status === 'PARTIALLY_FILLED' ||
-        updatedOrder.status === 'ACCEPTED'
-      ) {
-        refreshBalances();
-        refreshTrades();
-      }
+      // Stream messages are deltas, not complete OrderRecord payloads.
+      void refreshOrders();
+      void refreshOrderHistory();
+      void refreshBalances();
+      void refreshTrades();
     });
 
     return () => {
       unsubscribeOrder();
     };
-  }, [subscribe, refreshBalances, refreshTrades]);
+  }, [subscribe, refreshOrders, refreshOrderHistory, refreshBalances, refreshTrades]);
 
   // Cancel order
   const cancelOrder = useCallback(async (orderId: string) => {
     setIsLoading(true);
     try {
       await api.orders.cancelOrder(orderId);
-      // Optimistic status update
-      setOrders((prev) =>
-        prev.map((o) =>
-          o.orderId === orderId ? { ...o, status: 'CANCELLED' } : o
-        )
-      );
-      await refreshBalances();
-      return true;
-    } catch {
-      // If server unreachable in standalone demo, optimistically mark cancelled
-      setOrders((prev) =>
-        prev.map((o) =>
-          o.orderId === orderId ? { ...o, status: 'CANCELLED' } : o
-        )
-      );
+      await Promise.all([refreshBalances(), refreshOrders(), refreshOrderHistory()]);
       return true;
     } finally {
       setIsLoading(false);
     }
-  }, [refreshBalances]);
+  }, [refreshBalances, refreshOrders, refreshOrderHistory]);
 
   // Helper to place order and add to local state
   const placeOrder = useCallback(
@@ -147,85 +121,10 @@ export function useAccount() {
       price: string;
       quantity: string;
     }): Promise<OrderRecord> => {
-      try {
-        const order = await api.orders.placeOrder(params);
-        setOrders((prev) => [order, ...prev]);
-        await refreshBalances();
-        await refreshOrders();
-        // Trigger follow-up refreshes to capture matching engine executions and trade settlements
-        setTimeout(() => { void refreshBalances(); void refreshOrders(); void refreshOrderHistory(); void refreshTrades(); }, 600);
-        setTimeout(() => { void refreshBalances(); void refreshOrders(); void refreshOrderHistory(); void refreshTrades(); }, 1800);
-        setTimeout(() => { void refreshBalances(); void refreshOrders(); void refreshOrderHistory(); void refreshTrades(); }, 3500);
-        return order;
-      } catch (err) {
-        // If user is authenticated with a token, always surface real exchange rejection/error
-        const token = getAuthToken();
-        if (token) {
-          throw err;
-        }
-
-        // Fallback for standalone demo: simulate order lifecycle
-        const simOrder: OrderRecord = {
-          orderId: `ord-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          accountId: getCurrentUser()?.userId || 'demo-user-id',
-          instrument: params.instrument,
-          side: params.side,
-          type: params.type,
-          price: params.price,
-          quantity: params.quantity,
-          filledQuantity: params.type === 'MARKET' ? params.quantity : '0.0000',
-          remainingQuantity: params.type === 'MARKET' ? '0.0000' : params.quantity,
-          status: params.type === 'MARKET' ? 'FILLED' : 'ACCEPTED',
-          createdAt: new Date().toISOString(),
-        };
-
-        setOrders((prev) => [simOrder, ...prev]);
-
-        // If market order, simulate immediate fill and update balances
-        if (params.type === 'MARKET') {
-          const cost = parseFloat(params.price) * parseFloat(params.quantity);
-          const [base, quote] = params.instrument.split('_');
-
-          setBalances((prev) =>
-            prev.map((b) => {
-              if (params.side === 'BUY') {
-                if (b.asset === quote) {
-                  const newAvail = Math.max(0, parseFloat(b.available) - cost).toFixed(2);
-                  return { ...b, available: newAvail, total: (parseFloat(newAvail) + parseFloat(b.reserved)).toFixed(2) };
-                }
-                if (b.asset === base) {
-                  const newAvail = (parseFloat(b.available) + parseFloat(params.quantity)).toFixed(4);
-                  return { ...b, available: newAvail, total: (parseFloat(newAvail) + parseFloat(b.reserved)).toFixed(4) };
-                }
-              } else {
-                if (b.asset === base) {
-                  const newAvail = Math.max(0, parseFloat(b.available) - parseFloat(params.quantity)).toFixed(4);
-                  return { ...b, available: newAvail, total: (parseFloat(newAvail) + parseFloat(b.reserved)).toFixed(4) };
-                }
-                if (b.asset === quote) {
-                  const newAvail = (parseFloat(b.available) + cost).toFixed(2);
-                  return { ...b, available: newAvail, total: (parseFloat(newAvail) + parseFloat(b.reserved)).toFixed(2) };
-                }
-              }
-              return b;
-            })
-          );
-
-          // Add to personal trade fills
-          const simTrade: TradeRecord = {
-            tradeId: `tr-${Date.now()}`,
-            instrument: params.instrument,
-            price: params.price,
-            quantity: params.quantity,
-            makerSide: params.side === 'BUY' ? 'SELL' : 'BUY',
-            takerSide: params.side,
-            executedAt: new Date().toISOString(),
-          };
-          setTradeHistory((prev) => [simTrade, ...prev]);
-        }
-
-        return simOrder;
-      }
+      const order = await api.orders.placeOrder(params);
+      setOrders((prev) => [order, ...prev]);
+      await Promise.all([refreshBalances(), refreshOrders(), refreshOrderHistory(), refreshTrades()]);
+      return order;
     },
     [refreshBalances, refreshOrders, refreshOrderHistory, refreshTrades]
   );

@@ -15,7 +15,7 @@ import {
   Hash,
 } from 'lucide-react';
 import { getCurrentUser, clearAuthSession } from '@/lib/auth';
-import { api, INITIAL_DEMO_BALANCES } from '@/lib/api';
+import { api } from '@/lib/api';
 import { BalanceRecord, UserRecord } from '@/types';
 
 interface UserProfileModalProps {
@@ -86,10 +86,10 @@ export function UserProfileModal({
       if (data && data.length > 0) {
         setBalances(data);
       } else {
-        setBalances(INITIAL_DEMO_BALANCES);
+        setBalances([]);
       }
     } catch {
-      setBalances(INITIAL_DEMO_BALANCES);
+      setBalances([]);
     } finally {
       setIsLoadingBalances(false);
     }

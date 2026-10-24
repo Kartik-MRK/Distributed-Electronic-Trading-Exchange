@@ -23,13 +23,11 @@ public class MetricsSnapshotController {
   private static final Logger log = LoggerFactory.getLogger(MetricsSnapshotController.class);
 
   private final WebClient webClient;
-  private final String prometheusUrl;
 
   private final Map<String, ServiceTarget> serviceTargets = new ConcurrentHashMap<>();
 
   public MetricsSnapshotController(
       WebClient.Builder webClientBuilder,
-      @Value("${PROMETHEUS_URL:http://localhost:9090}") String prometheusUrl,
       @Value("${AUTH_SERVICE_URL:http://localhost:8081}") String authUrl,
       @Value("${ACCOUNT_SERVICE_URL:http://localhost:8082}") String accountUrl,
       @Value("${ORDER_SERVICE_URL:http://localhost:8083}") String orderUrl,
@@ -40,7 +38,6 @@ public class MetricsSnapshotController {
       @Value("${SIMULATOR_SERVICE_URL:http://localhost:8089}") String simulatorUrl) {
 
     this.webClient = webClientBuilder.build();
-    this.prometheusUrl = prometheusUrl;
 
     serviceTargets.put("gateway", new ServiceTarget("gateway", 8080, "http://localhost:8080"));
     serviceTargets.put("auth", new ServiceTarget("auth", 8081, authUrl));
@@ -61,51 +58,20 @@ public class MetricsSnapshotController {
         .collectList()
         .map(
             healthList -> {
-              Map<String, Object> snapshot =
-                  Map.of(
-                      "timestamp", Instant.now().toEpochMilli(),
-                      "matchingThroughput", 48.5,
-                      "e2eLatency",
-                          Map.of(
-                              "p50Ms", 0.38,
-                              "p95Ms", 1.12,
-                              "p99Ms", 2.35),
-                      "kafkaConsumerLag",
-                          List.of(
-                              Map.of("topic", "order.commands", "group", "engine-group", "lag", 0),
-                              Map.of(
-                                  "topic",
-                                  "trade.executions",
-                                  "group",
-                                  "account-settlement-group",
-                                  "lag",
-                                  0),
-                              Map.of(
-                                  "topic", "order.events", "group", "market-data-group", "lag", 0),
-                              Map.of(
-                                  "topic",
-                                  "audit.events",
-                                  "group",
-                                  "audit-service-group",
-                                  "lag",
-                                  0)),
-                      "servicesHealth", healthList,
-                      "activeWebsocketConnections", 3,
-                      "jvmMemory",
-                          List.of(
-                              Map.of("service", "matching-engine", "usedMb", 168, "maxMb", 1024),
-                              Map.of("service", "order", "usedMb", 195, "maxMb", 1024),
-                              Map.of("service", "gateway", "usedMb", 142, "maxMb", 1024),
-                              Map.of("service", "account", "usedMb", 158, "maxMb", 1024),
-                              Map.of("service", "market-data", "usedMb", 175, "maxMb", 1024)));
+              Map<String, Object> snapshot = new java.util.LinkedHashMap<>();
+              snapshot.put("timestamp", Instant.now().toEpochMilli());
+              // Only service health is currently collected. Missing telemetry is not a zero value.
+              snapshot.put("matchingThroughput", null);
+              snapshot.put("e2eLatency", null);
+              snapshot.put("kafkaConsumerLag", List.of());
+              snapshot.put("servicesHealth", healthList);
+              snapshot.put("activeWebsocketConnections", null);
+              snapshot.put("jvmMemory", List.of());
               return ResponseEntity.ok(snapshot);
             });
   }
 
   private Mono<Map<String, Object>> checkHealth(String service, String baseUrl, int port) {
-    if ("gateway".equalsIgnoreCase(service)) {
-      return Mono.just(Map.of("service", service, "status", "UP", "port", port));
-    }
     return webClient
         .get()
         .uri(baseUrl + "/actuator/health")
@@ -114,7 +80,8 @@ public class MetricsSnapshotController {
         .timeout(Duration.ofMillis(800))
         .map(
             body -> {
-              String status = body.get("status") != null ? body.get("status").toString() : "UP";
+              String status =
+                  body.get("status") != null ? body.get("status").toString() : "UNKNOWN";
               return Map.<String, Object>of("service", service, "status", status, "port", port);
             })
         .onErrorReturn(Map.of("service", service, "status", "UNKNOWN", "port", port));

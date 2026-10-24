@@ -50,7 +50,7 @@ public class RiskOrderEventConsumer {
               || OrderRejectedEvent.EVENT_TYPE.equals(eventType)
               || node.has("reason")
               || (node.has("fillQuantity") && !node.has("remainingQuantity"))
-              || (node.has("remainingQuantity") && node.get("remainingQuantity").asLong() == 0L);
+              || (node.has("remainingQuantity") && !node.has("fillQuantity"));
 
       if (isTerminal && orderId != null) {
         riskRuleEvaluator.onOrderClosed(accountId, orderId);

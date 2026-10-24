@@ -14,7 +14,7 @@ export function OrderBook({
       className="depth-row font-mono"
       key={level.price}
       onClick={() => onSelectPrice(level.price)}
-      aria-label={`Set order price to ${level.price} USDT`}
+      aria-label={`Set order price to ${level.price} USD`}
     >
       <span
         className={`depth-fill ${bid ? 'bid' : 'ask'}`}
@@ -30,7 +30,7 @@ export function OrderBook({
   return (
     <div className="order-book">
       <div className="depth-columns">
-        <span>Price (USDT)</span>
+        <span>Price (USD)</span>
         <span>Size ({instrument.split('_')[0]})</span>
         <span>Total</span>
       </div>

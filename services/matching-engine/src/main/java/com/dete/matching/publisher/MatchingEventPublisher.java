@@ -13,8 +13,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Publishes trade executions and order lifecycle events to Kafka. Guarantees atomic dispatch of
- * trade and order events produced by match results.
+ * Publishes trade executions and order lifecycle events to Kafka. Sends are acknowledged
+ * individually; publication across topics is not atomic.
  */
 @Component
 public class MatchingEventPublisher {
@@ -54,11 +54,11 @@ public class MatchingEventPublisher {
       }
 
       // 3. Fills and Partial Fills
-      for (OrderFilledEvent filled : result.filledEvents()) {
-        publishOrderEvent(filled.orderId().toString(), filled);
-      }
       for (OrderPartiallyFilledEvent partial : result.partiallyFilledEvents()) {
         publishOrderEvent(partial.orderId().toString(), partial);
+      }
+      for (OrderFilledEvent filled : result.filledEvents()) {
+        publishOrderEvent(filled.orderId().toString(), filled);
       }
 
       // 4. Cancellations

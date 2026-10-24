@@ -5,7 +5,7 @@ import { ConnectionState, wsManager, WSListener } from '../lib/ws';
 
 export function useWebSocket() {
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
-  const [latency, setLatency] = useState<number>(24);
+  const [latency, setLatency] = useState<number>(0);
 
   useEffect(() => {
     wsManager.connect();

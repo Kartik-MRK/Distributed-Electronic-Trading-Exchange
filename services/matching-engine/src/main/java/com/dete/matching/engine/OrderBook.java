@@ -240,9 +240,15 @@ public final class OrderBook {
       return;
     }
 
+    // A market BUY price is the reservation cap supplied by Order Service.
+    // Never execute above that cap and consume funds reserved for other orders.
+    if (incoming.side() == OrderSide.BUY && incoming.price() <= 0) {
+      result.setRejectedEvent(
+          OrderRejectedEvent.of(incoming.orderId(), "Market BUY requires a positive price cap"));
+      return;
+    }
     result.setAcceptedEvent(OrderAcceptedEvent.of(incoming.orderId(), incoming.sequenceNumber()));
-
-    executeMatching(incoming, result, true, 0);
+    executeMatching(incoming, result, incoming.side() != OrderSide.BUY, incoming.price());
 
     if (!incoming.isFilled()) {
       // Market remainder is immediately cancelled (never rests)

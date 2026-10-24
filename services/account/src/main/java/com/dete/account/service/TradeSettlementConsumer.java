@@ -39,7 +39,7 @@ public class TradeSettlementConsumer {
     } catch (Exception e) {
       log.error(
           "Failed to process settlement for trade payload {}: {}", payload, e.getMessage(), e);
-      // In production, failed settlements go to trade.executions.DLQ
+      throw new IllegalStateException("Trade settlement failed", e);
     }
   }
 }

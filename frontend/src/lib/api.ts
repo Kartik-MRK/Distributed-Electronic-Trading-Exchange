@@ -17,7 +17,7 @@ import {
   UserRecord,
   VerifyOtpRequest,
 } from '../types';
-import { getAuthToken } from './auth';
+import { getAuthToken, getCurrentUser } from './auth';
 import {
   toBackendInstrument,
   toFrontendInstrument,
@@ -105,28 +105,8 @@ async function request<T>(
   }
 }
 
-function formatOrderQuantity(val: unknown, isExplicitBackendNanos: boolean): string {
-  if (val == null) return '0.0000';
-  if (typeof val === 'number') {
-    if (isExplicitBackendNanos || (Number.isInteger(val) && val >= 1000)) {
-      return (val / 100_000_000).toFixed(4);
-    }
-    return val.toFixed(4);
-  }
-  const s = String(val).trim();
-  if (!s || s === '0') return '0.0000';
-  if (s.includes('.')) {
-    const parsed = parseFloat(s);
-    return Number.isFinite(parsed) ? parsed.toFixed(4) : '0.0000';
-  }
-  const parsedInt = parseInt(s, 10);
-  if (Number.isFinite(parsedInt)) {
-    if (isExplicitBackendNanos || parsedInt >= 1000) {
-      return (parsedInt / 100_000_000).toFixed(4);
-    }
-    return parsedInt.toFixed(4);
-  }
-  return '0.0000';
+function formatOrderQuantity(val: unknown): string {
+  return (Number(val ?? 0) / 100_000_000).toFixed(8);
 }
 
 export function normalizeOrderRecord(raw: Record<string, unknown>): OrderRecord {
@@ -139,21 +119,19 @@ export function normalizeOrderRecord(raw: Record<string, unknown>): OrderRecord 
   if (priceRaw != null && priceRaw !== 0 && priceRaw !== '0') {
     const pNum = typeof priceRaw === 'number' ? priceRaw : parseFloat(String(priceRaw));
     if (Number.isFinite(pNum) && pNum > 0) {
-      priceStr = pNum >= 100_000_000 ? (pNum / 100_000_000).toFixed(2) : pNum.toFixed(2);
+      priceStr = (pNum / 100_000_000).toFixed(2);
     }
   }
 
-  const isBackend =
-    raw.originalQty !== undefined || raw.filledQty !== undefined || raw.remainingQty !== undefined;
 
   const rawQty = raw.originalQty ?? raw.quantity ?? 0;
-  const normalizedQty = formatOrderQuantity(rawQty, isBackend || raw.originalQty !== undefined);
+  const normalizedQty = formatOrderQuantity(rawQty);
 
   const rawFilled = raw.filledQty ?? raw.filledQuantity ?? 0;
-  const normalizedFilled = formatOrderQuantity(rawFilled, isBackend || raw.filledQty !== undefined);
+  const normalizedFilled = formatOrderQuantity(rawFilled);
 
   const rawRemaining = raw.remainingQty ?? raw.remainingQuantity ?? 0;
-  const normalizedRemaining = formatOrderQuantity(rawRemaining, isBackend || raw.remainingQty !== undefined);
+  const normalizedRemaining = formatOrderQuantity(rawRemaining);
 
   return {
     orderId: String(raw.orderId),
@@ -229,16 +207,12 @@ export const api = {
             const availNum =
               b.availableDisplay !== undefined
                 ? Number(b.availableDisplay)
-                : typeof b.available === 'number' && b.available >= 100_000_000
-                  ? b.available / 100_000_000
-                  : Number(b.available || 0);
+                : Number(b.available || 0) / 100_000_000;
 
             const resNum =
               b.reservedDisplay !== undefined
                 ? Number(b.reservedDisplay)
-                : typeof b.reserved === 'number' && b.reserved >= 100_000_000
-                  ? b.reserved / 100_000_000
-                  : Number(b.reserved || 0);
+                : Number(b.reserved || 0) / 100_000_000;
 
             const totalNum =
               b.totalDisplay !== undefined
@@ -263,16 +237,6 @@ export const api = {
       // Ensure standard trading assets always exist in balances so users can see BTC, ETH, SOL rows
       const standardAssets = ['USDT', 'USD', 'BTC', 'ETH', 'SOL'];
       const assetMap = new Map<string, BalanceRecord>(records.map((r) => [r.asset, r]));
-
-      // If USDT is missing or 0 but USD has a balance, mirror USD to USDT for the frontend
-      const usdRecord = assetMap.get('USD');
-      const usdtRecord = assetMap.get('USDT');
-      if (usdRecord && (!usdtRecord || usdtRecord.availableDisplay === 0)) {
-        assetMap.set('USDT', {
-          ...usdRecord,
-          asset: 'USDT',
-        });
-      }
 
       for (const asset of standardAssets) {
         if (!assetMap.has(asset)) {
@@ -299,9 +263,18 @@ export const api = {
     },
 
     async getTrades(limit = 50): Promise<TradeRecord[]> {
-      return request<TradeRecord[]>(`/accounts/me/trades?limit=${limit}`, {
-        method: 'GET',
-      });
+      const trades = await request<Record<string, unknown>[]>(`/accounts/me/trades?limit=${limit}`, { method: 'GET' });
+      const accountId = getCurrentUser()?.userId;
+      return trades.map((trade) => ({
+        tradeId: String(trade.tradeId),
+        instrument: toFrontendInstrument(String(trade.instrument)),
+        price: (Number(trade.price) / 100_000_000).toFixed(2),
+        quantity: (Number(trade.quantity) / 100_000_000).toFixed(8),
+        // The table displays this account's side, not the market aggressor side.
+        takerSide: trade.buyerId === accountId ? 'BUY' : 'SELL',
+        makerSide: trade.buyerId === accountId ? 'SELL' : 'BUY',
+        executedAt: String(trade.settledAt),
+      }));
     },
   },
 
@@ -396,14 +369,10 @@ export const api = {
       return rawTrades.map((t) => {
         const rawP = t.price;
         const pNum =
-          typeof rawP === 'number' && rawP >= 100_000_000
-            ? rawP / 100_000_000
-            : Number(rawP);
+          Number(rawP) / 100_000_000;
         const rawQ = t.quantity;
         const qNum =
-          typeof rawQ === 'number' && rawQ >= 100_000_000
-            ? rawQ / 100_000_000
-            : Number(rawQ || 0);
+          Number(rawQ || 0) / 100_000_000;
 
         return {
           tradeId: String(t.tradeId || t.eventId || `tr-${Date.now()}`),
@@ -498,14 +467,14 @@ export const api = {
 };
 
 /* =========================================================================
-   Realistic Initial/Mock Seed Data for Smooth Standalone Operation
+   Instrument configuration (prices below are initial order-entry defaults)
    ========================================================================= */
 
 export const INSTRUMENT_METAS: Record<Instrument, InstrumentMeta> = {
-  BTC_USDT: {
-    symbol: 'BTC_USDT',
+  BTC_USD: {
+    symbol: 'BTC_USD',
     baseAsset: 'BTC',
-    quoteAsset: 'USDT',
+    quoteAsset: 'USD',
     priceDecimals: 2,
     quantityDecimals: 4,
     minPrice: '1000.00',
@@ -513,15 +482,15 @@ export const INSTRUMENT_METAS: Record<Instrument, InstrumentMeta> = {
     minQuantity: '0.0001',
     maxQuantity: '100.0000',
     lastPrice: '67420.50',
-    change24h: '+3.42%',
-    volume24h: '1,428.45 BTC',
-    high24h: '68,150.00',
-    low24h: '65,210.00',
+    change24h: '',
+    volume24h: '',
+    high24h: '',
+    low24h: '',
   },
-  ETH_USDT: {
-    symbol: 'ETH_USDT',
+  ETH_USD: {
+    symbol: 'ETH_USD',
     baseAsset: 'ETH',
-    quoteAsset: 'USDT',
+    quoteAsset: 'USD',
     priceDecimals: 2,
     quantityDecimals: 3,
     minPrice: '100.00',
@@ -529,15 +498,15 @@ export const INSTRUMENT_METAS: Record<Instrument, InstrumentMeta> = {
     minQuantity: '0.001',
     maxQuantity: '500.000',
     lastPrice: '3542.80',
-    change24h: '+2.15%',
-    volume24h: '8,950.20 ETH',
-    high24h: '3,595.00',
-    low24h: '3,450.00',
+    change24h: '',
+    volume24h: '',
+    high24h: '',
+    low24h: '',
   },
-  SOL_USDT: {
-    symbol: 'SOL_USDT',
+  SOL_USD: {
+    symbol: 'SOL_USD',
     baseAsset: 'SOL',
-    quoteAsset: 'USDT',
+    quoteAsset: 'USD',
     priceDecimals: 2,
     quantityDecimals: 2,
     minPrice: '1.00',
@@ -545,16 +514,9 @@ export const INSTRUMENT_METAS: Record<Instrument, InstrumentMeta> = {
     minQuantity: '0.01',
     maxQuantity: '5000.00',
     lastPrice: '158.40',
-    change24h: '+5.78%',
-    volume24h: '42,120.00 SOL',
-    high24h: '162.30',
-    low24h: '149.80',
+    change24h: '',
+    volume24h: '',
+    high24h: '',
+    low24h: '',
   },
 };
-
-export const INITIAL_DEMO_BALANCES: BalanceRecord[] = [
-  { asset: 'USDT', available: '50000.00', reserved: '2450.00', total: '52450.00' },
-  { asset: 'BTC', available: '1.4500', reserved: '0.2000', total: '1.6500' },
-  { asset: 'ETH', available: '12.850', reserved: '1.500', total: '14.350' },
-  { asset: 'SOL', available: '85.20', reserved: '10.00', total: '95.20' },
-];

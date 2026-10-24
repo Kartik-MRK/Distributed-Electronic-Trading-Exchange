@@ -32,52 +32,30 @@ export function Header({
             onChange={onSelectInstrument}
           />
           <span className="badge compact-feed-status">
-            {connected ? 'Connected' : 'Preview'}
+            {connected ? 'Connected' : 'Offline'}
           </span>
         </div>
         <dl className="market-stats">
           <div>
-            <dt>Reference price</dt>
+            <dt>Default order price</dt>
             <dd className="market-price">
               {Number(meta.lastPrice).toLocaleString('en-US', {
                 minimumFractionDigits: meta.priceDecimals,
               })}
-              <small> USDT</small>
+              <small> USD</small>
             </dd>
           </div>
           <div>
-            <dt>24h change</dt>
-            <dd
-              className={
-                meta.change24h.startsWith('+') ? 'positive' : 'negative'
-              }
-            >
-              {meta.change24h}
-            </dd>
-          </div>
-          <div>
-            <dt>24h high</dt>
-            <dd>
-              {Number(meta.high24h.replaceAll(',', '')).toLocaleString('en-US')}
-            </dd>
-          </div>
-          <div>
-            <dt>24h low</dt>
-            <dd>
-              {Number(meta.low24h.replaceAll(',', '')).toLocaleString('en-US')}
-            </dd>
-          </div>
-          <div>
-            <dt>24h volume</dt>
-            <dd>{meta.volume24h}</dd>
+            <dt>24h statistics</dt>
+            <dd className="muted">Unavailable</dd>
           </div>
         </dl>
         <div className="connection-status" role="status">
           <span className={`status-dot ${connected ? 'connected' : ''}`} />
           <div>
-            {connected ? 'Feed connected' : 'Preview mode'}
+            {connected ? 'Feed connected' : 'Feed unavailable'}
             <small>
-              {connected ? `${latency} ms latency` : 'Sample market data'}
+              {connected ? (latency > 0 ? `${latency} ms latency` : 'Live connection') : 'Feed unavailable'}
             </small>
           </div>
         </div>
