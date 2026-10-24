@@ -6,6 +6,7 @@ import com.dete.common.events.trade.TradeExecutedEvent;
 import com.dete.marketdata.model.Candle;
 import com.dete.marketdata.model.Interval;
 import com.dete.marketdata.model.OrderBookSnapshotResponse;
+import com.dete.marketdata.model.PublicTrade;
 import com.dete.marketdata.service.MarketDataService;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,20 +36,22 @@ public class MarketDataController {
   public ResponseEntity<OrderBookSnapshotResponse> getOrderBook(
       @PathVariable String instrument, @RequestParam(defaultValue = "20") int depth) {
     Instrument inst = resolveInstrument(instrument);
-    OrderBookSnapshotResponse snapshot = marketDataService.getL2Snapshot(inst, depth);
+    OrderBookSnapshotResponse snapshot =
+        marketDataService.getL2Snapshot(inst, Math.min(Math.max(depth, 1), 50));
     return ResponseEntity.ok(snapshot);
   }
 
   @GetMapping("/{instrument}/trades")
-  public ResponseEntity<List<TradeExecutedEvent>> getRecentTrades(
+  public ResponseEntity<List<PublicTrade>> getRecentTrades(
       @PathVariable String instrument, @RequestParam(defaultValue = "100") int limit) {
     Instrument inst = resolveInstrument(instrument);
-    List<TradeExecutedEvent> trades = marketDataService.getRecentTrades(inst, limit);
-    return ResponseEntity.ok(trades);
+    List<TradeExecutedEvent> trades =
+        marketDataService.getRecentTrades(inst, Math.min(Math.max(limit, 1), 500));
+    return ResponseEntity.ok(trades.stream().map(PublicTrade::from).toList());
   }
 
   @GetMapping("/{instrument}/replay")
-  public ResponseEntity<List<com.dete.marketdata.model.MarketDataTradeRecord>> getReplay(
+  public ResponseEntity<List<PublicTrade>> getReplay(
       @PathVariable String instrument,
       @RequestParam(required = false) Long from,
       @RequestParam(required = false) Long to,
@@ -58,9 +61,12 @@ public class MarketDataController {
         to != null ? java.time.Instant.ofEpochMilli(to) : java.time.Instant.now();
     java.time.Instant fromInstant =
         from != null ? java.time.Instant.ofEpochMilli(from) : toInstant.minusSeconds(3600);
+    if (fromInstant.isAfter(toInstant))
+      throw new IllegalArgumentException("Replay start must not follow end");
     List<com.dete.marketdata.model.MarketDataTradeRecord> trades =
-        marketDataService.getReplayTrades(inst, fromInstant, toInstant, limit);
-    return ResponseEntity.ok(trades);
+        marketDataService.getReplayTrades(
+            inst, fromInstant, toInstant, Math.min(Math.max(limit, 1), 5000));
+    return ResponseEntity.ok(trades.stream().map(PublicTrade::from).toList());
   }
 
   @GetMapping("/{instrument}/candles")
@@ -114,5 +120,10 @@ public class MarketDataController {
       }
     }
     throw new IllegalArgumentException("Unknown instrument: " + raw);
+  }
+
+  @org.springframework.web.bind.annotation.ExceptionHandler(IllegalArgumentException.class)
+  public ResponseEntity<Map<String, String>> invalidQuery(IllegalArgumentException ex) {
+    return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
   }
 }

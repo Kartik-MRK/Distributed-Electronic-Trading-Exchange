@@ -97,8 +97,11 @@ public class AccountService {
     if (amount <= 0) {
       throw new IllegalArgumentException("Deposit amount must be positive");
     }
-    // Ensure account exists
-    accountRepository.createAccount(accountId);
+    accountRepository.lockAccounts(accountId);
+    if (referenceId != null
+        && isRepeatedOperation(accountId, referenceId, LedgerEntryType.DEPOSIT, asset, amount)) {
+      return getBalance(accountId, asset);
+    }
 
     balanceRepository.creditAvailable(accountId, asset, amount);
 
@@ -149,7 +152,17 @@ public class AccountService {
       throw new IllegalArgumentException("Reservation amount must be positive");
     }
 
-    accountRepository.createAccount(accountId);
+    accountRepository.lockAccounts(accountId);
+    if (isRepeatedOperation(accountId, orderId, LedgerEntryType.RESERVE, asset, amount)) {
+      var balance = getBalance(accountId, asset);
+      return new ReserveFundsResponse(
+          true,
+          "Funds already reserved",
+          accountId,
+          asset,
+          balance.available(),
+          balance.reserved());
+    }
 
     int rowsUpdated = balanceRepository.reserve(accountId, asset, amount);
     if (rowsUpdated == 0) {
@@ -215,6 +228,17 @@ public class AccountService {
       throw new IllegalArgumentException("Release amount must be positive");
     }
 
+    accountRepository.lockAccounts(accountId);
+    if (isRepeatedOperation(accountId, orderId, LedgerEntryType.RELEASE, asset, amount)) {
+      var balance = getBalance(accountId, asset);
+      return new ReleaseFundsResponse(
+          true,
+          "Funds already released",
+          accountId,
+          asset,
+          balance.available(),
+          balance.reserved());
+    }
     int rowsUpdated = balanceRepository.release(accountId, asset, amount);
     if (rowsUpdated == 0) {
       Balance current =
@@ -269,6 +293,7 @@ public class AccountService {
 
   @Transactional
   public void settleTrade(TradeExecutedEvent event) {
+    accountRepository.lockAccounts(event.buyAccountId(), event.sellAccountId());
     // 1. Idempotency check: if settlement already recorded, skip cleanly
     if (settlementRepository.existsByTradeId(event.tradeId())) {
       log.info("Trade {} already settled. Skipping duplicate execution.", event.tradeId());
@@ -293,10 +318,6 @@ public class AccountService {
     if (quoteAmount <= 0) {
       throw new IllegalArgumentException("Settlement notional must be positive");
     }
-
-    // Ensure accounts exist
-    accountRepository.createAccount(buyerId);
-    accountRepository.createAccount(sellerId);
 
     // 2. Double-entry balance state updates
     // Buyer: debited quote amount from reserved, credited base asset to available
@@ -392,14 +413,18 @@ public class AccountService {
 
   @Transactional(readOnly = true)
   public List<LedgerEntryResponse> getLedgerEntries(UUID accountId, int limit, int offset) {
-    return ledgerRepository.findByAccountId(accountId, limit, offset).stream()
+    return ledgerRepository
+        .findByAccountId(accountId, Math.min(Math.max(limit, 1), 500), Math.max(offset, 0))
+        .stream()
         .map(LedgerEntryResponse::from)
         .toList();
   }
 
   @Transactional(readOnly = true)
   public List<SettlementResponse> getTradeHistory(UUID accountId, int limit, int offset) {
-    return settlementRepository.findByAccountId(accountId, limit, offset).stream()
+    return settlementRepository
+        .findByAccountId(accountId, Math.min(Math.max(limit, 1), 500), Math.max(offset, 0))
+        .stream()
         .map(SettlementResponse::from)
         .toList();
   }
@@ -412,5 +437,16 @@ public class AccountService {
       log.error("Failed to serialize outbox event: {}", e.getMessage(), e);
       throw new IllegalStateException("Failed to serialize outbox event", e);
     }
+  }
+
+  private boolean isRepeatedOperation(
+      UUID accountId, UUID referenceId, LedgerEntryType type, String asset, long amount) {
+    var existing = ledgerRepository.findOperation(accountId, referenceId, type);
+    if (existing.isEmpty()) return false;
+    if (!existing.get().asset().equals(asset) || existing.get().amount() != amount) {
+      throw new com.dete.account.exception.InvalidOperationException(
+          "Reference ID already used for different " + type + " terms");
+    }
+    return true;
   }
 }

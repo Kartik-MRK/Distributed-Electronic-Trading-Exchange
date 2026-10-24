@@ -1,6 +1,7 @@
 package com.dete.auth.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -69,10 +70,21 @@ class EmailOtpServiceTest {
   }
 
   @Test
-  @DisplayName(
-      "dispatchOtpEmail handles null mailSender and empty resend key gracefully without throwing")
-  void shouldHandleNullMailSenderGracefully() {
+  @DisplayName("dispatchOtpEmail fails when no delivery provider is configured")
+  void shouldRejectMissingMailProvider() {
     EmailOtpService noMailService = new EmailOtpService(null, "", null);
-    noMailService.dispatchOtpEmail("user@example.com", "654321", "Test Trader");
+    assertThatThrownBy(
+            () -> noMailService.dispatchOtpEmail("user@example.com", "654321", "Test Trader"))
+        .isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
+  void shouldPropagateMailFailure() {
+    org.mockito.Mockito.doThrow(new org.springframework.mail.MailSendException("offline"))
+        .when(mailSender)
+        .send(any(SimpleMailMessage.class));
+    assertThatThrownBy(
+            () -> emailOtpService.dispatchOtpEmail("user@example.com", "654321", "Test Trader"))
+        .isInstanceOf(IllegalStateException.class);
   }
 }

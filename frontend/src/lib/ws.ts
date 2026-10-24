@@ -1,4 +1,5 @@
 import { Client, IMessage, StompSubscription } from '@stomp/stompjs';
+import { getAuthToken, getCurrentUser } from './auth';
 
 export type ConnectionState =
   'connected' | 'reconnecting' | 'disconnected' | 'preview';
@@ -17,10 +18,24 @@ export class WebSocketManager {
   private reconnectAttempts = 0;
   private maxReconnectDelay = 10000;
   private baseReconnectDelay = 1000;
+  private wantsConnection = false;
 
-  constructor(private brokerUrl: string = 'ws://localhost:8080/ws') {}
+  constructor(private brokerUrl: string = 'ws://localhost:8080/ws') {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('dete-auth-changed', () => {
+        const client = this.client;
+        if (!client) return;
+        this.client = null;
+        this.updateState('disconnected');
+        void client.deactivate().then(() => {
+          if (this.wantsConnection) this.connect();
+        });
+      });
+    }
+  }
 
   public connect(): void {
+    this.wantsConnection = true;
     if (this.client && this.client.active) {
       return;
     }
@@ -28,8 +43,12 @@ export class WebSocketManager {
     this.updateState('reconnecting');
 
     try {
-      this.client = new Client({
+      const client = new Client({
         brokerURL: this.brokerUrl,
+        beforeConnect: () => {
+          const token = getAuthToken();
+          client.connectHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+        },
         reconnectDelay: this.calculateBackoff(),
         heartbeatIncoming: 4000,
         heartbeatOutgoing: 4000,
@@ -37,22 +56,27 @@ export class WebSocketManager {
           // Suppress verbose debug logs in production
         },
         onConnect: () => {
+          if (this.client !== client) return;
           this.reconnectAttempts = 0;
           this.updateState('connected');
           this.resubscribeAll();
         },
         onDisconnect: () => {
+          if (this.client !== client) return;
           this.updateState('disconnected');
         },
         onStompError: () => {
+          if (this.client !== client) return;
           this.updateState('reconnecting');
         },
         onWebSocketClose: () => {
+          if (this.client !== client) return;
           this.updateState('reconnecting');
         },
       });
 
-      this.client.activate();
+      this.client = client;
+      client.activate();
     } catch {
       this.updateState('disconnected');
     }
@@ -60,9 +84,11 @@ export class WebSocketManager {
   }
 
   public disconnect(): void {
+    this.wantsConnection = false;
     if (this.client) {
-      this.client.deactivate();
+      const client = this.client;
       this.client = null;
+      void client.deactivate();
     }
     this.topicSubscriptions.clear();
     this.updateState('disconnected');
@@ -79,6 +105,7 @@ export class WebSocketManager {
     if (
       this.client &&
       this.client.connected &&
+      this.canSubscribe(topic) &&
       !this.topicSubscriptions.has(topic)
     ) {
       const sub = this.client.subscribe(topic, (msg: IMessage) => {
@@ -143,11 +170,17 @@ export class WebSocketManager {
     this.topicSubscriptions.clear();
 
     this.topicListeners.forEach((_, topic) => {
+      if (!this.canSubscribe(topic)) return;
       const sub = this.client!.subscribe(topic, (msg: IMessage) => {
         this.handleMessage(topic, msg);
       });
       this.topicSubscriptions.set(topic, sub);
     });
+  }
+
+  private canSubscribe(topic: string): boolean {
+    return !topic.startsWith('/topic/orders.')
+      || (Boolean(getAuthToken()) && topic === `/topic/orders.${getCurrentUser()?.userId}`);
   }
 
   private calculateBackoff(): number {

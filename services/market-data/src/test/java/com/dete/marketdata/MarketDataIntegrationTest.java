@@ -189,18 +189,8 @@ class MarketDataIntegrationTest extends FullStackTestBase {
         .send("order.commands", Instrument.BTC_USD.name(), objectMapper.writeValueAsString(placed))
         .get(5, TimeUnit.SECONDS);
 
-    // Verify order book has resting bid
-    await()
-        .atMost(Duration.ofSeconds(10))
-        .untilAsserted(
-            () -> {
-              ResponseEntity<OrderBookSnapshotResponse> bookResp =
-                  restTemplate.getForEntity(
-                      "/market-data/BTC-USD/orderbook", OrderBookSnapshotResponse.class);
-              assertThat(bookResp.getStatusCode()).isEqualTo(HttpStatus.OK);
-              assertThat(bookResp.getBody().bids()).isNotEmpty();
-              assertThat(bookResp.getBody().bids().get(0).price()).isEqualTo(price);
-            });
+    // A submitted command must not be advertised as executable liquidity.
+    assertThat(marketDataService.getL2Snapshot(Instrument.BTC_USD, 20).bids()).isEmpty();
 
     // Test snapshot resync from Matching Engine
     OrderBookSnapshotEvent snapshot =
@@ -327,6 +317,21 @@ class MarketDataIntegrationTest extends FullStackTestBase {
             "order.commands", Instrument.BTC_USD.name(), objectMapper.writeValueAsString(liveOrder))
         .get(5, TimeUnit.SECONDS);
 
+    // Only an authoritative matching-engine snapshot may update public depth.
+    var liveSnapshot =
+        OrderBookSnapshotEvent.of(
+            Instrument.BTC_USD,
+            1000L,
+            List.of(),
+            List.of(
+                new OrderBookSnapshotEvent.SnapshotLevel(
+                    liveOrder.price(), liveOrder.quantity(), 1)));
+    kafkaTemplate
+        .send(
+            "market-data",
+            Instrument.BTC_USD.symbol(),
+            objectMapper.writeValueAsString(liveSnapshot))
+        .get(5, TimeUnit.SECONDS);
     // Verify orderbook snapshot received over WebSocket
     OrderBookSnapshotResponse receivedBook = bookQueue.poll(5, TimeUnit.SECONDS);
     assertThat(receivedBook).isNotNull();

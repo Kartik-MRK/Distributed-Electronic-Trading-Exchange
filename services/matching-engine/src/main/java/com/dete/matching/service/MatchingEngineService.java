@@ -57,6 +57,22 @@ public class MatchingEngineService {
     return orderBooks.get(instrument);
   }
 
+  /** Read all statistics on the owning thread so REST cannot iterate a mutating price tree. */
+  public CompletableFuture<Map<String, Object>> getStats(Instrument instrument) {
+    OrderBook book = orderBooks.get(instrument);
+    return CompletableFuture.supplyAsync(
+        () ->
+            Map.of(
+                "instrument", instrument.name(),
+                "sequenceNumber", book.currentSequenceNumber(),
+                "orderCount", book.orderCount(),
+                "bestBidPrice", book.bestBidPrice(),
+                "bestAskPrice", book.bestAskPrice(),
+                "totalBidVolume", book.totalBidVolume(),
+                "totalAskVolume", book.totalAskVolume()),
+        dispatchers.get(instrument));
+  }
+
   /** Dispatches an incoming OrderPlacedEvent to the instrument's single-writer thread. */
   public CompletableFuture<MatchResult> processOrder(OrderPlacedEvent event) {
     Instrument instrument = event.instrument();
@@ -113,7 +129,8 @@ public class MatchingEngineService {
       try {
         dispatcher.submit(() -> entry.getValue().clear()).get(2, TimeUnit.SECONDS);
       } catch (Exception e) {
-        log.error("Error resetting order book for instrument {}", entry.getKey(), e);
+        if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+        throw new IllegalStateException("Could not reset order book for " + entry.getKey(), e);
       }
     }
   }

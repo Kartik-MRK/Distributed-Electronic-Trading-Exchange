@@ -82,7 +82,7 @@ class AccountServiceUnitTest {
     assertThat(response.available()).isEqualTo(amount);
     assertThat(response.reserved()).isEqualTo(0L);
 
-    verify(accountRepository).createAccount(accountId);
+    verify(accountRepository).lockAccounts(accountId);
     verify(balanceRepository).creditAvailable(accountId, asset, amount);
 
     ArgumentCaptor<LedgerEntry> captor = ArgumentCaptor.forClass(LedgerEntry.class);

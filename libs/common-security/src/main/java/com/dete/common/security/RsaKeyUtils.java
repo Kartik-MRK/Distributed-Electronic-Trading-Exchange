@@ -10,6 +10,22 @@ import java.util.Base64;
 /** Utility for parsing and providing standard RS256 keys across DETE microservices. */
 public final class RsaKeyUtils {
 
+  public static PublicKey configuredPublicKey(String configured, boolean allowDevelopmentKey) {
+    if (configured == null || configured.isBlank()) {
+      if (!allowDevelopmentKey)
+        throw new IllegalStateException("SECURITY_JWT_PUBLIC_KEY must be configured");
+      return parsePublicKey(DEFAULT_PUBLIC_KEY);
+    }
+    PublicKey key = parsePublicKey(configured);
+    if (!allowDevelopmentKey
+        && java.util.Arrays.equals(
+            key.getEncoded(), parsePublicKey(DEFAULT_PUBLIC_KEY).getEncoded())) {
+      throw new IllegalStateException(
+          "The shared development JWT key cannot be used in this environment");
+    }
+    return key;
+  }
+
   public static final String DEFAULT_PUBLIC_KEY =
       "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA63M1Lw640B5WuINW7DVYd40TfuExpaG5sihggnkcvIJcNE13"
           + "txCy/RUJVpnjJDwWdGWdf5uJbrDI8xA24F/of0e+xruKAw8d58DnmYvxqM+EggvsXdoNOPx+qtT+v2MmMIJNXwAoD6"

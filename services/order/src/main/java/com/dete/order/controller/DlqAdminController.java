@@ -77,6 +77,10 @@ public class DlqAdminController {
   }
 
   private ResponseEntity<Map<String, Object>> peekTopicMessages(String topicName, int maxMessages) {
+    if (!KNOWN_DLQ_TOPICS.contains(topicName) || maxMessages < 1 || maxMessages > 100) {
+      return ResponseEntity.badRequest()
+          .body(Map.of("error", "Unknown DLQ topic or invalid message limit"));
+    }
     Properties props = createConsumerProps();
     List<Map<String, Object>> messages = new ArrayList<>();
 
@@ -137,6 +141,10 @@ public class DlqAdminController {
 
   private ResponseEntity<Map<String, Object>> reprocessTopicMessages(
       String dlqTopic, String targetTopic, int maxMessages) {
+    if (!KNOWN_DLQ_TOPICS.contains(dlqTopic) || maxMessages < 1 || maxMessages > 100) {
+      return ResponseEntity.badRequest()
+          .body(Map.of("error", "Unknown DLQ topic or invalid message limit"));
+    }
     Properties props = createConsumerProps();
     int reprocessed = 0;
 
@@ -147,7 +155,9 @@ public class DlqAdminController {
 
       ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
       for (ConsumerRecord<String, String> record : records) {
-        kafkaTemplate.send(targetTopic, record.key(), record.value());
+        kafkaTemplate
+            .send(targetTopic, record.key(), record.value())
+            .get(5, java.util.concurrent.TimeUnit.SECONDS);
         reprocessed++;
         if (reprocessed >= maxMessages) {
           break;

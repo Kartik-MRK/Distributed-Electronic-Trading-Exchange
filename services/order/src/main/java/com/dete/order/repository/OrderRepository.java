@@ -68,6 +68,11 @@ public class OrderRepository {
         Timestamp.from(order.updatedAt()));
   }
 
+  public void lockIdempotencyKey(UUID key) {
+    jdbcTemplate.queryForList(
+        "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", key.toString());
+  }
+
   public Optional<OrderRecord> findById(UUID orderId) {
     String sql = "SELECT * FROM order_svc.orders WHERE order_id = ?";
     try {

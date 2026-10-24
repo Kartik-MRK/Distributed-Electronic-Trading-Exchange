@@ -304,9 +304,11 @@ public class AuthService {
         UserResponse.fromUser(user));
   }
 
-  @Transactional
+  @Transactional(noRollbackFor = AuthenticationException.class)
   public AuthResponse refresh(TokenRefreshRequest request) {
     String tokenHash = jwtService.hashToken(request.refreshToken());
+    // Serialize rotation and reuse detection for the whole account, including different tokens.
+    refreshTokenRepository.lockUserByTokenHash(tokenHash);
     RefreshToken storedToken =
         refreshTokenRepository
             .findByTokenHash(tokenHash)
@@ -349,6 +351,7 @@ public class AuthService {
   public void logout(LogoutRequest request) {
     if (request != null && request.refreshToken() != null && !request.refreshToken().isBlank()) {
       String tokenHash = jwtService.hashToken(request.refreshToken());
+      refreshTokenRepository.lockUserByTokenHash(tokenHash);
       Optional<RefreshToken> tokenOpt = refreshTokenRepository.findByTokenHash(tokenHash);
       if (tokenOpt.isPresent()) {
         RefreshToken token = tokenOpt.get();

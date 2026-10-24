@@ -54,11 +54,11 @@ spec:
               value: "9095"
             - name: ACCOUNT_SERVICE_URL
               value: "http://account:8082"
-            - name: JWT_SECRET
+            - name: SECURITY_JWT_PUBLIC_KEY
               valueFrom:
                 secretKeyRef:
-                  name: dete-secrets
-                  key: JWT_SECRET
+                  name: {{ .Values.secrets.jwtKeySecretName }}
+                  key: public-key
           resources:
             {{- toYaml .Values.order.resources | nindent 12 }}
           startupProbe:

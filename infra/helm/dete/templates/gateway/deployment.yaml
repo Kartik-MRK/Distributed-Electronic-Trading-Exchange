@@ -36,11 +36,11 @@ spec:
                 secretKeyRef:
                   name: dete-secrets
                   key: REDIS_PASSWORD
-            - name: JWT_SECRET
+            - name: SECURITY_JWT_PUBLIC_KEY
               valueFrom:
                 secretKeyRef:
-                  name: dete-secrets
-                  key: JWT_SECRET
+                  name: {{ .Values.secrets.jwtKeySecretName }}
+                  key: public-key
             - name: AUTH_SERVICE_URL
               value: "http://auth:8081"
             - name: ORDER_SERVICE_URL

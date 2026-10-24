@@ -1,6 +1,6 @@
 package com.dete.order.exception;
 
-public class RiskServiceUnavailableException extends PreTradeRiskException {
+public class RiskServiceUnavailableException extends RuntimeException {
 
   public RiskServiceUnavailableException(String message) {
     super(message);

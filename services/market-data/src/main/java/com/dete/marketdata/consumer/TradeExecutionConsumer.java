@@ -43,12 +43,12 @@ public class TradeExecutionConsumer {
           trade.instrument(),
           trade.price(),
           trade.quantity());
-    } catch (Exception e) {
-      log.error("Failed to process trade execution message: {}", record.value(), e);
-    } finally {
       if (ack != null) {
         ack.acknowledge();
       }
+    } catch (Exception e) {
+      throw new IllegalStateException(
+          "Failed to process trade execution at offset " + record.offset(), e);
     }
   }
 }

@@ -43,6 +43,14 @@ public class InternalAccountController {
     return ResponseEntity.ok(response);
   }
 
+  @PostMapping("/deposit")
+  public ResponseEntity<BalanceResponse> deposit(
+      @Valid @RequestBody com.dete.account.dto.DepositRequest request) {
+    return ResponseEntity.ok(
+        accountService.deposit(
+            request.accountId(), request.asset(), request.amount(), request.referenceId()));
+  }
+
   @PostMapping("/release")
   public ResponseEntity<ReleaseFundsResponse> releaseFunds(
       @Valid @RequestBody ReleaseFundsRequest request) {

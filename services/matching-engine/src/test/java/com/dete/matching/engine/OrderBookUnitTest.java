@@ -19,6 +19,33 @@ import org.junit.jupiter.api.Test;
 
 class OrderBookUnitTest {
 
+  @Test
+  void duplicateFilledOrderCannotExecuteAgainAndReplayUsesStableTradeIdentity() {
+    var book = new OrderBook(Instrument.BTC_USD);
+    var sell =
+        createOrder(
+            UUID.randomUUID(), OrderSide.SELL, OrderType.LIMIT, FixedPoint.SCALE, FixedPoint.SCALE);
+    var buy =
+        createOrder(
+            UUID.randomUUID(), OrderSide.BUY, OrderType.LIMIT, FixedPoint.SCALE, FixedPoint.SCALE);
+    book.processOrder(sell);
+    var original = book.processOrder(buy).trades().getFirst();
+    book.processOrder(
+        createOrder(
+            UUID.randomUUID(),
+            OrderSide.SELL,
+            OrderType.LIMIT,
+            FixedPoint.SCALE,
+            FixedPoint.SCALE));
+    assertThat(book.processOrder(buy).trades()).isEmpty();
+    assertThat(book.totalAskVolume()).isEqualTo(FixedPoint.SCALE);
+    book.clear();
+    book.processOrder(sell);
+    var replayed = book.processOrder(buy).trades().getFirst();
+    assertThat(replayed.tradeId()).isEqualTo(original.tradeId());
+    assertThat(replayed.timestamp()).isEqualTo(original.timestamp());
+  }
+
   private OrderBook orderBook;
   private UUID accountA;
   private UUID accountB;

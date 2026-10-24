@@ -1,7 +1,6 @@
 package com.dete.matching.controller;
 
 import com.dete.common.domain.enums.Instrument;
-import com.dete.matching.engine.OrderBook;
 import com.dete.matching.engine.model.L2Depth;
 import com.dete.matching.replay.KafkaReplayService;
 import com.dete.matching.service.MatchingEngineService;
@@ -34,7 +33,9 @@ public class MatchingEngineController {
       @PathVariable String symbol, @RequestParam(defaultValue = "10") int depth) {
     try {
       Instrument instrument = Instrument.valueOf(symbol.toUpperCase());
-      return matchingEngineService.getL2Depth(instrument, depth).thenApply(ResponseEntity::ok);
+      return matchingEngineService
+          .getL2Depth(instrument, Math.min(Math.max(depth, 1), 100))
+          .thenApply(ResponseEntity::ok);
     } catch (IllegalArgumentException e) {
       return CompletableFuture.completedFuture(ResponseEntity.badRequest().build());
     }
@@ -44,19 +45,7 @@ public class MatchingEngineController {
   public ResponseEntity<Map<String, Object>> getStats(@PathVariable String symbol) {
     try {
       Instrument instrument = Instrument.valueOf(symbol.toUpperCase());
-      OrderBook book = matchingEngineService.getOrderBook(instrument);
-      if (book == null) {
-        return ResponseEntity.notFound().build();
-      }
-      return ResponseEntity.ok(
-          Map.of(
-              "instrument", instrument.name(),
-              "sequenceNumber", book.currentSequenceNumber(),
-              "orderCount", book.orderCount(),
-              "bestBidPrice", book.bestBidPrice(),
-              "bestAskPrice", book.bestAskPrice(),
-              "totalBidVolume", book.totalBidVolume(),
-              "totalAskVolume", book.totalAskVolume()));
+      return ResponseEntity.ok(matchingEngineService.getStats(instrument).join());
     } catch (IllegalArgumentException e) {
       return ResponseEntity.badRequest().build();
     }

@@ -96,6 +96,10 @@ public class EmailOtpService {
         sendViaResend(recipientEmail, otpCode, greeting, subject, plainText);
         return;
       } catch (Exception e) {
+        if (e instanceof InterruptedException) {
+          Thread.currentThread().interrupt();
+          throw new IllegalStateException("Email delivery interrupted", e);
+        }
         log.error("Resend API dispatch failed for {}: {}", recipientEmail, e.getMessage(), e);
       }
     }
@@ -109,10 +113,13 @@ public class EmailOtpService {
         message.setText(plainText);
         mailSender.send(message);
         log.info("Successfully delivered verification email via SMTP to {}", recipientEmail);
+        return;
       } catch (Exception e) {
         log.warn("SMTP dispatch failed for {}: {}", recipientEmail, e.getMessage());
+        throw new IllegalStateException("Verification email could not be delivered", e);
       }
     }
+    throw new IllegalStateException("No working verification email provider is configured");
   }
 
   private void sendViaResend(
@@ -204,6 +211,6 @@ public class EmailOtpService {
         </body>
         </html>
         """
-        .formatted(greeting, otpCode);
+        .formatted(org.springframework.web.util.HtmlUtils.htmlEscape(greeting), otpCode);
   }
 }

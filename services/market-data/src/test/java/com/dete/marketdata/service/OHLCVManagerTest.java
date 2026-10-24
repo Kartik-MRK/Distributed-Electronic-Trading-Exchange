@@ -14,6 +14,22 @@ import org.junit.jupiter.api.Test;
 
 class OHLCVManagerTest {
 
+  @Test
+  void lateTradesUpdateTheirOwnWindowAndEventTimeOpenClose() {
+    var manager = new OHLCVManager(2);
+    Instant base = Instant.parse("2026-10-24T00:00:00Z");
+    manager.onTrade(Instrument.BTC_USD, 110, 2, base.plusSeconds(30));
+    manager.onTrade(Instrument.BTC_USD, 200, 3, base.plusSeconds(90));
+    manager.onTrade(Instrument.BTC_USD, 100, 4, base.plusSeconds(10));
+    var candles = manager.getCandles(Instrument.BTC_USD, Interval.ONE_MINUTE, 10);
+    assertThat(candles).hasSize(2);
+    assertThat(candles.getFirst().open()).isEqualTo(100);
+    assertThat(candles.getFirst().close()).isEqualTo(110);
+    assertThat(candles.getFirst().volume()).isEqualTo(6);
+    assertThat(candles.getLast().volume()).isEqualTo(3);
+    assertThat(candles.getLast().close()).isEqualTo(200);
+  }
+
   private OHLCVManager ohlcvManager;
 
   @BeforeEach

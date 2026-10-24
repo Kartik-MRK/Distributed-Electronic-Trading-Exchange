@@ -32,6 +32,7 @@ public class OrderBookSnapshotPublisher {
   private final MatchingEngineService matchingEngineService;
   private final KafkaTemplate<String, String> kafkaTemplate;
   private final ObjectMapper objectMapper;
+  private final com.dete.matching.consumer.OrderCommandConsumer commandConsumer;
 
   @Value("${matching.snapshot.depth:50}")
   private int snapshotDepth = 50;
@@ -39,10 +40,12 @@ public class OrderBookSnapshotPublisher {
   public OrderBookSnapshotPublisher(
       MatchingEngineService matchingEngineService,
       KafkaTemplate<String, String> kafkaTemplate,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      com.dete.matching.consumer.OrderCommandConsumer commandConsumer) {
     this.matchingEngineService = matchingEngineService;
     this.kafkaTemplate = kafkaTemplate;
     this.objectMapper = objectMapper;
+    this.commandConsumer = commandConsumer;
   }
 
   @Scheduled(fixedRateString = "${matching.snapshot.interval-ms:100}")
@@ -57,10 +60,12 @@ public class OrderBookSnapshotPublisher {
   }
 
   public void publishInstrumentSnapshot(Instrument instrument) {
+    if (!commandConsumer.isLiveProcessingEnabled()) return;
     matchingEngineService
         .getL2Depth(instrument, snapshotDepth)
         .thenAccept(
             l2 -> {
+              if (!commandConsumer.isLiveProcessingEnabled()) return;
               try {
                 List<OrderBookSnapshotEvent.SnapshotLevel> bids =
                     l2.bids().stream()

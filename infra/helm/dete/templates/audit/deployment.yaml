@@ -23,6 +23,11 @@ spec:
             - containerPort: {{ .Values.audit.port }}
               name: http
           env:
+            - name: SECURITY_JWT_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.jwtKeySecretName }}
+                  key: public-key
             - name: SPRING_PROFILES_ACTIVE
               value: "docker"
             - name: PORT

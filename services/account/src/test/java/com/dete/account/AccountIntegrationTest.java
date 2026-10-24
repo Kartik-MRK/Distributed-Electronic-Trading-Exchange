@@ -40,6 +40,38 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class AccountIntegrationTest extends FullStackTestBase {
 
+  @Test
+  void concurrentRetriesReserveAndReleaseOnlyOnce() throws Exception {
+    UUID account = UUID.randomUUID();
+    UUID order = UUID.randomUUID();
+    UUID deposit = UUID.randomUUID();
+    accountService.deposit(account, "USD", 1000L, deposit);
+    accountService.deposit(account, "USD", 1000L, deposit);
+    var request = new ReserveFundsRequest(account, order, "USD", 400L);
+    try (var pool = Executors.newFixedThreadPool(8)) {
+      var tasks = new java.util.ArrayList<java.util.concurrent.Future<?>>();
+      for (int i = 0; i < 16; i++)
+        tasks.add(pool.submit(() -> accountService.reserveFunds(request)));
+      for (var task : tasks) task.get(10, java.util.concurrent.TimeUnit.SECONDS);
+      assertThat(accountService.getBalance(account, "USD").available()).isEqualTo(600L);
+      assertThat(accountService.getBalance(account, "USD").reserved()).isEqualTo(400L);
+      tasks.clear();
+      for (int i = 0; i < 16; i++)
+        tasks.add(
+            pool.submit(
+                () ->
+                    accountService.releaseFunds(
+                        new ReleaseFundsRequest(account, order, "USD", 400L))));
+      for (var task : tasks) task.get(10, java.util.concurrent.TimeUnit.SECONDS);
+    }
+    assertThat(accountService.getBalance(account, "USD").available()).isEqualTo(1000L);
+    assertThat(accountService.getBalance(account, "USD").reserved()).isZero();
+    assertThat(ledgerRepository.findByAccountId(account, 100, 0)).hasSize(3);
+    assertThatThrownBy(
+            () -> accountService.reserveFunds(new ReserveFundsRequest(account, order, "BTC", 400L)))
+        .isInstanceOf(com.dete.account.exception.InvalidOperationException.class);
+  }
+
   @Autowired private AccountService accountService;
   @Autowired private LedgerRepository ledgerRepository;
   @Autowired private SettlementRepository settlementRepository;

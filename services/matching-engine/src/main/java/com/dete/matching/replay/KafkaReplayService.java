@@ -5,159 +5,128 @@ import com.dete.common.events.order.OrderModifyCommand;
 import com.dete.common.events.order.OrderPlacedEvent;
 import com.dete.matching.consumer.OrderCommandConsumer;
 import com.dete.matching.service.MatchingEngineService;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.UUID;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.stereotype.Service;
 
-/**
- * Service that reconstructs in-memory OrderBook state upon engine restart by replaying events from
- * the Kafka 'order.commands' log without emitting output events.
- */
+/** Single-owner recovery: reconstruct only commands whose output was acknowledged before commit. */
 @Service
 public class KafkaReplayService {
-
-  private static final Logger log = LoggerFactory.getLogger(KafkaReplayService.class);
-
   @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
   private String bootstrapServers;
 
-  @Value("${matching.replay.on-startup:false}")
-  private boolean replayOnStartup;
+  @Value("${matching.consumer.group-id:matching-engine-group}")
+  private String groupId;
 
-  private final MatchingEngineService matchingEngineService;
-  private final OrderCommandConsumer orderCommandConsumer;
-  private final ObjectMapper objectMapper;
+  @Autowired private KafkaListenerEndpointRegistry registry;
+  private final MatchingEngineService engine;
+  private final OrderCommandConsumer liveConsumer;
+  private final ObjectMapper mapper;
 
   public KafkaReplayService(
-      MatchingEngineService matchingEngineService,
-      OrderCommandConsumer orderCommandConsumer,
-      ObjectMapper objectMapper) {
-    this.matchingEngineService = matchingEngineService;
-    this.orderCommandConsumer = orderCommandConsumer;
-    this.objectMapper = objectMapper;
+      MatchingEngineService engine, OrderCommandConsumer liveConsumer, ObjectMapper mapper) {
+    this.engine = engine;
+    this.liveConsumer = liveConsumer;
+    this.mapper = mapper;
   }
 
   @EventListener(ApplicationReadyEvent.class)
   public void onApplicationReady() {
-    if (replayOnStartup) {
-      log.info("Starting automatic Kafka event replay on startup...");
-      replayFromBeginning();
+    // No live commands may race with reconstruction; the listener factory disables auto-start.
+    replayFromBeginning();
+    registry.start();
+  }
+
+  public int replayFromBeginning() {
+    synchronized (liveConsumer) {
+      liveConsumer.setLiveProcessingEnabled(false);
+      Properties props = new Properties();
+      props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+      props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+      props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+      props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+      props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+      // assign(), rather than subscribe(), never joins or changes the live group's assignment.
+      try (KafkaConsumer<String, String> replay = new KafkaConsumer<>(props)) {
+        var partitions =
+            replay
+                .partitionsFor(OrderCommandConsumer.TOPIC_ORDER_COMMANDS, Duration.ofSeconds(30))
+                .stream()
+                .map(p -> new TopicPartition(p.topic(), p.partition()))
+                .collect(Collectors.toSet());
+        if (partitions.isEmpty())
+          throw new IllegalStateException("Order command topic is unavailable");
+        var committed = replay.committed(partitions);
+        Map<TopicPartition, Long> targets =
+            partitions.stream()
+                .collect(
+                    Collectors.toMap(
+                        p -> p, p -> committed.get(p) == null ? 0L : committed.get(p).offset()));
+        return reconstruct(replay, targets);
+      }
     }
   }
 
-  /**
-   * Replays all messages from beginning of 'order.commands' up to current high watermarks. Returns
-   * total number of commands replayed.
-   */
-  public int replayFromBeginning() {
-    // Pause live consumer while replaying
-    orderCommandConsumer.setLiveProcessingEnabled(false);
-    matchingEngineService.resetAll();
-
-    Properties props = new Properties();
-    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-    props.put(ConsumerConfig.GROUP_ID_CONFIG, "replay-group-" + UUID.randomUUID());
-    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-
-    int replayedCount = 0;
-
-    try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
-      List<PartitionInfo> partitionInfos =
-          consumer.partitionsFor(OrderCommandConsumer.TOPIC_ORDER_COMMANDS);
-      if (partitionInfos == null || partitionInfos.isEmpty()) {
-        log.info(
-            "No partitions found for topic {}, replay complete.",
-            OrderCommandConsumer.TOPIC_ORDER_COMMANDS);
-        orderCommandConsumer.setLiveProcessingEnabled(true);
-        return 0;
-      }
-
-      List<TopicPartition> partitions =
-          partitionInfos.stream().map(p -> new TopicPartition(p.topic(), p.partition())).toList();
-
-      consumer.assign(partitions);
-      consumer.seekToBeginning(partitions);
-
-      Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
-      boolean hasMore = true;
-
-      while (hasMore) {
-        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
-        if (records.isEmpty()) {
-          // Check if all partitions reached end offsets
-          boolean allCaughtUp = true;
-          for (TopicPartition tp : partitions) {
-            long currentPos = consumer.position(tp);
-            long endPos = endOffsets.getOrDefault(tp, 0L);
-            if (currentPos < endPos) {
-              allCaughtUp = false;
-              break;
-            }
-          }
-          if (allCaughtUp) {
-            hasMore = false;
-          }
-          continue;
+  /** Fault-injection entry point; the supplied consumer must never commit replay offsets. */
+  public int reconstruct(Consumer<String, String> replay, Map<TopicPartition, Long> targets) {
+    synchronized (liveConsumer) {
+      liveConsumer.setLiveProcessingEnabled(false);
+      Set<TopicPartition> partitions = targets.keySet();
+      var beginnings = replay.beginningOffsets(partitions);
+      var ends = replay.endOffsets(partitions);
+      for (var partition : partitions) {
+        if (beginnings.get(partition) != 0 || targets.get(partition) > ends.get(partition)) {
+          throw new IllegalStateException(
+              "Complete command history is unavailable for "
+                  + partition
+                  + "; restore a verified checkpoint before accepting orders");
         }
-
-        for (ConsumerRecord<String, String> record : records) {
-          try {
-            JsonNode node = objectMapper.readTree(record.value());
-            String eventType = node.has("eventType") ? node.get("eventType").asText() : "";
-
-            if (OrderModifyCommand.EVENT_TYPE.equals(eventType)
-                || (node.has("newPrice") && node.has("newQuantity"))) {
-              OrderModifyCommand command = objectMapper.treeToValue(node, OrderModifyCommand.class);
-              matchingEngineService.modifyOrder(command).join();
-            } else if (OrderCancelCommand.EVENT_TYPE.equals(eventType)
-                || (node.has("orderId")
-                    && !node.has("price")
-                    && !node.has("newPrice")
-                    && !node.has("side"))) {
-              OrderCancelCommand command = objectMapper.treeToValue(node, OrderCancelCommand.class);
-              matchingEngineService.cancelOrder(command).join();
+      }
+      replay.assign(partitions);
+      partitions.forEach(p -> replay.seek(p, 0));
+      engine.resetAll();
+      liveConsumer.clearPendingPublications();
+      int count = 0;
+      long deadline = System.nanoTime() + Duration.ofMinutes(2).toNanos();
+      try {
+        while (partitions.stream().anyMatch(p -> replay.position(p) < targets.get(p))) {
+          if (System.nanoTime() > deadline) throw new IllegalStateException("Recovery timed out");
+          for (var record : replay.poll(Duration.ofMillis(250))) {
+            TopicPartition partition = new TopicPartition(record.topic(), record.partition());
+            if (record.offset() >= targets.get(partition)) continue;
+            var node = mapper.readTree(record.value());
+            String type = node.path("eventType").asText();
+            if (OrderModifyCommand.EVENT_TYPE.equals(type) || node.has("newPrice")) {
+              engine.modifyOrder(mapper.treeToValue(node, OrderModifyCommand.class)).join();
+            } else if (OrderCancelCommand.EVENT_TYPE.equals(type)
+                || (!node.has("price") && !node.has("side"))) {
+              engine.cancelOrder(mapper.treeToValue(node, OrderCancelCommand.class)).join();
             } else {
-              OrderPlacedEvent event = objectMapper.treeToValue(node, OrderPlacedEvent.class);
-              matchingEngineService.processOrder(event).join();
+              engine.processOrder(mapper.treeToValue(node, OrderPlacedEvent.class)).join();
             }
-            replayedCount++;
-          } catch (Exception e) {
-            log.error(
-                "Failed to replay message at partition {} offset {}",
-                record.partition(),
-                record.offset(),
-                e);
+            count++;
           }
         }
+      } catch (Exception ex) {
+        throw new IllegalStateException(
+            "Order book recovery failed; live processing remains disabled", ex);
       }
-
-      log.info("Kafka replay completed successfully. Total commands replayed: {}", replayedCount);
-    } catch (Exception e) {
-      log.error("Error during Kafka event replay", e);
-    } finally {
-      orderCommandConsumer.setLiveProcessingEnabled(true);
+      liveConsumer.setLiveProcessingEnabled(true);
+      return count;
     }
-
-    return replayedCount;
   }
 }

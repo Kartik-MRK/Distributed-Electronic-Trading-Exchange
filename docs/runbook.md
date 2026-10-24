@@ -1,5 +1,7 @@
 # Distributed Electronic Trading Exchange (DETE) — Operational Runbook
 
+> **Status as of 2026-10-24:** Historical runbook; its recovery guarantees and rotation procedures are not verified operational instructions. The live audit found missing command history and balance drift. Use the [current audit and recovery plan](project_review_2026-10-24.md) and [RSA configuration](jwt_configuration.md). Do not execute the replay, balance repair, or key-rotation examples below against the existing VPS without that recovery process.
+>
 > **Audience:** Exchange Site Reliability Engineers (SRE), DevOps Engineers, Platform Administrators  
 > **Target Environment:** Kubernetes / K3s Production Cluster (`https://dete.kartik-mrk.me`, Namespace: `dete`)  
 > **Version:** 1.0.0 (Production Release)

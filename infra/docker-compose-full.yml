@@ -105,8 +105,10 @@ services:
     entrypoint: ["/bin/bash", "-c"]
     command:
       - |
+        set -e
         echo "Creating DETE Kafka topics..."
         kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic order.commands --partitions 3 --replication-factor 1
+        kafka-configs --bootstrap-server kafka:9092 --entity-type topics --entity-name order.commands --alter --add-config retention.ms=-1,retention.bytes=-1,cleanup.policy=delete
         kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic order.events --partitions 3 --replication-factor 1
         kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic trade.executions --partitions 3 --replication-factor 1
         kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic market-data --partitions 3 --replication-factor 1
@@ -202,6 +204,8 @@ services:
       kafka:
         condition: service_healthy
     environment:
+      AUTH_JWT_PRIVATE_KEY: ${AUTH_JWT_PRIVATE_KEY:?Set the RSA private key}
+      AUTH_JWT_PUBLIC_KEY: ${SECURITY_JWT_PUBLIC_KEY:?Set the RSA public key}
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dete?currentSchema=auth
       SPRING_DATASOURCE_USERNAME: dete
@@ -210,7 +214,7 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: dete_redis_secret
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      JWT_SECRET: "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+      SECURITY_JWT_PUBLIC_KEY: ${SECURITY_JWT_PUBLIC_KEY:?Set the RSA public key}
     ports:
       - "8081:8081"
     networks:
@@ -231,7 +235,7 @@ services:
       SPRING_DATASOURCE_USERNAME: dete
       SPRING_DATASOURCE_PASSWORD: dete_local_secret
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      JWT_SECRET: "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+      SECURITY_JWT_PUBLIC_KEY: ${SECURITY_JWT_PUBLIC_KEY:?Set the RSA public key}
     ports:
       - "8082:8082"
     networks:
@@ -285,7 +289,7 @@ services:
       RISK_GRPC_HOST: risk
       RISK_GRPC_PORT: 9095
       ACCOUNT_SERVICE_URL: http://account:8082
-      JWT_SECRET: "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+      SECURITY_JWT_PUBLIC_KEY: ${SECURITY_JWT_PUBLIC_KEY:?Set the RSA public key}
     ports:
       - "8083:8083"
     networks:
@@ -318,6 +322,7 @@ services:
       kafka:
         condition: service_healthy
     environment:
+      SECURITY_JWT_PUBLIC_KEY: ${SECURITY_JWT_PUBLIC_KEY:?Set the RSA public key}
       SPRING_PROFILES_ACTIVE: docker
       PORT: 8086
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dete?currentSchema=audit
@@ -339,6 +344,7 @@ services:
       kafka:
         condition: service_healthy
     environment:
+      SECURITY_JWT_PUBLIC_KEY: ${SECURITY_JWT_PUBLIC_KEY:?Set the RSA public key}
       SPRING_PROFILES_ACTIVE: docker
       PORT: 8087
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dete?currentSchema=market_data
@@ -368,7 +374,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: dete_redis_secret
-      JWT_SECRET: "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+      SECURITY_JWT_PUBLIC_KEY: ${SECURITY_JWT_PUBLIC_KEY:?Set the RSA public key}
       AUTH_SERVICE_URL: http://auth:8081
       ORDER_SERVICE_URL: http://order:8083
       ACCOUNT_SERVICE_URL: http://account:8082

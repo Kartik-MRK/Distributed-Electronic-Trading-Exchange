@@ -36,6 +36,8 @@ public class MarketDataService {
       new EnumMap<>(Instrument.class);
   private final Map<Instrument, TradeTape> tradeTapes = new EnumMap<>(Instrument.class);
   private final Map<Instrument, AtomicLong> lastTradedPrices = new EnumMap<>(Instrument.class);
+  private final Map<Instrument, java.time.Instant> lastTradeTimes = new EnumMap<>(Instrument.class);
+  private final int tapeCapacity;
 
   private final Map<UUID, UUID> orderToAccountMap = new ConcurrentHashMap<>();
   private final Map<UUID, Instrument> orderToInstrumentMap = new ConcurrentHashMap<>();
@@ -52,6 +54,7 @@ public class MarketDataService {
     this.ohlcvManager = ohlcvManager;
     this.tradeRepository = tradeRepository;
     this.broadcaster = broadcaster;
+    this.tapeCapacity = tapeCapacity;
 
     for (Instrument instrument : Instrument.values()) {
       orderBooks.put(instrument, new com.dete.marketdata.model.OrderBookView(instrument));
@@ -59,6 +62,39 @@ public class MarketDataService {
       lastTradedPrices.put(instrument, new AtomicLong(0L));
     }
     log.info("Initialized MarketDataService for {} instruments", Instrument.values().length);
+  }
+
+  /** Rebuild the bounded live projection from durable trades after a process restart. */
+  @jakarta.annotation.PostConstruct
+  public synchronized void restoreRecentTrades() {
+    for (Instrument instrument : Instrument.values()) {
+      var records =
+          new java.util.ArrayList<>(tradeRepository.findByInstrument(instrument, tapeCapacity));
+      records.sort(
+          java.util.Comparator.comparing(
+                  com.dete.marketdata.model.MarketDataTradeRecord::executedAt)
+              .thenComparingLong(com.dete.marketdata.model.MarketDataTradeRecord::sequenceNumber));
+      for (var record : records) {
+        var trade =
+            new TradeExecutedEvent(
+                record.tradeId(),
+                record.tradeId(),
+                instrument,
+                record.buyOrderId(),
+                record.sellOrderId(),
+                record.buyAccountId(),
+                record.sellAccountId(),
+                record.price(),
+                record.quantity(),
+                record.sequenceNumber(),
+                record.executedAt(),
+                1);
+        tradeTapes.get(instrument).addTrade(trade);
+        ohlcvManager.onTrade(instrument, trade.price(), trade.quantity(), trade.timestamp());
+        lastTradedPrices.get(instrument).set(trade.price());
+        lastTradeTimes.put(instrument, trade.timestamp());
+      }
+    }
   }
 
   public com.dete.marketdata.model.OrderBookView getOrderBook(Instrument instrument) {
@@ -104,11 +140,7 @@ public class MarketDataService {
     }
     if (instrument != null) {
       orderToInstrumentMap.put(orderId, instrument);
-      com.dete.marketdata.model.OrderBookView view = orderBooks.get(instrument);
-      if (view != null && price > 0 && quantity > 0) {
-        view.addOrder(orderId, accountId, side, price, quantity);
-        broadcaster.broadcastOrderBook(instrument, view.getL2Snapshot(20));
-      }
+      // Commands are intent, not confirmed resting liquidity. Only engine snapshots update depth.
     }
 
     if (accountId != null) {
@@ -148,14 +180,7 @@ public class MarketDataService {
   }
 
   public void handleOrderFilled(UUID orderId, long filledQty) {
-    Instrument instrument = orderToInstrumentMap.get(orderId);
-    if (instrument != null) {
-      com.dete.marketdata.model.OrderBookView view = orderBooks.get(instrument);
-      if (view != null) {
-        view.applyFill(orderId, filledQty, 0L);
-        broadcaster.broadcastOrderBook(instrument, view.getL2Snapshot(20));
-      }
-    }
+    orderToInstrumentMap.remove(orderId);
 
     UUID accountId = orderToAccountMap.remove(orderId);
     if (accountId != null) {
@@ -174,15 +199,6 @@ public class MarketDataService {
   }
 
   public void handleOrderPartiallyFilled(UUID orderId, long filledQty, long remainingQty) {
-    Instrument instrument = orderToInstrumentMap.get(orderId);
-    if (instrument != null) {
-      com.dete.marketdata.model.OrderBookView view = orderBooks.get(instrument);
-      if (view != null) {
-        view.applyFill(orderId, filledQty, remainingQty);
-        broadcaster.broadcastOrderBook(instrument, view.getL2Snapshot(20));
-      }
-    }
-
     UUID accountId = orderToAccountMap.get(orderId);
     if (accountId != null) {
       Map<String, Object> update =
@@ -202,14 +218,7 @@ public class MarketDataService {
   }
 
   public void handleOrderCancelled(UUID orderId, long remainingQty) {
-    Instrument instrument = orderToInstrumentMap.remove(orderId);
-    if (instrument != null) {
-      com.dete.marketdata.model.OrderBookView view = orderBooks.get(instrument);
-      if (view != null) {
-        view.cancelOrder(orderId, remainingQty);
-        broadcaster.broadcastOrderBook(instrument, view.getL2Snapshot(20));
-      }
-    }
+    orderToInstrumentMap.remove(orderId);
 
     UUID accountId = orderToAccountMap.remove(orderId);
     if (accountId != null) {
@@ -241,14 +250,21 @@ public class MarketDataService {
     }
   }
 
-  public void handleTradeExecuted(TradeExecutedEvent trade) {
+  public synchronized void handleTradeExecuted(TradeExecutedEvent trade) {
     if (trade == null) return;
+    // Persist before touching projections. Database failures must reach Kafka retry handling;
+    // a redelivered execution must not add volume or appear in the tape twice.
+    if (!tradeRepository.saveTrade(trade)) return;
     Instrument instrument = trade.instrument();
 
     // 1. Update Last Traded Price
     AtomicLong ltp = lastTradedPrices.get(instrument);
-    if (ltp != null) {
+    if (ltp != null
+        && !trade
+            .timestamp()
+            .isBefore(lastTradeTimes.getOrDefault(instrument, java.time.Instant.MIN))) {
       ltp.set(trade.price());
+      lastTradeTimes.put(instrument, trade.timestamp());
     }
 
     // 2. Append to in-memory Trade Tape
@@ -260,13 +276,6 @@ public class MarketDataService {
     // 3. Update OHLCV Candles for all 5 intervals
     Map<Interval, Candle> updatedCandles =
         ohlcvManager.onTrade(instrument, trade.price(), trade.quantity(), trade.timestamp());
-
-    // 4. Persist to historical database (read model for Phase 12 Replay)
-    try {
-      tradeRepository.saveTrade(trade);
-    } catch (Exception e) {
-      log.error("Failed to save historical trade record for {}", trade.tradeId(), e);
-    }
 
     // 5. Cache account bindings if present
     if (trade.buyOrderId() != null && trade.buyAccountId() != null) {
@@ -321,7 +330,7 @@ public class MarketDataService {
     }
   }
 
-  public void resetAll() {
+  public synchronized void resetAll() {
     for (com.dete.marketdata.model.OrderBookView view : orderBooks.values()) {
       view.clear();
     }
@@ -332,6 +341,7 @@ public class MarketDataService {
       ltp.set(0L);
     }
     ohlcvManager.clear();
+    lastTradeTimes.clear();
     orderToAccountMap.clear();
     orderToInstrumentMap.clear();
   }

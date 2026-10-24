@@ -16,6 +16,7 @@ public class TradeTape {
   private final Deque<TradeExecutedEvent> buffer;
 
   public TradeTape(int capacity) {
+    if (capacity <= 0) throw new IllegalArgumentException("Trade tape capacity must be positive");
     this.capacity = capacity;
     this.buffer = new ArrayDeque<>(capacity);
   }
@@ -29,7 +30,7 @@ public class TradeTape {
   }
 
   public synchronized List<TradeExecutedEvent> getRecentTrades(int limit) {
-    int count = Math.min(limit, buffer.size());
+    int count = Math.min(Math.max(limit, 0), buffer.size());
     List<TradeExecutedEvent> result = new ArrayList<>(count);
     int i = 0;
     for (TradeExecutedEvent trade : buffer) {

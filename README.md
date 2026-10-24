@@ -11,7 +11,7 @@
 > **DETE** is an educational, event-driven Distributed Electronic Trading Exchange built for high-throughput crypto spot trading (`BTC_USD`, `ETH_USD`, `SOL_USD`).
 > Uses a **single-writer thread model**, **in-memory deterministic order book**, **Kafka event sourcing**, **64-bit fixed-point financial math**, and **append-only double-entry ledger bookkeeping**.
 
-**Review status (2026-10-23):** Known recovery, reservation, and security gaps remain. This is a simulated-funds demo, not a production exchange. See the [code audit and remaining work](docs/project_review.md) for verified checks, fixes, and limitations.
+**Review status (2026-10-24):** The code and VPS audit found missing command history, order/book divergence, ledger drift, and a deployed development signing key. Local fixes are not deployed; data recovery and reservation lifecycle work remain. This is a simulated-funds demo, not a production exchange. See the [latest audit and recovery plan](docs/project_review_2026-10-24.md).
 
 ---
 
@@ -203,6 +203,8 @@ cd "Distributed Electronic Trading Exchange"
 # Start PostgreSQL, Redis, Kafka, ZooKeeper
 docker-compose up -d
 ```
+
+Before starting application services, configure a unique [RSA signing key pair](docs/jwt_configuration.md). Normal startup rejects missing or shared development keys. Full Compose requires `AUTH_JWT_PRIVATE_KEY` and `SECURITY_JWT_PUBLIC_KEY`; Helm requires a separately provisioned key Secret. The existing VPS also needs the data recovery steps in the latest audit before upgrading.
 
 ### 3. Run Microbenchmarks
 ```bash

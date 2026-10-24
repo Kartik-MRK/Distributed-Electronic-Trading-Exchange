@@ -18,6 +18,44 @@ import org.junit.jupiter.api.Test;
 
 class RiskRuleEvaluatorTest {
 
+  @Test
+  void concurrentApprovalsCannotExceedLimitAndRetriesAreIdempotent() throws Exception {
+    var properties = new RiskProperties();
+    properties.setMaxOpenOrdersPerAccount(1);
+    var risk = new RiskRuleEvaluator(properties);
+    UUID account = UUID.randomUUID();
+    var request =
+        new ValidateOrderRequest(
+            UUID.randomUUID(),
+            account,
+            Instrument.BTC_USD,
+            OrderSide.BUY,
+            OrderType.LIMIT,
+            60_000L * FixedPoint.SCALE,
+            FixedPoint.SCALE);
+    try (var pool = java.util.concurrent.Executors.newFixedThreadPool(8)) {
+      var tasks = new java.util.ArrayList<java.util.concurrent.Future<ValidateOrderResponse>>();
+      for (int i = 0; i < 16; i++) tasks.add(pool.submit(() -> risk.evaluate(request)));
+      for (var task : tasks) assertThat(task.get().approved()).isTrue();
+    }
+    assertThat(risk.getAccountState(account).getOpenOrdersCount()).isEqualTo(1);
+    assertThat(
+            risk.evaluate(
+                    new ValidateOrderRequest(
+                        UUID.randomUUID(),
+                        account,
+                        Instrument.BTC_USD,
+                        OrderSide.BUY,
+                        OrderType.LIMIT,
+                        60_000L * FixedPoint.SCALE,
+                        FixedPoint.SCALE))
+                .approved())
+        .isFalse();
+    risk.onOrderClosed(account, request.orderId());
+    risk.onOrderClosed(account, request.orderId());
+    assertThat(risk.getAccountState(account).getOpenOrdersCount()).isZero();
+  }
+
   private RiskProperties properties;
   private RiskRuleEvaluator evaluator;
   private UUID accountId;
@@ -447,9 +485,19 @@ class RiskRuleEvaluatorTest {
     @DisplayName("Should allow new order once resting order is closed")
     void shouldAllowOrderAfterRestingOrderRemoved() {
       UUID order1 = UUID.randomUUID();
-      evaluator
-          .getAccountState(accountId)
-          .addRestingOrder(order1, Instrument.BTC_USD, OrderSide.SELL, 60_000L * FixedPoint.SCALE);
+      assertThat(
+              evaluator
+                  .evaluate(
+                      new ValidateOrderRequest(
+                          order1,
+                          accountId,
+                          Instrument.BTC_USD,
+                          OrderSide.SELL,
+                          OrderType.LIMIT,
+                          60_000L * FixedPoint.SCALE,
+                          FixedPoint.SCALE))
+                  .approved())
+          .isTrue();
 
       // Close the resting order
       evaluator.onOrderClosed(accountId, order1);

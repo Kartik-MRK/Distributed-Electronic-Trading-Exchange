@@ -54,7 +54,11 @@ public class MatchingConfig {
     ConcurrentKafkaListenerContainerFactory<String, String> factory =
         new ConcurrentKafkaListenerContainerFactory<>();
     factory.setConsumerFactory(consumerFactory);
+    factory.setAutoStartup(false);
     factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+    factory.setCommonErrorHandler(
+        new org.springframework.kafka.listener.DefaultErrorHandler(
+            new org.springframework.util.backoff.FixedBackOff(1000L, Long.MAX_VALUE)));
     return factory;
   }
 }

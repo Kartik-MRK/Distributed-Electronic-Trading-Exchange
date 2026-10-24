@@ -39,11 +39,11 @@ spec:
                   key: POSTGRES_PASSWORD
             - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
               value: "kafka:9092"
-            - name: JWT_SECRET
+            - name: SECURITY_JWT_PUBLIC_KEY
               valueFrom:
                 secretKeyRef:
-                  name: dete-secrets
-                  key: JWT_SECRET
+                  name: {{ .Values.secrets.jwtKeySecretName }}
+                  key: public-key
           resources:
             {{- toYaml .Values.account.resources | nindent 12 }}
           startupProbe:

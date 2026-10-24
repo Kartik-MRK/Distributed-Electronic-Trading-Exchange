@@ -34,10 +34,11 @@ public class MarketDataWebSocketBroadcaster {
 
   public void broadcastTrade(Instrument instrument, TradeExecutedEvent trade) {
     String topicSymbol = "/topic/trades." + instrument.symbol();
-    messagingTemplate.convertAndSend(topicSymbol, trade);
+    var publicTrade = com.dete.marketdata.model.PublicTrade.from(trade);
+    messagingTemplate.convertAndSend(topicSymbol, publicTrade);
 
     String topicName = "/topic/trades." + instrument.name();
-    messagingTemplate.convertAndSend(topicName, trade);
+    messagingTemplate.convertAndSend(topicName, publicTrade);
     log.trace("Broadcast trade to {} and {}", topicSymbol, topicName);
   }
 

@@ -53,13 +53,16 @@ public class AccountServiceClient {
   }
 
   private void depositAsset(UUID accountId, String asset, long amountNanos) {
-    String url = accountServiceUrl + "/accounts/deposit";
+    String url = accountServiceUrl + "/internal/accounts/deposit";
     Map<String, Object> request =
         Map.of(
             "accountId", accountId,
             "asset", asset,
             "amount", amountNanos,
-            "referenceId", UUID.randomUUID());
+            "referenceId",
+                UUID.nameUUIDFromBytes(
+                    ("welcome:" + accountId + ":" + asset)
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);

@@ -36,6 +36,7 @@ public final class OrderBook {
   private final NavigableMap<Long, PriceLevel> bids;
   private final NavigableMap<Long, PriceLevel> asks;
   private final Map<UUID, BookOrder> orderIndex;
+  private final java.util.Set<UUID> processedOrderIds = new java.util.HashSet<>();
 
   private long sequenceNumber;
 
@@ -95,22 +96,27 @@ public final class OrderBook {
     bids.clear();
     asks.clear();
     orderIndex.clear();
+    processedOrderIds.clear();
     sequenceNumber = 0;
   }
 
   /** Main entry point for processing incoming order commands. */
   public MatchResult processOrder(OrderPlacedEvent event) {
+    Objects.requireNonNull(event, "event");
+    Objects.requireNonNull(event.orderId(), "orderId");
+    Objects.requireNonNull(event.accountId(), "accountId");
+    Objects.requireNonNull(event.side(), "side");
+    Objects.requireNonNull(event.orderType(), "orderType");
+    Objects.requireNonNull(event.timestamp(), "timestamp");
+    if (event.instrument() != instrument) {
+      throw new IllegalArgumentException("Order instrument does not match this book");
+    }
     MatchResult result = new MatchResult();
+    if (!processedOrderIds.add(event.orderId())) return result;
 
     if (event.quantity() <= 0) {
       result.setRejectedEvent(
           OrderRejectedEvent.of(event.orderId(), "Quantity must be strictly positive"));
-      return result;
-    }
-
-    if (orderIndex.containsKey(event.orderId())) {
-      result.setRejectedEvent(
-          OrderRejectedEvent.of(event.orderId(), "Duplicate orderId: " + event.orderId()));
       return result;
     }
 
@@ -177,9 +183,10 @@ public final class OrderBook {
       return result;
     }
 
-    if (command.newQuantity() <= 0) {
+    if (command.newQuantity() <= 0 || command.newPrice() <= 0) {
       result.setRejectedEvent(
-          OrderRejectedEvent.of(command.orderId(), "New quantity must be strictly positive"));
+          OrderRejectedEvent.of(
+              command.orderId(), "New price and quantity must be strictly positive"));
       return result;
     }
 
@@ -336,7 +343,18 @@ public final class OrderBook {
         restingMaker.fill(fillQty);
         level.reduceVolume(fillQty);
 
-        UUID tradeId = UUID.randomUUID();
+        UUID tradeId =
+            UUID.nameUUIDFromBytes(
+                (instrument.name()
+                        + ":"
+                        + incoming.orderId()
+                        + ":"
+                        + restingMaker.orderId()
+                        + ":"
+                        + incoming.filledQuantity()
+                        + ":"
+                        + restingMaker.filledQuantity())
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8));
         long tradeSeq = ++sequenceNumber;
 
         UUID buyOrderId =
@@ -350,7 +368,7 @@ public final class OrderBook {
 
         TradeExecutedEvent trade =
             new TradeExecutedEvent(
-                UUID.randomUUID(),
+                tradeId,
                 tradeId,
                 instrument,
                 buyOrderId,
@@ -360,7 +378,7 @@ public final class OrderBook {
                 matchPrice,
                 fillQty,
                 tradeSeq,
-                Instant.now(),
+                incoming.timestamp(),
                 1);
         result.addTrade(trade);
 

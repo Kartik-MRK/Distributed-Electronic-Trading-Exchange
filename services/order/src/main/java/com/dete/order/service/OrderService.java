@@ -79,6 +79,8 @@ public class OrderService {
 
   @Transactional
   public OrderResponse placeOrder(CreateOrderRequest request, UUID accountId, UUID idempotencyKey) {
+    // Serialize concurrent retries before any remote reservation can happen.
+    orderRepository.lockIdempotencyKey(idempotencyKey);
     // 1. Idempotency check via Redis
     Optional<OrderResponse> cached = idempotencyService.getCachedOrder(idempotencyKey);
     if (cached.isPresent()) {
@@ -98,7 +100,6 @@ public class OrderService {
 
     // 3. Pre-trade Risk Validation with persistent order ID
     UUID orderId = UUID.randomUUID();
-    riskValidator.validateOrder(request, accountId, orderId);
 
     // 4. Calculate required funds reservation
     String reserveAsset;
@@ -118,6 +119,11 @@ public class OrderService {
       reserveAsset = request.instrument().baseAsset();
       reserveAmount = request.quantity();
     }
+
+    if (reserveAmount <= 0) {
+      throw new InvalidOrderException("Order reservation must be positive at supported precision");
+    }
+    riskValidator.validateOrder(request, accountId, orderId);
 
     // 5. Synchronous balance reservation via Account Service
     accountClient.reserveFunds(accountId, orderId, reserveAsset, reserveAmount);

@@ -19,9 +19,18 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
   private final ObjectMapper objectMapper;
+  private final StompAuthorizationInterceptor authorizationInterceptor;
 
-  public WebSocketConfig(ObjectMapper objectMapper) {
+  public WebSocketConfig(
+      ObjectMapper objectMapper, StompAuthorizationInterceptor authorizationInterceptor) {
     this.objectMapper = objectMapper;
+    this.authorizationInterceptor = authorizationInterceptor;
+  }
+
+  @Override
+  public void configureClientInboundChannel(
+      org.springframework.messaging.simp.config.ChannelRegistration registration) {
+    registration.interceptors(authorizationInterceptor);
   }
 
   @Override

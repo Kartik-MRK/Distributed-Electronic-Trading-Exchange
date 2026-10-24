@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
-    "test": "node --test tests/api-contract.test.cjs"
+    "test": "node --test tests/api-contract.test.cjs tests/ws-session.test.cjs"
   },
   "dependencies": {
     "@stomp/stompjs": "^7.3.0",

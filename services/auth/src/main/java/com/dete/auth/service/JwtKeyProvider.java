@@ -21,26 +21,47 @@ public class JwtKeyProvider {
   private final KeyPair keyPair;
 
   public JwtKeyProvider(String keyId) {
-    this(keyId, null, null);
+    this(keyId, null, null, true);
   }
 
   @org.springframework.beans.factory.annotation.Autowired
   public JwtKeyProvider(
       @Value("${auth.jwt.key-id:dete-auth-key-1}") String keyId,
       @Value("${auth.jwt.private-key:}") String privateKeyB64,
-      @Value("${auth.jwt.public-key:}") String publicKeyB64) {
+      @Value("${auth.jwt.public-key:}") String publicKeyB64,
+      @Value("${security.jwt.allow-development-key:false}") boolean allowDevelopmentKey) {
     this.keyId = keyId;
     if (privateKeyB64 != null
         && !privateKeyB64.isBlank()
         && publicKeyB64 != null
         && !publicKeyB64.isBlank()) {
       PrivateKey priv = RsaKeyUtils.parsePrivateKey(privateKeyB64);
-      PublicKey pub = RsaKeyUtils.parsePublicKey(publicKeyB64);
+      PublicKey pub = RsaKeyUtils.configuredPublicKey(publicKeyB64, allowDevelopmentKey);
       this.keyPair = new KeyPair(pub, priv);
     } else {
+      if (!allowDevelopmentKey
+          || (privateKeyB64 != null && !privateKeyB64.isBlank())
+          || (publicKeyB64 != null && !publicKeyB64.isBlank())) {
+        throw new IllegalStateException(
+            "Configure both AUTH_JWT_PRIVATE_KEY and AUTH_JWT_PUBLIC_KEY");
+      }
       PrivateKey priv = RsaKeyUtils.parsePrivateKey(RsaKeyUtils.DEFAULT_PRIVATE_KEY);
       PublicKey pub = RsaKeyUtils.parsePublicKey(RsaKeyUtils.DEFAULT_PUBLIC_KEY);
       this.keyPair = new KeyPair(pub, priv);
+    }
+    try {
+      var signature = java.security.Signature.getInstance("SHA256withRSA");
+      byte[] challenge =
+          "DETE signing key validation".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+      signature.initSign(keyPair.getPrivate());
+      signature.update(challenge);
+      byte[] signed = signature.sign();
+      signature.initVerify(keyPair.getPublic());
+      signature.update(challenge);
+      if (!signature.verify(signed))
+        throw new IllegalStateException("JWT private and public keys do not match");
+    } catch (java.security.GeneralSecurityException ex) {
+      throw new IllegalStateException("Invalid JWT signing key pair", ex);
     }
   }
 

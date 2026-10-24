@@ -1,3 +1,6 @@
+{{- if ne (int .Values.matchingEngine.replicaCount) 1 }}
+{{- fail "matchingEngine.replicaCount must be 1: recovery currently requires a single owner" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,6 +10,8 @@ metadata:
     app: matching-engine
 spec:
   replicas: {{ .Values.matchingEngine.replicaCount }}
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: matching-engine

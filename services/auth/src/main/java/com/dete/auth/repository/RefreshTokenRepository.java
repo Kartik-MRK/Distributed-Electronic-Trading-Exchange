@@ -55,6 +55,18 @@ public class RefreshTokenRepository {
     }
   }
 
+  /** Must be called inside the transaction before reading or revoking a refresh token. */
+  public void lockUserByTokenHash(String tokenHash) {
+    jdbcTemplate.queryForList(
+        """
+        SELECT u.user_id FROM auth.users u
+        JOIN auth.refresh_tokens t ON t.user_id = u.user_id
+        WHERE t.token_hash = ? FOR UPDATE OF u
+        """,
+        UUID.class,
+        tokenHash);
+  }
+
   public int revokeByTokenId(UUID tokenId) {
     String sql = "UPDATE auth.refresh_tokens SET revoked = true WHERE token_id = ?";
     return jdbcTemplate.update(sql, tokenId);

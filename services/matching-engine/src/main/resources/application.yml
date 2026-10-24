@@ -19,10 +19,6 @@ spring:
 matching:
   consumer:
     group-id: matching-engine-group
-  producer:
-    sync: true
-  replay:
-    on-startup: false
 
 management:
   endpoints:

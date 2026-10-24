@@ -38,6 +38,21 @@ public class AccountRepository {
     return count != null && count > 0;
   }
 
+  /** All balance/ledger mutations acquire these locks in the same order. */
+  public void lockAccounts(UUID... accountIds) {
+    java.util.Arrays.stream(accountIds)
+        .distinct()
+        .sorted()
+        .forEach(
+            id -> {
+              createAccount(id);
+              jdbcTemplate.queryForObject(
+                  "SELECT account_id FROM account.accounts WHERE account_id = ? FOR UPDATE",
+                  UUID.class,
+                  id);
+            });
+  }
+
   public Optional<Account> findById(UUID accountId) {
     String sql = "SELECT account_id, created_at FROM account.accounts WHERE account_id = ?";
     try {

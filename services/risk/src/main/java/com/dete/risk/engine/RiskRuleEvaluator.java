@@ -31,6 +31,7 @@ public class RiskRuleEvaluator {
 
   // orderId -> accountId index for terminal event cleanup
   private final Map<UUID, UUID> orderToAccount = new ConcurrentHashMap<>();
+  private final Map<UUID, ValidateOrderRequest> approvedRequests = new ConcurrentHashMap<>();
 
   public RiskRuleEvaluator(RiskProperties properties) {
     this.properties = properties;
@@ -40,9 +41,22 @@ public class RiskRuleEvaluator {
     lastTradePrices.put(Instrument.SOL_USD, 150L * FixedPoint.SCALE);
   }
 
-  public ValidateOrderResponse evaluate(ValidateOrderRequest request) {
+  public synchronized ValidateOrderResponse evaluate(ValidateOrderRequest request) {
     if (request == null) {
       return ValidateOrderResponse.reject("Order request cannot be null");
+    }
+
+    if (request.orderId() == null
+        || request.accountId() == null
+        || request.side() == null
+        || request.orderType() == null) {
+      return ValidateOrderResponse.reject("Order ID, account, side and order type are required");
+    }
+    ValidateOrderRequest approved = approvedRequests.get(request.orderId());
+    if (approved != null) {
+      return approved.equals(request)
+          ? ValidateOrderResponse.approve()
+          : ValidateOrderResponse.reject("Order ID already used for different terms");
     }
 
     Instrument instrument = request.instrument();
@@ -81,7 +95,13 @@ public class RiskRuleEvaluator {
     }
 
     if (effectivePrice > 0) {
-      long notional = FixedPoint.multiply(effectivePrice, qty);
+      long notional;
+      try {
+        notional = FixedPoint.multiply(effectivePrice, qty);
+      } catch (ArithmeticException ex) {
+        return ValidateOrderResponse.reject("Order notional exceeds supported precision");
+      }
+      if (notional <= 0) return ValidateOrderResponse.reject("Order notional must be positive");
       if (notional > properties.getMaxOrderNotional()) {
         return ValidateOrderResponse.reject(
             String.format(
@@ -165,6 +185,7 @@ public class RiskRuleEvaluator {
 
     // All 6 rules passed! Update tracking state for this account
     accountState.incrementOpenOrders();
+    approvedRequests.put(request.orderId(), request);
     if (request.orderId() != null) {
       orderToAccount.put(request.orderId(), request.accountId());
       if (price != null && price > 0 && request.orderType() == OrderType.LIMIT) {
@@ -200,26 +221,16 @@ public class RiskRuleEvaluator {
     return accountStates.computeIfAbsent(accountId, AccountRiskState::new);
   }
 
-  public void onOrderClosed(UUID accountId, UUID orderId) {
-    UUID resolvedAccountId = accountId;
-    if (resolvedAccountId == null && orderId != null) {
-      resolvedAccountId = orderToAccount.remove(orderId);
-    } else if (orderId != null) {
-      orderToAccount.remove(orderId);
-    }
-
-    if (resolvedAccountId != null) {
-      AccountRiskState state = accountStates.get(resolvedAccountId);
-      if (state != null) {
-        state.decrementOpenOrders();
-        if (orderId != null) {
-          state.removeRestingOrder(orderId);
-        }
-      }
-    } else if (orderId != null) {
-      for (AccountRiskState state : accountStates.values()) {
-        state.removeRestingOrder(orderId);
-      }
+  public synchronized void onOrderClosed(UUID accountId, UUID orderId) {
+    if (orderId == null) return;
+    UUID owner = orderToAccount.get(orderId);
+    if (owner == null || (accountId != null && !owner.equals(accountId))) return;
+    orderToAccount.remove(orderId);
+    approvedRequests.remove(orderId);
+    AccountRiskState state = accountStates.get(owner);
+    if (state != null) {
+      state.decrementOpenOrders();
+      state.removeRestingOrder(orderId);
     }
   }
 }

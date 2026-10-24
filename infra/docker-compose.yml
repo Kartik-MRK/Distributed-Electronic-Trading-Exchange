@@ -134,11 +134,15 @@ services:
     entrypoint: ["/bin/bash", "-c"]
     command:
       - |
+        set -e
         echo "Creating DETE Kafka topics..."
 
         # Main operational topics (3 partitions for instrument-level parallelism)
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists \
           --topic order.commands --partitions 3 --replication-factor 1
+        kafka-configs --bootstrap-server kafka:29092 --entity-type topics \
+          --entity-name order.commands --alter \
+          --add-config retention.ms=-1,retention.bytes=-1,cleanup.policy=delete
 
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists \
           --topic order.events --partitions 3 --replication-factor 1

@@ -9,6 +9,8 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,7 +38,15 @@ public class AccountController {
   }
 
   @GetMapping(value = {"/{accountId}", "/{accountId}/balances"})
-  public ResponseEntity<List<BalanceResponse>> getBalancesById(@PathVariable UUID accountId) {
+  public ResponseEntity<List<BalanceResponse>> getBalancesById(
+      @PathVariable UUID accountId, Authentication authentication) {
+    if (authentication == null
+        || !authentication.isAuthenticated()
+        || (!accountId.equals(authentication.getPrincipal())
+            && authentication.getAuthorities().stream()
+                .noneMatch(a -> "ROLE_ADMIN".equals(a.getAuthority())))) {
+      throw new AccessDeniedException("You may only view your own account balances");
+    }
     List<BalanceResponse> balances = accountService.getAllBalances(accountId);
     return ResponseEntity.ok(balances);
   }

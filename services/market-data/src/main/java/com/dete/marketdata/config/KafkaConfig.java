@@ -31,6 +31,9 @@ public class KafkaConfig {
         new ConcurrentKafkaListenerContainerFactory<>();
     factory.setConsumerFactory(consumerFactory);
     factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+    factory.setCommonErrorHandler(
+        new org.springframework.kafka.listener.DefaultErrorHandler(
+            new org.springframework.util.backoff.FixedBackOff(1000L, Long.MAX_VALUE)));
     return factory;
   }
 }

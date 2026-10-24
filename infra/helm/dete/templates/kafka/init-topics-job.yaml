@@ -18,6 +18,7 @@ spec:
           command: ["/bin/bash", "-c"]
           args:
             - |
+              set -e
               echo "Waiting for Kafka to become available..."
               until kafka-broker-api-versions --bootstrap-server kafka:9092; do
                 sleep 2
@@ -45,6 +46,11 @@ spec:
                 kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists \
                   --topic "$topic" --partitions "$partitions" --replication-factor 1
               done
+
+              # Matching recovery requires the entire command log until durable checkpoints exist.
+              kafka-configs --bootstrap-server kafka:9092 --entity-type topics \
+                --entity-name order.commands --alter \
+                --add-config retention.ms=-1,retention.bytes=-1,cleanup.policy=delete
 
               echo "Kafka topics created successfully:"
               kafka-topics --bootstrap-server kafka:9092 --list

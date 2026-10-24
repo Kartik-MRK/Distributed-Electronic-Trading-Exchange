@@ -59,6 +59,8 @@ subprojects {
     // All subprojects get these common test settings
     // ---------------------------------------------------------------------------
     tasks.withType<Test> {
+        // Shared fixture keys are explicitly opt-in and never the runtime default.
+        systemProperty("security.jwt.allow-development-key", "true")
         useJUnitPlatform()
         testLogging {
             events(TestLogEvent.PASSED, TestLogEvent.FAILED, TestLogEvent.SKIPPED)

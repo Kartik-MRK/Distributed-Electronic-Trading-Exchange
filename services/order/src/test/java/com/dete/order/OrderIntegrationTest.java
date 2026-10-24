@@ -100,6 +100,40 @@ class OrderIntegrationTest extends FullStackTestBase {
 
   @MockBean private AccountClient accountClient;
 
+  @Autowired private com.dete.order.service.OrderService orderService;
+
+  @Test
+  void concurrentIdenticalPlacementReservesExactlyOnce() throws Exception {
+    UUID account = UUID.randomUUID();
+    UUID key = UUID.randomUUID();
+    var request =
+        new CreateOrderRequest(
+            Instrument.BTC_USD,
+            OrderSide.BUY,
+            OrderType.LIMIT,
+            60_000L * FixedPoint.SCALE,
+            FixedPoint.SCALE);
+    var start = new java.util.concurrent.CountDownLatch(1);
+    try (var executor = java.util.concurrent.Executors.newFixedThreadPool(6)) {
+      var results = new java.util.ArrayList<java.util.concurrent.Future<OrderResponse>>();
+      for (int i = 0; i < 6; i++) {
+        results.add(
+            executor.submit(
+                () -> {
+                  start.await();
+                  return orderService.placeOrder(request, account, key);
+                }));
+      }
+      start.countDown();
+      var ids = new java.util.HashSet<UUID>();
+      for (var result : results) ids.add(result.get(20, TimeUnit.SECONDS).orderId());
+      assertThat(ids).hasSize(1);
+      verify(accountClient, org.mockito.Mockito.times(1))
+          .reserveFunds(eq(account), any(), eq("USD"), eq(60_000L * FixedPoint.SCALE));
+      assertThat(orderRepository.findByIdempotencyKey(key)).isPresent();
+    }
+  }
+
   @BeforeEach
   void setUp() {
     restTemplate
@@ -417,6 +451,15 @@ class OrderIntegrationTest extends FullStackTestBase {
       "DLQ Routing & Reprocessing: Corrupt message sent to DLQ -> Peek DLQ -> Reprocess to main topic")
   void testDlqRoutingAndReprocessing() throws Exception {
     String corruptPayload = "MALFORMED_UNPARSEABLE_JSON_MESSAGE_12345";
+    String adminToken =
+        Jwts.builder()
+            .subject(UUID.randomUUID().toString())
+            .claim("username", "audit-admin")
+            .claim("roles", List.of("ADMIN"))
+            .expiration(new Date(System.currentTimeMillis() + 60_000))
+            .signWith(TEST_KEY_PAIR.getPrivate())
+            .compact();
+    HttpHeaders adminHeaders = createHeaders(adminToken, null);
 
     // Send malformed message to order.events
     kafkaTemplate
@@ -430,17 +473,27 @@ class OrderIntegrationTest extends FullStackTestBase {
         .until(
             () -> {
               ResponseEntity<Map> dlqPeek =
-                  restTemplate.getForEntity("/admin/dlq/messages?maxMessages=10", Map.class);
+                  restTemplate.exchange(
+                      "/admin/dlq/messages?maxMessages=10",
+                      HttpMethod.GET,
+                      new HttpEntity<>(adminHeaders),
+                      Map.class);
               if (dlqPeek.getStatusCode() == HttpStatus.OK && dlqPeek.getBody() != null) {
                 List<?> messages = (List<?>) dlqPeek.getBody().get("messages");
-                return messages != null && messages.contains(corruptPayload);
+                return messages != null
+                    && messages.stream()
+                        .anyMatch(
+                            entry ->
+                                entry instanceof Map<?, ?> message
+                                    && corruptPayload.equals(message.get("value")));
               }
               return false;
             });
 
     // Call reprocess endpoint
     ResponseEntity<Map> reprocessResp =
-        restTemplate.postForEntity("/admin/dlq/reprocess?maxMessages=10", null, Map.class);
+        restTemplate.postForEntity(
+            "/admin/dlq/reprocess?maxMessages=10", new HttpEntity<>(adminHeaders), Map.class);
     assertThat(reprocessResp.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(reprocessResp.getBody().get("status")).isEqualTo("SUCCESS");
     assertThat(((Number) reprocessResp.getBody().get("reprocessedCount")).intValue())

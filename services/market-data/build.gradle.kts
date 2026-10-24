@@ -16,6 +16,7 @@ dependencies {
     implementation(project(":libs:common-domain"))
     implementation(project(":libs:common-events"))
     implementation(project(":libs:common-security"))
+    implementation(libs.jjwt.api)
 
     // Web & WebSocket & Security
     implementation(libs.spring.boot.starter.web)

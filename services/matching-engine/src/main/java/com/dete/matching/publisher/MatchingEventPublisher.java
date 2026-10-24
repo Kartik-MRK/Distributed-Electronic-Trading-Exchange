@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
@@ -26,9 +25,6 @@ public class MatchingEventPublisher {
 
   private final KafkaTemplate<String, String> kafkaTemplate;
   private final ObjectMapper objectMapper;
-
-  @Value("${matching.producer.sync:true}")
-  private boolean synchronous = true;
 
   public MatchingEventPublisher(
       KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper) {
@@ -79,11 +75,7 @@ public class MatchingEventPublisher {
   private void publishTrade(TradeExecutedEvent trade) throws Exception {
     String payload = objectMapper.writeValueAsString(trade);
     String key = trade.instrument().symbol();
-    if (synchronous) {
-      kafkaTemplate.send(TOPIC_TRADE_EXECUTIONS, key, payload).get(5, TimeUnit.SECONDS);
-    } else {
-      kafkaTemplate.send(TOPIC_TRADE_EXECUTIONS, key, payload);
-    }
+    kafkaTemplate.send(TOPIC_TRADE_EXECUTIONS, key, payload).get(5, TimeUnit.SECONDS);
     log.debug(
         "Published TradeExecutedEvent: tradeId={}, instrument={}, price={}, qty={}",
         trade.tradeId(),
@@ -94,11 +86,7 @@ public class MatchingEventPublisher {
 
   private void publishOrderEvent(String key, Object event) throws Exception {
     String payload = objectMapper.writeValueAsString(event);
-    if (synchronous) {
-      kafkaTemplate.send(TOPIC_ORDER_EVENTS, key, payload).get(5, TimeUnit.SECONDS);
-    } else {
-      kafkaTemplate.send(TOPIC_ORDER_EVENTS, key, payload);
-    }
+    kafkaTemplate.send(TOPIC_ORDER_EVENTS, key, payload).get(5, TimeUnit.SECONDS);
     log.debug("Published order event to {}: key={}", TOPIC_ORDER_EVENTS, key);
   }
 }

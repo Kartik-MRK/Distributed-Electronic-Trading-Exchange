@@ -34,6 +34,7 @@ export function setAuthSession(auth: AuthResponse): void {
     roles: ['ROLE_TRADER'],
   };
   sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+  window.dispatchEvent(new Event('dete-auth-changed'));
 }
 
 export function updateCurrentUser(partialUser: Partial<UserRecord>): void {
@@ -49,12 +50,14 @@ export function setCustomUserSession(token: string, user: UserRecord): void {
   if (typeof window === 'undefined') return;
   sessionStorage.setItem(TOKEN_KEY, token);
   sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+  window.dispatchEvent(new Event('dete-auth-changed'));
 }
 
 export function clearAuthSession(): void {
   if (typeof window === 'undefined') return;
   sessionStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(USER_KEY);
+  window.dispatchEvent(new Event('dete-auth-changed'));
 }
 
 export function isAuthenticated(): boolean {

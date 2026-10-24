@@ -46,7 +46,7 @@ public class MarketDataTradeRepository {
              buy_order_id, sell_order_id, buy_account_id, sell_account_id, executed_at
       FROM market_data.trades
       WHERE instrument = ?
-      ORDER BY sequence_number DESC
+      ORDER BY executed_at DESC, sequence_number DESC, trade_id DESC
       LIMIT ?
       """;
 
@@ -69,21 +69,22 @@ public class MarketDataTradeRepository {
       ORDER BY sequence_number ASC
       """;
 
-  public void saveTrade(TradeExecutedEvent trade) {
-    if (trade == null) return;
+  public boolean saveTrade(TradeExecutedEvent trade) {
+    if (trade == null) return false;
     try {
-      jdbcTemplate.update(
-          INSERT_TRADE_SQL,
-          trade.tradeId(),
-          trade.instrument().name(),
-          trade.sequenceNumber(),
-          trade.price(),
-          trade.quantity(),
-          trade.buyOrderId(),
-          trade.sellOrderId(),
-          trade.buyAccountId(),
-          trade.sellAccountId(),
-          Timestamp.from(trade.timestamp()));
+      return jdbcTemplate.update(
+              INSERT_TRADE_SQL,
+              trade.tradeId(),
+              trade.instrument().name(),
+              trade.sequenceNumber(),
+              trade.price(),
+              trade.quantity(),
+              trade.buyOrderId(),
+              trade.sellOrderId(),
+              trade.buyAccountId(),
+              trade.sellAccountId(),
+              Timestamp.from(trade.timestamp()))
+          == 1;
     } catch (Exception e) {
       log.error("Failed to persist trade {}", trade.tradeId(), e);
       throw e;

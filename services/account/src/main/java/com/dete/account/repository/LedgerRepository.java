@@ -51,6 +51,19 @@ public class LedgerRepository {
     return seq != null ? seq : 1L;
   }
 
+  public java.util.Optional<LedgerEntry> findOperation(
+      UUID accountId, UUID referenceId, LedgerEntryType type) {
+    return jdbcTemplate
+        .query(
+            "SELECT * FROM account.ledger_entries WHERE account_id = ? AND reference_id = ? AND entry_type = ?",
+            LedgerRepository::mapRow,
+            accountId,
+            referenceId,
+            type.name())
+        .stream()
+        .findFirst();
+  }
+
   public List<LedgerEntry> findByAccountId(UUID accountId, int limit, int offset) {
     String sql =
         """

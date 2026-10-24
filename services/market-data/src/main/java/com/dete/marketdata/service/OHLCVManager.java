@@ -4,13 +4,13 @@ import com.dete.common.domain.enums.Instrument;
 import com.dete.marketdata.model.Candle;
 import com.dete.marketdata.model.Interval;
 import java.time.Instant;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -21,12 +21,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class OHLCVManager {
 
-  private final int maxHistory;
   private final Map<Instrument, Map<Interval, SeriesState>> seriesMap =
       new EnumMap<>(Instrument.class);
 
   public OHLCVManager(@Value("${marketdata.candles.max-history:1000}") int maxHistory) {
-    this.maxHistory = maxHistory;
+    if (maxHistory < 1) throw new IllegalArgumentException("Candle history must be positive");
     for (Instrument instrument : Instrument.values()) {
       Map<Interval, SeriesState> intervalMap = new EnumMap<>(Interval.class);
       for (Interval interval : Interval.values()) {
@@ -54,7 +53,7 @@ public class OHLCVManager {
       SeriesState state = intervalMap.get(interval);
       if (state != null) {
         Candle updated = state.addTrade(price, quantity, tradeEpochMs, interval.getDurationMs());
-        updatedCandles.put(interval, updated);
+        if (updated != null) updatedCandles.put(interval, updated);
       }
     }
 
@@ -85,43 +84,46 @@ public class OHLCVManager {
 
   static class SeriesState {
     private final int maxHistory;
-    private final Deque<Candle> history;
-    private Candle currentCandle;
+    private final NavigableMap<Long, Window> windows = new TreeMap<>();
 
     SeriesState(int maxHistory) {
       this.maxHistory = maxHistory;
-      this.history = new ArrayDeque<>(maxHistory);
     }
 
     synchronized Candle addTrade(long price, long quantity, long tradeEpochMs, long durationMs) {
       long windowStart = (tradeEpochMs / durationMs) * durationMs;
       long windowEnd = windowStart + durationMs - 1;
 
-      if (currentCandle == null) {
-        currentCandle = Candle.ofFirstTrade(windowStart, windowEnd, price, quantity);
-      } else if (currentCandle.openTime() == windowStart) {
-        currentCandle = currentCandle.withTrade(price, quantity);
-      } else if (windowStart > currentCandle.openTime()) {
-        if (history.size() >= maxHistory) {
-          history.removeFirst();
-        }
-        history.addLast(currentCandle);
-        currentCandle = Candle.ofFirstTrade(windowStart, windowEnd, price, quantity);
+      // Keep the current window plus maxHistory historical windows. Never put a late trade
+      // into today's candle, and do not resurrect windows that have aged out of retention.
+      if (windows.size() >= maxHistory + 1 && windowStart < windows.firstKey()) return null;
+      Window window = windows.get(windowStart);
+      if (window == null) {
+        window =
+            new Window(Candle.ofFirstTrade(windowStart, windowEnd, price, quantity), tradeEpochMs);
+        windows.put(windowStart, window);
       } else {
-        // Trade timestamp older than current candle - update current if within or ignore
-        currentCandle = currentCandle.withTrade(price, quantity);
+        Candle old = window.candle;
+        window.candle =
+            new Candle(
+                windowStart,
+                windowEnd,
+                tradeEpochMs < window.firstTrade ? price : old.open(),
+                Math.max(old.high(), price),
+                Math.min(old.low(), price),
+                tradeEpochMs >= window.lastTrade ? price : old.close(),
+                Math.addExact(old.volume(), quantity),
+                Math.incrementExact(old.tradeCount()));
+        window.firstTrade = Math.min(window.firstTrade, tradeEpochMs);
+        window.lastTrade = Math.max(window.lastTrade, tradeEpochMs);
       }
-
-      return currentCandle;
+      while (windows.size() > maxHistory + 1) windows.pollFirstEntry();
+      return window.candle;
     }
 
     synchronized List<Candle> getCandles(int limit) {
       int effectiveLimit = limit <= 0 ? 100 : limit;
-      List<Candle> all = new ArrayList<>(history.size() + 1);
-      all.addAll(history);
-      if (currentCandle != null) {
-        all.add(currentCandle);
-      }
+      List<Candle> all = windows.values().stream().map(w -> w.candle).toList();
 
       if (all.size() <= effectiveLimit) {
         return all;
@@ -130,8 +132,19 @@ public class OHLCVManager {
     }
 
     synchronized void clear() {
-      history.clear();
-      currentCandle = null;
+      windows.clear();
+    }
+
+    private static class Window {
+      Candle candle;
+      long firstTrade;
+      long lastTrade;
+
+      Window(Candle candle, long timestamp) {
+        this.candle = candle;
+        this.firstTrade = timestamp;
+        this.lastTrade = timestamp;
+      }
     }
   }
 }

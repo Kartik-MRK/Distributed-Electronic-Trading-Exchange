@@ -37,6 +37,43 @@ class AuthIntegrationTest extends FullStackTestBase {
 
   @Autowired private JwtKeyProvider jwtKeyProvider;
 
+  @Autowired private com.dete.auth.service.AuthService authService;
+
+  @Test
+  void concurrentRefreshIssuesOneReplacementAndReuseRevokesIt() throws Exception {
+    String username = "rotation_" + UUID.randomUUID().toString().substring(0, 8);
+    authService.register(new RegisterRequest(username, username + "@dete.io", "Password123!"));
+    var initial = authService.login(new LoginRequest(username, "Password123!"), username);
+    var start = new java.util.concurrent.CountDownLatch(1);
+    try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+      var results = new java.util.ArrayList<java.util.concurrent.Future<AuthResponse>>();
+      for (int i = 0; i < 2; i++) {
+        results.add(
+            executor.submit(
+                () -> {
+                  start.await();
+                  try {
+                    return authService.refresh(new TokenRefreshRequest(initial.refreshToken()));
+                  } catch (com.dete.auth.exception.AuthenticationException expected) {
+                    return null;
+                  }
+                }));
+      }
+      start.countDown();
+      var successful = new java.util.ArrayList<AuthResponse>();
+      for (var result : results) {
+        var response = result.get(20, java.util.concurrent.TimeUnit.SECONDS);
+        if (response != null) successful.add(response);
+      }
+      assertThat(successful).hasSize(1);
+      org.assertj.core.api.Assertions.assertThatThrownBy(
+              () ->
+                  authService.refresh(
+                      new TokenRefreshRequest(successful.getFirst().refreshToken())))
+          .isInstanceOf(com.dete.auth.exception.AuthenticationException.class);
+    }
+  }
+
   @org.junit.jupiter.api.BeforeEach
   void setUp() {
     restTemplate
@@ -131,6 +168,14 @@ class AuthIntegrationTest extends FullStackTestBase {
     ResponseEntity<ErrorResponse> staleRefreshResp =
         restTemplate.postForEntity("/auth/refresh", refreshRequest, ErrorResponse.class);
     assertThat(staleRefreshResp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+
+    // Reuse must revoke the replacement even though the reuse request returned an exception.
+    ResponseEntity<ErrorResponse> compromisedFamily =
+        restTemplate.postForEntity(
+            "/auth/refresh",
+            new TokenRefreshRequest(refreshedAuth.refreshToken()),
+            ErrorResponse.class);
+    assertThat(compromisedFamily.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
 
     // 10. Logout with refreshed token
     LogoutRequest logoutRequest = new LogoutRequest(refreshedAuth.refreshToken());

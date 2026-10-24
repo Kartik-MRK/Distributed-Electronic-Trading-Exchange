@@ -83,7 +83,8 @@ export function useAccount() {
   // Subscribe to real-time order and balance updates via WebSocket for current account
   useEffect(() => {
     const user = getCurrentUser();
-    const accountId = user?.userId || 'default';
+    const accountId = user?.userId;
+    if (!accountId) return;
 
     const orderTopic = `/topic/orders.${accountId}`;
     const unsubscribeOrder = subscribe<Record<string, unknown>>(orderTopic, (incomingOrder) => {

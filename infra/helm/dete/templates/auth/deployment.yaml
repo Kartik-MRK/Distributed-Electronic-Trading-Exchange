@@ -48,11 +48,16 @@ spec:
                   key: REDIS_PASSWORD
             - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
               value: "kafka:9092"
-            - name: JWT_SECRET
+            - name: AUTH_JWT_PRIVATE_KEY
               valueFrom:
                 secretKeyRef:
-                  name: dete-secrets
-                  key: JWT_SECRET
+                  name: {{ .Values.secrets.jwtKeySecretName }}
+                  key: private-key
+            - name: AUTH_JWT_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.jwtKeySecretName }}
+                  key: public-key
             - name: ACCOUNT_SERVICE_URL
               value: "http://account:8082"
             - name: RESEND_API_KEY
