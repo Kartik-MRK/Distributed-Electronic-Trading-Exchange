@@ -56,6 +56,12 @@ jobs:
       - name: Helm Chart Lint
         run: helm lint ./infra/helm/dete
 
+      - name: Deployment script checks
+        run: |
+          bash -n scripts/deploy_vps.sh scripts/package_images.sh scripts/import_images_to_k3s.sh
+          python3 -m py_compile scripts/deployment_preflight.py scripts/smoke_test.py
+          python3 -m unittest discover -s scripts -p 'test_smoke_test.py'
+
   test-and-compile:
     name: Compile & Test Suite
     needs: format-and-lint

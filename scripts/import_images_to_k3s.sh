@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
+IMAGE_TAG="${IMAGE_TAG:-latest}"
 
 IMAGES=(
   "dete/gateway:latest"
@@ -15,6 +16,7 @@ IMAGES=(
 )
 
 for img in "${IMAGES[@]}"; do
+  img="${img%:latest}:$IMAGE_TAG"
   echo "Importing $img into K3s containerd..."
   sudo docker save "$img" | sudo k3s ctr images import -
 done

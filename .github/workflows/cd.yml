@@ -7,6 +7,10 @@ on:
     branches: [master, main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
 concurrency:
   group: cd-production
   cancel-in-progress: false
@@ -19,12 +23,32 @@ jobs:
        github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_repository.full_name == github.repository)
     name: Deploy to K3s Cluster (Oracle VPS)
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Require successful CI for this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          url = f"https://api.github.com/repos/{os.environ['REPOSITORY']}/actions/workflows/ci.yml/runs?head_sha={os.environ['DEPLOY_SHA']}&per_page=100"
+          headers = {"Authorization": "Bearer " + os.environ["GH_TOKEN"], "Accept": "application/vnd.github+json"}
+          with urllib.request.urlopen(urllib.request.Request(url, headers=headers)) as response:
+              runs = json.load(response)["workflow_runs"]
+          runs = [run for run in runs if run["head_sha"] == os.environ["DEPLOY_SHA"]]
+          latest = max(runs, key=lambda run: (run["run_number"], run["run_attempt"]), default=None)
+          if not latest or latest["status"] != "completed" or latest["conclusion"] != "success":
+              raise SystemExit("Deployment requires the latest CI run for this exact SHA to succeed")
+          print("Verified successful CI:", latest["html_url"])
+          PY
 
       - name: Configure SSH Key
         env:
@@ -39,10 +63,11 @@ jobs:
         env:
           VPS_HOST: ${{ secrets.ORACLE_VPS_HOST }}
           VPS_USER: ${{ secrets.ORACLE_VPS_USER }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           TARGET_USER="${VPS_USER:-ubuntu}"
-          SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=no"
+          SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=yes"
           echo "Connecting to $TARGET_USER@$TARGET_HOST..."
           if ! ssh -v -o BatchMode=yes $SSH_OPTS -i ~/.ssh/id_rsa "$TARGET_USER@$TARGET_HOST" "echo SSH_CONNECTION_OK" > /tmp/ssh_debug.log 2>&1; then
             cat /tmp/ssh_debug.log
@@ -52,42 +77,8 @@ jobs:
             exit 255
           fi
           echo "SSH connection established successfully!"
-          ssh $SSH_OPTS -i ~/.ssh/id_rsa "$TARGET_USER@$TARGET_HOST" bash -s << 'EOF'
-            set -e
-            echo "=========================================================="
-            echo " Starting DETE Automated Deployment on K3s Cluster"
-            echo " Commit: ${{ github.event.workflow_run.head_sha || github.sha }}"
-            echo "=========================================================="
-
-            cd /home/ubuntu/dete
-            git fetch origin ${{ github.event.workflow_run.head_sha || github.sha }}
-            git reset --hard ${{ github.event.workflow_run.head_sha || github.sha }}
-            chmod +x ./gradlew ./scripts/*.sh ./scripts/chaos/*.sh ./scripts/*.py 2>/dev/null || true
-
-            echo "--> Compiling Spring Boot Executable JARs..."
-            ./gradlew bootJar -x test --no-daemon --max-workers=2
-
-            echo "--> Packaging Container Images..."
-            chmod +x ./scripts/*.sh
-            ./scripts/package_images.sh
-
-            echo "--> Importing Images to K3s containerd..."
-            ./scripts/import_images_to_k3s.sh
-
-            echo "--> Upgrading Helm Release 'dete'..."
-            helm upgrade --install dete ./infra/helm/dete -n dete
-
-            echo "--> Rolling out Deployment Updates..."
-            kubectl rollout restart deployment account audit auth gateway market-data matching-engine order risk simulator frontend -n dete
-
-            echo "--> Verifying Rollout Status..."
-            kubectl rollout status deployment/gateway -n dete --timeout=360s
-            kubectl rollout status deployment/order -n dete --timeout=360s
-            kubectl rollout status deployment/frontend -n dete --timeout=360s
-            kubectl rollout status deployment/account -n dete --timeout=360s
-
-            echo "All microservices successfully deployed and running."
-          EOF
+          ssh $SSH_OPTS -i ~/.ssh/id_rsa "$TARGET_USER@$TARGET_HOST" \
+            bash -s -- "$DEPLOY_SHA" < scripts/deploy_vps.sh
 
   smoke-test:
     name: Automated Smoke & Integration Verification
@@ -112,16 +103,13 @@ jobs:
         env:
           VPS_HOST: ${{ secrets.ORACLE_VPS_HOST }}
           VPS_USER: ${{ secrets.ORACLE_VPS_USER }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           TARGET_USER="${VPS_USER:-ubuntu}"
-          SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=no"
-          ssh $SSH_OPTS -i ~/.ssh/id_rsa "$TARGET_USER@$TARGET_HOST" bash -s << 'EOF'
-            set -e
-            echo "--> Running DETE Smoke Tests..."
-            chmod +x /home/ubuntu/dete/scripts/*.py 2>/dev/null || true
-            python3 /home/ubuntu/dete/scripts/smoke_test.py
-          EOF
+          SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=yes"
+          ssh $SSH_OPTS -i ~/.ssh/id_rsa "$TARGET_USER@$TARGET_HOST" \
+            python3 "/home/$TARGET_USER/dete-releases/$DEPLOY_SHA/scripts/smoke_test.py"
 
       - name: Post Deployment Summary
         if: always()

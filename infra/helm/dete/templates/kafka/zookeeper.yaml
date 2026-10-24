@@ -7,6 +7,8 @@ metadata:
     app: zookeeper
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: zookeeper
@@ -15,6 +17,8 @@ spec:
       labels:
         app: zookeeper
     spec:
+      securityContext:
+        fsGroup: 1000
       containers:
         - name: zookeeper
           image: {{ .Values.kafka.zookeeperImage }}
@@ -34,7 +38,26 @@ spec:
               memory: 128Mi
             limits:
               cpu: 200m
-              memory: 256Mi
+              memory: 512Mi
+          volumeMounts:
+            - name: zookeeper-data
+              mountPath: /var/lib/zookeeper
+      volumes:
+        - name: zookeeper-data
+          persistentVolumeClaim:
+            claimName: zookeeper-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zookeeper-data
+  labels:
+    {{- include "dete.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
 ---
 apiVersion: v1
 kind: Service

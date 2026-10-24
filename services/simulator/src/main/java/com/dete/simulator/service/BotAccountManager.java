@@ -71,10 +71,10 @@ public class BotAccountManager {
   private void fundBotAccount(UUID accountId) {
     if (accountId == null) return;
     long scale = FixedPoint.SCALE;
-    restClient.deposit(accountId, "USD", 100_000_000L * scale, UUID.randomUUID());
-    restClient.deposit(accountId, "BTC", 10_000L * scale, UUID.randomUUID());
-    restClient.deposit(accountId, "ETH", 100_000L * scale, UUID.randomUUID());
-    restClient.deposit(accountId, "SOL", 1_000_000L * scale, UUID.randomUUID());
+    restClient.deposit(accountId, "USD", 100_000_000L * scale, seedReference(accountId, "USD"));
+    restClient.deposit(accountId, "BTC", 10_000L * scale, seedReference(accountId, "BTC"));
+    restClient.deposit(accountId, "ETH", 100_000L * scale, seedReference(accountId, "ETH"));
+    restClient.deposit(accountId, "SOL", 1_000_000L * scale, seedReference(accountId, "SOL"));
     log.info("Funded bot account {} with initial market maker liquidity", accountId);
   }
 
@@ -89,10 +89,10 @@ public class BotAccountManager {
       if (auth != null) {
         demoUserId = auth.userId();
         long scale = FixedPoint.SCALE;
-        restClient.deposit(demoUserId, "USD", 10_000L * scale, UUID.randomUUID());
-        restClient.deposit(demoUserId, "BTC", 1L * scale, UUID.randomUUID());
-        restClient.deposit(demoUserId, "ETH", 5L * scale, UUID.randomUUID());
-        restClient.deposit(demoUserId, "SOL", 50L * scale, UUID.randomUUID());
+        restClient.deposit(demoUserId, "USD", 10_000L * scale, seedReference(demoUserId, "USD"));
+        restClient.deposit(demoUserId, "BTC", 1L * scale, seedReference(demoUserId, "BTC"));
+        restClient.deposit(demoUserId, "ETH", 5L * scale, seedReference(demoUserId, "ETH"));
+        restClient.deposit(demoUserId, "SOL", 50L * scale, seedReference(demoUserId, "SOL"));
         log.info("Seeded Demo user (ID: {}) with 10,000 USD, 1 BTC, 5 ETH, 50 SOL", demoUserId);
       } else {
         log.warn("Unable to log in as demo user to seed funds");
@@ -100,6 +100,12 @@ public class BotAccountManager {
     } catch (Exception e) {
       log.warn("Failed to seed demo account: {}", e.getMessage());
     }
+  }
+
+  private UUID seedReference(UUID accountId, String asset) {
+    return UUID.nameUUIDFromBytes(
+        ("simulator-seed:" + accountId + ":" + asset)
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8));
   }
 
   public String getMakerToken() {

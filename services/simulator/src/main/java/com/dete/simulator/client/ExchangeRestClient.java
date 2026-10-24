@@ -71,7 +71,7 @@ public class ExchangeRestClient {
     try {
       restClient
           .post()
-          .uri(properties.getAccountUrl() + "/accounts/deposit")
+          .uri(properties.getAccountUrl() + "/internal/accounts/deposit")
           .contentType(MediaType.APPLICATION_JSON)
           .body(new DepositDto(accountId, asset, amountNanos, referenceId))
           .retrieve()

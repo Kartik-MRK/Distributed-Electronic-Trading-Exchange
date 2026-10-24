@@ -3,6 +3,8 @@ build/
 **/bin/
 out/
 *.class
+__pycache__/
+*.pyc
 *.jar
 *.war
 

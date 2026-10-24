@@ -64,5 +64,11 @@ class BotAccountManagerTest {
     verify(restClient, atLeastOnce()).deposit(eq(demoId), eq("BTC"), any(Long.class), any());
     verify(restClient, atLeastOnce()).deposit(eq(demoId), eq("ETH"), any(Long.class), any());
     verify(restClient, atLeastOnce()).deposit(eq(demoId), eq("SOL"), any(Long.class), any());
+
+    manager.initialize();
+    var references = org.mockito.ArgumentCaptor.forClass(UUID.class);
+    verify(restClient, org.mockito.Mockito.times(24))
+        .deposit(any(), any(), any(Long.class), references.capture());
+    assertThat(new java.util.HashSet<>(references.getAllValues())).hasSize(12);
   }
 }
