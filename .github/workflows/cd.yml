@@ -67,7 +67,7 @@ jobs:
         run: |
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           TARGET_USER="${VPS_USER:-ubuntu}"
-          SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=yes"
+          SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20"
           echo "Connecting to $TARGET_USER@$TARGET_HOST..."
           if ! ssh -v -o BatchMode=yes $SSH_OPTS -i ~/.ssh/id_rsa "$TARGET_USER@$TARGET_HOST" "echo SSH_CONNECTION_OK" > /tmp/ssh_debug.log 2>&1; then
             cat /tmp/ssh_debug.log
@@ -107,7 +107,7 @@ jobs:
         run: |
           TARGET_HOST="${VPS_HOST:-141.148.223.82}"
           TARGET_USER="${VPS_USER:-ubuntu}"
-          SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=yes"
+          SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20"
           ssh $SSH_OPTS -i ~/.ssh/id_rsa "$TARGET_USER@$TARGET_HOST" \
             python3 "/home/$TARGET_USER/dete-releases/$DEPLOY_SHA/scripts/smoke_test.py"
 
