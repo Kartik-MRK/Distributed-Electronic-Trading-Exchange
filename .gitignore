@@ -22,6 +22,9 @@ gradle-app.setting
 .vscode/
 *.code-workspace
 
+# Git worktrees
+.worktrees/
+
 # OS
 .DS_Store
 Thumbs.db
