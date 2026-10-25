@@ -8,8 +8,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.dete.common.domain.enums.OrderStatus;
 import com.dete.common.domain.enums.Instrument;
+import com.dete.common.domain.enums.OrderStatus;
 import com.dete.simulator.client.ExchangeRestClient;
 import com.dete.simulator.config.SimulatorProperties;
 import com.dete.simulator.dto.CreateOrderDto;
@@ -70,7 +70,8 @@ class InstrumentBotTest {
   @Test
   @DisplayName("Should populate Ethereum and Solana order books")
   void shouldPopulateEthAndSolOrderBooks() {
-    for (var market : java.util.List.of(new Object[] {"ETH-USD", 3500.0}, new Object[] {"SOL-USD", 150.0})) {
+    for (var market :
+        java.util.List.of(new Object[] {"ETH-USD", 3500.0}, new Object[] {"SOL-USD", 150.0})) {
       String symbol = (String) market[0];
       double initialMid = (double) market[1];
       SimulatorProperties.InstrumentConfig marketConfig =
