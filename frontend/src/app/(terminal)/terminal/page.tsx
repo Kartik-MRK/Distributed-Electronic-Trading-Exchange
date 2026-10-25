@@ -19,6 +19,7 @@ import { ToastProvider } from '@/components/common/ToastContext';
 import { ReplayViewer } from '@/components/replay/ReplayViewer';
 import { Loader } from '@/components/common/Loader';
 import { MarketSimulationControl } from '@/components/simulation/MarketSimulationControl';
+import { ResizableWorkspace } from '@/components/layout/ResizableWorkspace';
 
 type ActivityTab = 'open' | 'history' | 'trades' | 'replay';
 const tabs: [ActivityTab, string][] = [
@@ -85,81 +86,115 @@ function TradingWorkspace() {
         connectionState={connectionState}
         latency={latency}
       />
-      <main id="workspace" className="terminal-body">
-        <section className="chart-region" aria-label="Price chart">
-          <PriceChart key={instrument} instrument={instrument} />
-        </section>
-        <section className="panel depth-region" aria-label="Market activity">
-          <div className="tab-bar" aria-label="Market view">
-            <button
-              aria-pressed={marketTab === 'book'}
-              onClick={() => setMarketTab('book')}
-            >
-              Order book
-            </button>
-            <button
-              aria-pressed={marketTab === 'tape'}
-              onClick={() => setMarketTab('tape')}
-            >
-              Recent trades
-            </button>
-          </div>
-          <div className="panel-body">
-            {marketTab === 'book' ? (
-              <OrderBook
+      <ResizableWorkspace
+        panels={[
+          {
+            id: 'chart',
+            label: 'Price chart',
+            className: 'chart-region',
+            content: <PriceChart key={instrument} instrument={instrument} />,
+          },
+          {
+            id: 'book',
+            label: 'Market activity',
+            className: 'panel depth-region',
+            content: (
+              <>
+                <div className="tab-bar" aria-label="Market view">
+                  <button
+                    aria-pressed={marketTab === 'book'}
+                    onClick={() => setMarketTab('book')}
+                  >
+                    Order book
+                  </button>
+                  <button
+                    aria-pressed={marketTab === 'tape'}
+                    onClick={() => setMarketTab('tape')}
+                  >
+                    Recent trades
+                  </button>
+                </div>
+                <div className="panel-body">
+                  {marketTab === 'book' ? (
+                    <OrderBook
+                      instrument={instrument}
+                      onSelectPrice={setSelectedPrice}
+                    />
+                  ) : (
+                    <TradeTape instrument={instrument} />
+                  )}
+                </div>
+              </>
+            ),
+          },
+          {
+            id: 'simulation',
+            label: 'Market simulation controls',
+            className: 'simulation-region',
+            content: <MarketSimulationControl />,
+          },
+          {
+            id: 'orderEntry',
+            label: 'Place an order',
+            className: 'order-entry-region',
+            content: (
+              <OrderEntry
+                key={instrument}
                 instrument={instrument}
-                onSelectPrice={setSelectedPrice}
+                selectedPriceFromBook={selectedPrice}
+                balances={balances}
+                onPlaceOrder={placeOrder}
               />
-            ) : (
-              <TradeTape instrument={instrument} />
-            )}
-          </div>
-        </section>
-        <section className="entry-region" aria-label="Place an order">
-          <MarketSimulationControl />
-          <OrderEntry
-            key={instrument}
-            instrument={instrument}
-            selectedPriceFromBook={selectedPrice}
-            balances={balances}
-            onPlaceOrder={placeOrder}
-          />
-        </section>
-        <section
-          className="panel activity-region"
-          aria-label="Account activity"
-        >
-          <div className="tab-bar" aria-label="Activity view">
-            {tabs.map(([id, label]) => (
-              <button
-                key={id}
-                aria-pressed={activeTab === id}
-                onClick={() => setActiveTab(id)}
-              >
-                {label}
-                {id === 'open' && <span className="count">{openCount}</span>}
-              </button>
-            ))}
-          </div>
-          <div className="panel-body activity-body">
-            {activeTab === 'open' && (
-              <OpenOrdersTable orders={orders} onCancelOrder={cancelOrder} />
-            )}
-            {activeTab === 'history' && (
-              <OrderHistoryTable orders={orderHistory} />
-            )}
-            {activeTab === 'trades' && (
-              <TradeHistoryTable trades={tradeHistory} />
-            )}
-            {activeTab === 'replay' && (
-              <ReplayViewer key={instrument} instrument={instrument} />
-            )}
-          </div>
-        </section>
-        <section className="panel balance-region" aria-label="Account balances">
-          <AccountPanel balances={balances} />
-        </section>
-      </main>
+            ),
+          },
+          {
+            id: 'activity',
+            label: 'Account activity',
+            className: 'panel activity-region',
+            content: (
+              <>
+                <div className="tab-bar" aria-label="Activity view">
+                  {tabs.map(([id, label]) => (
+                    <button
+                      key={id}
+                      aria-pressed={activeTab === id}
+                      onClick={() => setActiveTab(id)}
+                    >
+                      {label}
+                      {id === 'open' && (
+                        <span className="count">{openCount}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <div className="panel-body activity-body">
+                  {activeTab === 'open' && (
+                    <OpenOrdersTable
+                      orders={orders}
+                      onCancelOrder={cancelOrder}
+                    />
+                  )}
+                  {activeTab === 'history' && (
+                    <OrderHistoryTable orders={orderHistory} />
+                  )}
+                  {activeTab === 'trades' && (
+                    <TradeHistoryTable trades={tradeHistory} />
+                  )}
+                  {activeTab === 'replay' && (
+                    <ReplayViewer key={instrument} instrument={instrument} />
+                  )}
+                </div>
+              </>
+            ),
+          },
+          {
+            id: 'balances',
+            label: 'Account balances',
+            className: 'panel balance-region',
+            content: <AccountPanel balances={balances} />,
+          },
+        ]}
+      />
       <footer className="workspace-footer">
         <span>DETE / Spot trading workspace</span>
         <span>Prices and balances may include demonstration data.</span>

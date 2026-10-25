@@ -39,8 +39,8 @@ export const PANEL_LIMITS: Readonly<
   Record<PanelId, { minColumns: number; maxColumns: number; minRows: number; maxRows: number }>
 >;
 export function normalizePanelLayout(value: unknown): PanelLayout;
-export function readPanelLayout(storage: LayoutStorage): PanelLayout;
-export function savePanelLayout(storage: LayoutStorage, layout: unknown): void;
+export function readPanelLayout(storage: LayoutStorage | undefined): PanelLayout;
+export function savePanelLayout(storage: LayoutStorage | undefined, layout: unknown): void;
 export function resizePanelLayout(
   layout: unknown,
   id: PanelId,
