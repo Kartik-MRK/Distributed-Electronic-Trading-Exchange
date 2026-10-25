@@ -6,6 +6,7 @@ import com.dete.simulator.client.ExchangeRestClient;
 import com.dete.simulator.config.SimulatorProperties;
 import com.dete.simulator.dto.OrderResponseDto;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -113,10 +114,10 @@ public class SimulatorService {
                   sessionId,
                   userId,
                   durationSeconds,
-                  now,
-                  now.plusSeconds(durationSeconds),
+                  Timestamp.from(now),
+                  Timestamp.from(now.plusSeconds(durationSeconds)),
                   workerOwner,
-                  now.plusSeconds(durationSeconds + MAX_GRACE_SECONDS));
+                  Timestamp.from(now.plusSeconds(durationSeconds + MAX_GRACE_SECONDS)));
               return new Claim(new WorkerClaim(sessionId, workerOwner, 1L), null);
             });
 
