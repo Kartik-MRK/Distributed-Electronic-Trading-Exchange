@@ -7,6 +7,7 @@ const {
   getResizeDeltas,
   normalizePanelLayout,
   readPanelLayout,
+  resizePanelBoundaryLayout,
   resizePanelLayout,
   savePanelLayout,
 } = require('../src/lib/workspace-layout.cjs');
@@ -87,4 +88,34 @@ test('applies resize deltas without crossing per-panel span limits', () => {
       .balances,
     { columns: 3, rows: 2 },
   );
+});
+
+test('moves width across a vertical boundary while preserving the pair width', () => {
+  const next = resizePanelBoundaryLayout(
+    DEFAULT_PANEL_LAYOUT,
+    'chart',
+    'book',
+    1,
+  );
+
+  assert.equal(next.chart.columns, 7);
+  assert.equal(next.book.columns, 2);
+  assert.equal(next.chart.columns + next.book.columns, 9);
+
+  const movedBack = resizePanelBoundaryLayout(next, 'chart', 'book', -1);
+  assert.equal(movedBack.chart.columns, DEFAULT_PANEL_LAYOUT.chart.columns);
+  assert.equal(movedBack.book.columns, DEFAULT_PANEL_LAYOUT.book.columns);
+});
+
+test('limits a boundary drag when either adjacent panel reaches its minimum', () => {
+  const next = resizePanelBoundaryLayout(
+    DEFAULT_PANEL_LAYOUT,
+    'chart',
+    'book',
+    20,
+  );
+
+  assert.equal(next.chart.columns, 7);
+  assert.equal(next.book.columns, 2);
+  assert.equal(next.chart.columns + next.book.columns, 9);
 });

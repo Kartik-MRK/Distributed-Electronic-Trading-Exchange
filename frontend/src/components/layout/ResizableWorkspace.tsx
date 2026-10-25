@@ -17,6 +17,7 @@ import {
   type PanelLayout,
   type ResizeAxis,
   readPanelLayout,
+  resizePanelBoundaryLayout,
   resizePanelLayout,
   savePanelLayout,
 } from '@/lib/workspace-layout.cjs';
@@ -31,6 +32,7 @@ export interface WorkspacePanel {
 interface DragState {
   id: PanelId;
   axis: ResizeAxis;
+  adjacentId: PanelId | null;
   pointerId: number;
   startX: number;
   startY: number;
@@ -83,6 +85,8 @@ export function ResizableWorkspace({
     dragRef.current = {
       id,
       axis,
+      adjacentId:
+        axis === 'height' ? null : findAdjacentPanel(grid, id, event.clientY),
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
@@ -104,7 +108,13 @@ export function ResizableWorkspace({
       columnStep: drag.columnStep,
       rowStep: drag.rowStep,
     });
-    const next = resizePanelLayout(drag.initialLayout, drag.id, deltas) as PanelLayout;
+    const next = applyResize(
+      drag.initialLayout,
+      drag.id,
+      drag.adjacentId,
+      drag.axis,
+      deltas,
+    );
     layoutRef.current = next;
     setLayout(next);
   }
@@ -135,7 +145,16 @@ export function ResizableWorkspace({
     if (deltas.columns === 0 && deltas.rows === 0) return;
 
     event.preventDefault();
-    const next = resizePanelLayout(layoutRef.current, id, deltas) as PanelLayout;
+    const gripBounds = event.currentTarget.getBoundingClientRect();
+    const adjacentId =
+      axis === 'height'
+        ? null
+        : findAdjacentPanel(
+            gridRef.current,
+            id,
+            gripBounds.top + gripBounds.height / 2,
+          );
+    const next = applyResize(layoutRef.current, id, adjacentId, axis, deltas);
     layoutRef.current = next;
     setLayout(next);
     savePanelLayout(getLocalStorage(), next);
@@ -151,6 +170,7 @@ export function ResizableWorkspace({
       {panels.map((panel) => (
         <section
           key={panel.id}
+          data-panel-id={panel.id}
           className={`workspace-panel ${panel.className}`}
           aria-label={panel.label}
           style={
@@ -207,6 +227,60 @@ function getLocalStorage(): Storage | undefined {
   } catch {
     return undefined;
   }
+}
+
+function applyResize(
+  layout: PanelLayout,
+  id: PanelId,
+  adjacentId: PanelId | null,
+  axis: ResizeAxis,
+  deltas: { columns: number; rows: number },
+): PanelLayout {
+  if (axis !== 'height' && adjacentId && deltas.columns !== 0) {
+    const withTransferredWidth = resizePanelBoundaryLayout(
+      layout,
+      id,
+      adjacentId,
+      deltas.columns,
+    ) as PanelLayout;
+    return deltas.rows === 0
+      ? withTransferredWidth
+      : (resizePanelLayout(withTransferredWidth, id, {
+          rows: deltas.rows,
+        }) as PanelLayout);
+  }
+
+  return resizePanelLayout(layout, id, deltas) as PanelLayout;
+}
+
+function findAdjacentPanel(
+  grid: HTMLElement | null,
+  id: PanelId,
+  pointerY: number,
+): PanelId | null {
+  if (!grid) return null;
+
+  const panels = Array.from(
+    grid.querySelectorAll<HTMLElement>('[data-panel-id]'),
+  );
+  const current = panels.find((panel) => panel.dataset.panelId === id);
+  if (!current) return null;
+
+  const currentBounds = current.getBoundingClientRect();
+  const gap = Number.parseFloat(getComputedStyle(grid).columnGap) || 0;
+  const expectedLeft = currentBounds.right + gap;
+  const candidates = panels
+    .filter((panel) => panel !== current && panel.dataset.panelId)
+    .map((panel) => ({ panel, bounds: panel.getBoundingClientRect() }))
+    .filter(
+      ({ bounds }) =>
+        Math.abs(bounds.left - expectedLeft) <= 3 &&
+        pointerY >= bounds.top &&
+        pointerY <= bounds.bottom,
+    )
+    .sort((left, right) => left.bounds.left - right.bounds.left);
+
+  return (candidates[0]?.panel.dataset.panelId as PanelId | undefined) ?? null;
 }
 
 function ResizeGrip({

@@ -89,6 +89,42 @@ function resizePanelLayout(layout, id, delta) {
   });
 }
 
+function resizePanelBoundaryLayout(layout, leftId, rightId, deltaColumns) {
+  const normalized = normalizePanelLayout(layout);
+  if (
+    leftId === rightId ||
+    !Object.hasOwn(DEFAULT_PANEL_LAYOUT, leftId) ||
+    !Object.hasOwn(DEFAULT_PANEL_LAYOUT, rightId) ||
+    !Number.isFinite(deltaColumns)
+  ) {
+    return normalized;
+  }
+
+  const left = normalized[leftId];
+  const right = normalized[rightId];
+  const leftLimits = PANEL_LIMITS[leftId];
+  const rightLimits = PANEL_LIMITS[rightId];
+  const requested = Math.round(deltaColumns);
+  const maxIncrease = Math.min(
+    leftLimits.maxColumns - left.columns,
+    right.columns - rightLimits.minColumns,
+  );
+  const maxDecrease = Math.min(
+    left.columns - leftLimits.minColumns,
+    rightLimits.maxColumns - right.columns,
+  );
+  const applied =
+    requested >= 0
+      ? Math.min(requested, maxIncrease)
+      : -Math.min(-requested, maxDecrease);
+
+  return {
+    ...normalized,
+    [leftId]: { ...left, columns: left.columns + applied },
+    [rightId]: { ...right, columns: right.columns - applied },
+  };
+}
+
 function getResizeDeltas(axis, drag) {
   const columnSteps = Math.round((drag.currentX - drag.startX) / drag.columnStep);
   const rowSteps = Math.round((drag.currentY - drag.startY) / drag.rowStep);
@@ -105,6 +141,7 @@ module.exports = {
   getResizeDeltas,
   normalizePanelLayout,
   readPanelLayout,
+  resizePanelBoundaryLayout,
   resizePanelLayout,
   savePanelLayout,
 };

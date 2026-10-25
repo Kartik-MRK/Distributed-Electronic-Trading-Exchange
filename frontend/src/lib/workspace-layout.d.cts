@@ -46,4 +46,10 @@ export function resizePanelLayout(
   id: PanelId,
   delta: Partial<ResizeDelta> | null | undefined,
 ): PanelLayout;
+export function resizePanelBoundaryLayout(
+  layout: unknown,
+  leftId: PanelId,
+  rightId: PanelId,
+  deltaColumns: number,
+): PanelLayout;
 export function getResizeDeltas(axis: ResizeAxis, drag: ResizeDrag): ResizeDelta;

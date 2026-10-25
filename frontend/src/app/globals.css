@@ -491,7 +491,7 @@ h2 {
   border: 0;
   color: var(--text-secondary);
   background: transparent;
-  opacity: 0.28;
+  opacity: 0;
   pointer-events: auto;
   touch-action: none;
   transition: opacity 120ms ease-out, background-color 120ms ease-out;
