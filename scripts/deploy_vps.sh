@@ -47,5 +47,25 @@ helm upgrade --install dete infra/helm/dete -n "$NAMESPACE" \
 for name in gateway auth account order matching-engine risk audit market-data simulator frontend; do
   kubectl rollout status "deployment/$name" -n "$NAMESPACE" --timeout=360s
 done
+python3 - "$SHA" "$NAMESPACE" <<'PY'
+import json, subprocess, sys
+sha, namespace = sys.argv[1:]
+deployments = json.loads(subprocess.check_output([
+    "kubectl", "get", "deployments", "-n", namespace, "-o", "json"
+]))["items"]
+for name in ("gateway", "auth", "account", "order", "matching-engine", "risk",
+             "audit", "market-data", "simulator", "frontend"):
+    deployment = next(item for item in deployments if item["metadata"]["name"] == name)
+    desired = deployment["spec"]["replicas"]
+    status = deployment["status"]
+    if (desired < 1 or status.get("readyReplicas", 0) != desired
+            or status.get("updatedReplicas", 0) != desired
+            or status.get("observedGeneration", 0) < deployment["metadata"]["generation"]):
+        raise SystemExit(name + ": expected at least one ready replica of the current revision")
+    containers = deployment["spec"]["template"]["spec"]["containers"]
+    if not any(container["image"] == "dete/" + name + ":" + sha for container in containers):
+        raise SystemExit(name + ": deployed image does not match the CI-verified commit")
+print("Verified ready replicas and exact release images for all ten applications")
+PY
 printf '%s\n' "$SHA" > "$HOME/.local/state/dete/deployed-sha"
 echo "All ten application deployments are ready at commit $SHA"

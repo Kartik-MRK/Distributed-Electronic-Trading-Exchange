@@ -1,5 +1,7 @@
 # Project and VPS audit — 2026-10-24
 
+> This is the pre-deployment audit snapshot. The subsequently authorized backup, demo-data reset, signing-key rotation, deployment, and live verification are recorded in [the rollout report](deployment_2026-10-24.md). Statements below about the then-running version describe the inspection time, not the final deployed state. The remaining architectural limitations still apply unless explicitly resolved in that report.
+
 ## Outcome
 
 The working tree contains fixes for confirmed security, retry, concurrency, recovery, and market-data defects. **The running exchange has not been upgraded or repaired. Do not deploy this patch over its current data without the recovery work below.** The project remains a simulated-funds demonstration, not a production exchange.
