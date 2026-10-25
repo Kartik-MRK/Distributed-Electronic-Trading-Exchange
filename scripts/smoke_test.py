@@ -49,9 +49,16 @@ def eventually(check, label, timeout=40):
 def new_account(role):
     username = 'smoke_' + role + '_' + uuid.uuid4().hex[:12]
     password = 'Smoke!' + uuid.uuid4().hex
-    call('/auth/register', 'POST', {'username': username, 'email': username + '@example.invalid',
-        'password': password}, expected=(201,))
-    result = call('/auth/login', 'POST', {'identifier': username, 'password': password})
+    try:
+        call('/auth/register', 'POST', {'username': username, 'email': username + '@example.invalid',
+            'password': password}, expected=(201,))
+    except Exception as registration_error:
+        try:
+            result = call('/auth/login', 'POST', {'identifier': username, 'password': password})
+        except Exception:
+            raise registration_error
+    else:
+        result = call('/auth/login', 'POST', {'identifier': username, 'password': password})
     return result['userId'], result['accessToken']
 
 

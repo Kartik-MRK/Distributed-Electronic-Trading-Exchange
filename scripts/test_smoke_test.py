@@ -1,10 +1,22 @@
 import unittest
 from unittest.mock import call as mock_call, patch
 
-from smoke_test import select_price, verify_deltas, verify_simulator_api
+from smoke_test import new_account, select_price, verify_deltas, verify_simulator_api
 
 
 class SmokeAssertionsTest(unittest.TestCase):
+    @patch('smoke_test.call')
+    def test_account_creation_recovers_when_registration_commits_before_503(self, request):
+        request.side_effect = [
+            RuntimeError('POST /auth/register: HTTP 503'),
+            {'userId': 'account-id', 'accessToken': 'buyer-token'},
+        ]
+
+        self.assertEqual(('account-id', 'buyer-token'), new_account('buyer'))
+        self.assertEqual(2, request.call_count)
+        self.assertEqual('/auth/register', request.call_args_list[0].args[0])
+        self.assertEqual('/auth/login', request.call_args_list[1].args[0])
+
     @patch('smoke_test.call')
     def test_simulator_status_requires_auth_and_uses_session_route(self, request):
         request.side_effect = [None, {'status': 'IDLE'}]

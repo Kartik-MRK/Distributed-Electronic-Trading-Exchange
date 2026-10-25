@@ -125,7 +125,7 @@ resilience4j.timelimiter:
     accountService:
       timeoutDuration: 5s
     authService:
-      timeoutDuration: 5s
+      timeoutDuration: 15s
     marketDataService:
       timeoutDuration: 5s
     auditService:
