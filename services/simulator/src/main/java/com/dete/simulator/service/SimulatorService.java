@@ -32,6 +32,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class SimulatorService {
   private static final Logger log = LoggerFactory.getLogger(SimulatorService.class);
   private static final int MAX_GRACE_SECONDS = 15;
+  private static final int BOT_CLEANUP_TIMEOUT_SECONDS = 60;
   private static final long ADVISORY_LOCK_KEY = 7_349_113_205L;
 
   private final SimulatorProperties properties;
@@ -199,7 +200,11 @@ public class SimulatorService {
       for (SimulatorProperties.InstrumentConfig config : properties.getInstruments()) {
         if (!ownsSession(claim)) return;
         InstrumentBot bot = bots.get(Instrument.fromSymbol(config.getSymbol()));
-        if (bot != null) bot.populateOrderBook();
+        if (bot != null) {
+          long lastTradedPrice = restClient.getLastTradedPrice(bot.getInstrument());
+          if (lastTradedPrice > 0) bot.setCurrentMidPrice(lastTradedPrice);
+          bot.populateOrderBook();
+        }
       }
       while (Instant.now().isBefore(sessionExpiry(claim))) {
         if (!renewLease(claim)) return;
@@ -362,49 +367,84 @@ public class SimulatorService {
         && !accountManager.initializeSimulationAccounts()) {
       throw new IllegalStateException("Unable to authenticate simulator accounts for cleanup");
     }
-    List<Callable<Boolean>> cancellations = new ArrayList<>();
-    addCancellations(cancellations, accountManager.getMakerToken());
-    addCancellations(cancellations, accountManager.getTakerToken());
-    if (!cancellations.isEmpty()) {
-      ThreadPoolExecutor cleanup =
-          new ThreadPoolExecutor(
-              24,
-              24,
-              0,
-              TimeUnit.MILLISECONDS,
-              new ArrayBlockingQueue<>(144),
-              runnable -> {
-                Thread thread = new Thread(runnable, "market-simulation-cleanup");
-                thread.setDaemon(true);
-                return thread;
-              },
-              new ThreadPoolExecutor.AbortPolicy());
-      try {
-        List<Future<Boolean>> results = cleanup.invokeAll(cancellations, 12, TimeUnit.SECONDS);
-        for (Future<Boolean> result : results) {
-          if (result.isCancelled() || !Boolean.TRUE.equals(result.get())) {
-            throw new IllegalStateException("Simulator order cleanup did not complete");
+    ThreadPoolExecutor cleanup =
+        new ThreadPoolExecutor(
+            24,
+            24,
+            0,
+            TimeUnit.MILLISECONDS,
+            new ArrayBlockingQueue<>(144),
+            runnable -> {
+              Thread thread = new Thread(runnable, "market-simulation-cleanup");
+              thread.setDaemon(true);
+              return thread;
+            },
+            new ThreadPoolExecutor.AbortPolicy());
+    java.util.Set<UUID> cancellationRequested = ConcurrentHashMap.newKeySet();
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(BOT_CLEANUP_TIMEOUT_SECONDS);
+    try {
+      while (true) {
+        List<Callable<Boolean>> cancellations = new ArrayList<>();
+        List<UUID> orderIds = new ArrayList<>();
+        int activeCount =
+            addCancellations(
+                    cancellations, orderIds, cancellationRequested, accountManager.getMakerToken())
+                + addCancellations(
+                    cancellations, orderIds, cancellationRequested, accountManager.getTakerToken());
+        if (activeCount == 0) break;
+        if (!cancellations.isEmpty()) {
+          long remainingMillis = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+          if (remainingMillis <= 0) {
+            throw new IllegalStateException(
+                "Simulator order cleanup did not settle within one minute");
+          }
+          List<Future<Boolean>> results =
+              cleanup.invokeAll(
+                  cancellations,
+                  Math.min(TimeUnit.SECONDS.toMillis(12), remainingMillis),
+                  TimeUnit.MILLISECONDS);
+          for (int index = 0; index < results.size(); index++) {
+            Future<Boolean> result = results.get(index);
+            if (!result.isCancelled() && Boolean.TRUE.equals(result.get())) {
+              cancellationRequested.add(orderIds.get(index));
+            }
           }
         }
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        throw new IllegalStateException("Simulator order cleanup was interrupted", e);
-      } catch (java.util.concurrent.ExecutionException e) {
-        throw new IllegalStateException("Simulator order cleanup failed", e.getCause());
-      } finally {
-        cleanup.shutdownNow();
+        if (System.nanoTime() >= deadline) {
+          throw new IllegalStateException(
+              "Simulator order cleanup did not settle within one minute");
+        }
+        long remainingMillis = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+        Thread.sleep(Math.min(500, Math.max(1, remainingMillis)));
       }
+      // Order-service state is updated from Kafka. Give the risk consumer a short catch-up window
+      // after the final cancellation is visible before reusing the bot accounts.
+      Thread.sleep(1_000);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("Simulator order cleanup was interrupted", e);
+    } catch (java.util.concurrent.ExecutionException e) {
+      throw new IllegalStateException("Simulator order cleanup failed", e.getCause());
+    } finally {
+      cleanup.shutdownNow();
     }
     bots.clear();
   }
 
-  private void addCancellations(List<Callable<Boolean>> cancellations, String token) {
-    if (token == null) return;
+  private int addCancellations(
+      List<Callable<Boolean>> cancellations,
+      List<UUID> orderIds,
+      java.util.Set<UUID> cancellationRequested,
+      String token) {
+    if (token == null) return 0;
     List<OrderResponseDto> active = restClient.getActiveOrdersStrict(token);
     for (OrderResponseDto order : active) {
-      if (order.orderId() != null)
+      if (order.orderId() != null && !cancellationRequested.contains(order.orderId())) {
+        orderIds.add(order.orderId());
         cancellations.add(() -> restClient.cancelOrder(token, order.orderId()));
+      }
     }
+    return active.size();
   }
 
   private SimulationSession findActiveForUpdate() {

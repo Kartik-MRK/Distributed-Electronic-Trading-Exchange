@@ -94,6 +94,10 @@ public class InstrumentBot {
     return currentMidPrice;
   }
 
+  public void setCurrentMidPrice(long scaledPrice) {
+    if (scaledPrice > 0) currentMidPrice = FixedPoint.ofScaled(scaledPrice).toDouble();
+  }
+
   public int getActiveBidCount() {
     return restingBidOrderIds.size();
   }

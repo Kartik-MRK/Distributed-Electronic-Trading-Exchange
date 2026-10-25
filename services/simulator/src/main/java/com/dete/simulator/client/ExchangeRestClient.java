@@ -1,5 +1,6 @@
 package com.dete.simulator.client;
 
+import com.dete.common.domain.enums.Instrument;
 import com.dete.simulator.config.SimulatorProperties;
 import com.dete.simulator.dto.AuthDtos;
 import com.dete.simulator.dto.CreateOrderDto;
@@ -93,6 +94,21 @@ public class ExchangeRestClient {
     }
   }
 
+  public long getLastTradedPrice(Instrument instrument) {
+    try {
+      LastPriceResponse response =
+          restClient
+              .get()
+              .uri(properties.getMarketDataUrl() + "/market-data/" + instrument.name() + "/price")
+              .retrieve()
+              .body(LastPriceResponse.class);
+      return response != null ? response.lastTradedPrice() : 0L;
+    } catch (Exception e) {
+      log.debug("Could not read latest market price for {}: {}", instrument, e.getMessage());
+      return 0L;
+    }
+  }
+
   public OrderResponseDto placeOrder(
       String accessToken, CreateOrderDto orderRequest, UUID idempotencyKey) {
     try {
@@ -162,4 +178,7 @@ public class ExchangeRestClient {
       throw new IllegalStateException("Order service returned no active-order response");
     return orders;
   }
+
+  private record LastPriceResponse(
+      String instrument, String symbol, long lastTradedPrice, String formattedPrice) {}
 }

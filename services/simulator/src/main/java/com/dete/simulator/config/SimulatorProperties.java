@@ -14,6 +14,7 @@ public class SimulatorProperties {
   private String authUrl = "http://localhost:8081";
   private String accountUrl = "http://localhost:8082";
   private String orderUrl = "http://localhost:8083";
+  private String marketDataUrl = "http://localhost:8087";
   private int driftIntervalSeconds = 10;
   private int tradeIntervalSeconds = 3;
   private int refreshIntervalSeconds = 4;
@@ -58,6 +59,14 @@ public class SimulatorProperties {
 
   public void setOrderUrl(String orderUrl) {
     this.orderUrl = orderUrl;
+  }
+
+  public String getMarketDataUrl() {
+    return marketDataUrl;
+  }
+
+  public void setMarketDataUrl(String marketDataUrl) {
+    this.marketDataUrl = marketDataUrl;
   }
 
   public int getDriftIntervalSeconds() {

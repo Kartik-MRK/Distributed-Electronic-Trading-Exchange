@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.dete.common.domain.enums.Instrument;
 import com.dete.common.domain.enums.OrderStatus;
+import com.dete.common.domain.types.FixedPoint;
 import com.dete.simulator.client.ExchangeRestClient;
 import com.dete.simulator.config.SimulatorProperties;
 import com.dete.simulator.dto.CreateOrderDto;
@@ -85,6 +86,20 @@ class InstrumentBotTest {
       assertThat(marketBot.getActiveAskCount()).isEqualTo(5);
       assertThat(marketBot.getCurrentMidPrice()).isEqualTo(initialMid);
     }
+  }
+
+  @Test
+  @DisplayName("Should align ETH quotes to the latest traded price")
+  void shouldAlignQuotesToLatestTradedPrice() {
+    var ethConfig = new SimulatorProperties.InstrumentConfig("ETH-USD", 3500.0, 20, 6, 0.01, 0.5);
+    var ethBot = new InstrumentBot(ethConfig, restClient, accountManager);
+    ethBot.setCurrentMidPrice(3_000L * FixedPoint.SCALE);
+
+    ethBot.populateOrderBook();
+
+    assertThat(ethBot.getCurrentMidPrice()).isEqualTo(3000.0);
+    assertThat(ethBot.getActiveBidCount()).isEqualTo(6);
+    assertThat(ethBot.getActiveAskCount()).isEqualTo(6);
   }
 
   @Test

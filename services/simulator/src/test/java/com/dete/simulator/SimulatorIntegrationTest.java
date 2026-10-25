@@ -36,6 +36,12 @@ class SimulatorIntegrationTest {
   @DisplayName("Simulator context loads without starting market activity while idle")
   void contextLoadsIdle() {
     assertThat(properties.getInstruments()).hasSize(3);
+    assertThat(properties.getInstruments())
+        .extracting(SimulatorProperties.InstrumentConfig::getSymbol)
+        .containsExactly("BTC-USD", "ETH-USD", "SOL-USD");
+    assertThat(properties.getInstruments())
+        .extracting(SimulatorProperties.InstrumentConfig::getLevels)
+        .containsOnly(6);
     assertThat(simulatorService).isNotNull();
     verifyNoInteractions(restClient);
   }

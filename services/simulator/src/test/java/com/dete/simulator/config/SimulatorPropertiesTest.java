@@ -18,6 +18,7 @@ class SimulatorPropertiesTest {
     assertThat(props.getAuthUrl()).isEqualTo("http://localhost:8081");
     assertThat(props.getAccountUrl()).isEqualTo("http://localhost:8082");
     assertThat(props.getOrderUrl()).isEqualTo("http://localhost:8083");
+    assertThat(props.getMarketDataUrl()).isEqualTo("http://localhost:8087");
     assertThat(props.getDriftIntervalSeconds()).isEqualTo(10);
     assertThat(props.getTradeIntervalSeconds()).isEqualTo(3);
     assertThat(props.getRefreshIntervalSeconds()).isEqualTo(4);
