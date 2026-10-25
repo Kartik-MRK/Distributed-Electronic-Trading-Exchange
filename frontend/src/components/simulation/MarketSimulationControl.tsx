@@ -7,6 +7,7 @@ import { SimulatorStatus } from '@/types';
 import { Loader } from '@/components/common/Loader';
 
 type Duration = 30 | 60 | 120;
+const RECOVERY_GRACE_MS = 15_000;
 
 export function MarketSimulationControl() {
   const [session, setSession] = useState<SimulatorStatus | null>(null);
@@ -40,6 +41,11 @@ export function MarketSimulationControl() {
   const remaining = session?.expiresAt
     ? Math.max(0, Math.ceil((new Date(session.expiresAt).getTime() - now) / 1000))
     : 0;
+  const canRecover = Boolean(
+    session?.status === 'STOPPING'
+      && session.expiresAt
+      && now >= new Date(session.expiresAt).getTime() + RECOVERY_GRACE_MS,
+  );
   const label = starting
     ? 'Starting'
     : session?.status === 'ACTIVE'
@@ -89,7 +95,7 @@ export function MarketSimulationControl() {
           <select
             aria-label="Simulation duration"
             value={duration}
-            disabled={starting || Boolean(active) || !session}
+            disabled={starting || (Boolean(active) && !canRecover) || !session}
             onChange={(event) => setDuration(Number(event.target.value) as Duration)}
           >
             <option value={30}>30 seconds</option>
@@ -97,13 +103,13 @@ export function MarketSimulationControl() {
             <option value={120}>2 minutes</option>
           </select>
         </label>
-        <button className="button" disabled={starting || Boolean(active) || !session} aria-busy={starting} onClick={start}>
-          {starting ? <Loader variant="inline" label="Starting..." /> : 'Start simulation'}
+        <button className="button" disabled={starting || (Boolean(active) && !canRecover) || !session} aria-busy={starting} onClick={start}>
+          {starting ? <Loader variant="inline" label="Starting..." /> : canRecover ? 'Recover and start simulation' : 'Start simulation'}
         </button>
         {active && (
           <div className="simulation-session-info" role="status">
-            <strong>{session?.ownerUserId === userId ? 'Your session' : 'Another trader started the session'}</strong>
-            <span>{remaining > 0 ? `${remaining}s remaining` : 'Finishing'}</span>
+            <strong>{canRecover ? 'The previous session needs recovery' : session?.ownerUserId === userId ? 'Your session' : 'Another trader started the session'}</strong>
+            <span>{canRecover ? 'Start a new session to recover it' : remaining > 0 ? `${remaining}s remaining` : 'Finishing'}</span>
             {session?.startsAt && session.expiresAt && (
               <small>
                 Started {new Date(session.startsAt).toLocaleTimeString()}

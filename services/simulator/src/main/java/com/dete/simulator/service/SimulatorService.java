@@ -226,27 +226,39 @@ public class SimulatorService {
       log.error("Market simulation {} failed", claim.sessionId(), e);
     } finally {
       try {
-        if (ownsSession(claim)) {
-          jdbc.update(
-              "UPDATE simulator.simulation_session SET status='STOPPING', updated_at=now() "
-                  + "WHERE session_id=? AND worker_owner=? AND fencing_token=? AND status='ACTIVE'",
-              claim.sessionId(),
-              claim.owner(),
-              claim.fence());
-          cancelAllBotOrders();
-          jdbc.update(
-              "UPDATE simulator.simulation_session SET status=?, completed_at=now(), updated_at=now(), "
-                  + "completion_reason=?, lease_until=NULL WHERE session_id=? AND worker_owner=? "
-                  + "AND fencing_token=? AND status='STOPPING'",
-              "WORKER_FAILED".equals(reason) || "WORKER_INTERRUPTED".equals(reason)
-                  ? "FAILED"
-                  : "COMPLETED",
-              reason,
-              claim.sessionId(),
-              claim.owner(),
-              claim.fence());
-          log.info("Market simulation {} ended ({})", claim.sessionId(), reason);
-        }
+        String completionReason = reason;
+        transactions.execute(
+            status -> {
+              lockGlobalSession();
+              try {
+                if (!ownsSession(claim)) return null;
+                jdbc.update(
+                    "UPDATE simulator.simulation_session SET status='STOPPING', updated_at=now() "
+                        + "WHERE session_id=? AND worker_owner=? AND fencing_token=? AND status='ACTIVE'",
+                    claim.sessionId(),
+                    claim.owner(),
+                    claim.fence());
+                cancelAllBotOrders();
+                jdbc.update(
+                    "UPDATE simulator.simulation_session SET status=?, completed_at=now(), updated_at=now(), "
+                        + "completion_reason=?, lease_until=NULL WHERE session_id=? AND worker_owner=? "
+                        + "AND fencing_token=? AND status='STOPPING'",
+                    "WORKER_FAILED".equals(completionReason)
+                            || "WORKER_INTERRUPTED".equals(completionReason)
+                        ? "FAILED"
+                        : "COMPLETED",
+                    completionReason,
+                    claim.sessionId(),
+                    claim.owner(),
+                    claim.fence());
+                log.info("Market simulation {} ended ({})", claim.sessionId(), completionReason);
+                return null;
+              } finally {
+                workerRunning.set(false);
+                currentSessionId = null;
+                currentWorkerOwner = null;
+              }
+            });
       } catch (RuntimeException cleanupError) {
         meters.counter("market.simulation.cleanup.failures").increment();
         log.error(
@@ -277,7 +289,20 @@ public class SimulatorService {
     Integer count =
         jdbc.queryForObject(
             "SELECT count(*) FROM simulator.simulation_session WHERE session_id=? "
-                + "AND worker_owner=? AND fencing_token=? AND status='ACTIVE' AND expires_at > now()",
+                + "AND worker_owner=? AND fencing_token=? AND status='ACTIVE' AND lease_until > now()",
+            Integer.class,
+            claim.sessionId(),
+            claim.owner(),
+            claim.fence());
+    return count != null && count == 1;
+  }
+
+  private boolean canTrade(WorkerClaim claim) {
+    Integer count =
+        jdbc.queryForObject(
+            "SELECT count(*) FROM simulator.simulation_session WHERE session_id=? "
+                + "AND worker_owner=? AND fencing_token=? AND status='ACTIVE' "
+                + "AND expires_at > now() AND lease_until > now()",
             Integer.class,
             claim.sessionId(),
             claim.owner(),
@@ -306,7 +331,7 @@ public class SimulatorService {
               accountManager,
               () ->
                   currentSessionId != null
-                      && ownsSession(
+                      && canTrade(
                           new WorkerClaim(currentSessionId, currentWorkerOwner, currentFence)),
               this::allowBotOrder,
               meters);

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.dete.common.domain.enums.OrderStatus;
+import com.dete.common.domain.enums.Instrument;
 import com.dete.simulator.client.ExchangeRestClient;
 import com.dete.simulator.config.SimulatorProperties;
 import com.dete.simulator.dto.CreateOrderDto;
@@ -64,6 +65,25 @@ class InstrumentBotTest {
     assertThat(bot.getActiveAskCount()).isEqualTo(5);
     verify(restClient, atLeastOnce())
         .placeOrder(eq("mock-maker-token"), any(CreateOrderDto.class), any());
+  }
+
+  @Test
+  @DisplayName("Should populate Ethereum and Solana order books")
+  void shouldPopulateEthAndSolOrderBooks() {
+    for (var market : java.util.List.of(new Object[] {"ETH-USD", 3500.0}, new Object[] {"SOL-USD", 150.0})) {
+      String symbol = (String) market[0];
+      double initialMid = (double) market[1];
+      SimulatorProperties.InstrumentConfig marketConfig =
+          new SimulatorProperties.InstrumentConfig(symbol, initialMid, 20, 5, 0.01, 0.1);
+      InstrumentBot marketBot = new InstrumentBot(marketConfig, restClient, accountManager);
+
+      marketBot.populateOrderBook();
+
+      assertThat(marketBot.getInstrument()).isEqualTo(Instrument.fromSymbol(symbol));
+      assertThat(marketBot.getActiveBidCount()).isEqualTo(5);
+      assertThat(marketBot.getActiveAskCount()).isEqualTo(5);
+      assertThat(marketBot.getCurrentMidPrice()).isEqualTo(initialMid);
+    }
   }
 
   @Test
