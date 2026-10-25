@@ -213,16 +213,14 @@ export interface AuditQueryParams {
   offset?: number;
 }
 
-export interface BotStatus {
-  instrument: string;
-  currentMid: number;
-  activeBids: number;
-  activeAsks: number;
-}
-
 export interface SimulatorStatus {
-  enabled: boolean;
-  running: boolean;
-  initialized: boolean;
-  bots: BotStatus[];
+  status: 'IDLE' | 'ACTIVE' | 'STOPPING' | 'COMPLETED' | 'FAILED';
+  sessionId: string | null;
+  ownerUserId: string | null;
+  durationSeconds: number | null;
+  startsAt: string | null;
+  expiresAt: string | null;
+  completedAt: string | null;
+  completionReason: string | null;
+  message: string | null;
 }

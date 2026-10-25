@@ -85,6 +85,10 @@ spring:
           uri: ${MARKET_DATA_WS_URL:ws://localhost:8087}
           predicates:
             - Path=/ws/**
+        - id: market-simulation-service
+          uri: ${SIMULATOR_SERVICE_URL:http://localhost:8089}
+          predicates:
+            - Path=/market-simulation, /market-simulation/**
 
 resilience4j.circuitbreaker:
   instances:

@@ -31,20 +31,21 @@ public class BotAccountManager {
 
   public synchronized boolean initialize() {
     log.info("Initializing simulator bot accounts and balances...");
-    boolean makerReady = ensureBotSession(makerSession);
-    boolean takerReady = ensureBotSession(takerSession);
-
-    if (makerReady) {
-      fundBotAccount(makerSession.userId);
-    }
-    if (takerReady) {
-      fundBotAccount(takerSession.userId);
-    }
+    boolean botsReady = initializeSimulationAccounts();
 
     if (properties.isSeedDemo()) {
       seedDemoAccount();
     }
 
+    return botsReady;
+  }
+
+  /** Prepares only simulator-owned accounts; never seeds or changes a user account. */
+  public synchronized boolean initializeSimulationAccounts() {
+    boolean makerReady = ensureBotSession(makerSession);
+    boolean takerReady = ensureBotSession(takerSession);
+    if (makerReady) fundBotAccount(makerSession.userId);
+    if (takerReady) fundBotAccount(takerSession.userId);
     return makerReady && takerReady;
   }
 

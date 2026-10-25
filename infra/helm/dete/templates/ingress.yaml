@@ -56,6 +56,13 @@ spec:
                 name: gateway
                 port:
                   number: 8080
+          - path: /market-simulation
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8080
           - path: /internal
             pathType: Prefix
             backend:

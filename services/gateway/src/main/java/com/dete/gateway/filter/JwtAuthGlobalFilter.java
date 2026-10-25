@@ -90,7 +90,7 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
         path.equals("/admin")
             || path.startsWith("/admin/")
             || path.equals("/accounts/deposit")
-            || (path.startsWith("/simulator/") && !path.equals("/simulator/status"));
+            || path.startsWith("/simulator/");
     if (adminOnly
         && (roles == null || (!roles.contains("ADMIN") && !roles.contains("ROLE_ADMIN")))) {
       log.warn("Access denied to {}: user {} lacks ADMIN role", path, username);
@@ -107,10 +107,13 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
         exchange
             .getRequest()
             .mutate()
-            .header("X-User-Id", accountId.toString())
-            .header("X-Account-Id", accountId.toString())
-            .header("X-Username", username != null ? username : "")
-            .header("X-User-Roles", roles != null ? String.join(",", roles) : "")
+            .headers(
+                headers -> {
+                  headers.set("X-User-Id", accountId.toString());
+                  headers.set("X-Account-Id", accountId.toString());
+                  headers.set("X-Username", username != null ? username : "");
+                  headers.set("X-User-Roles", roles != null ? String.join(",", roles) : "");
+                })
             .build();
 
     return chain.filter(exchange.mutate().request(mutatedRequest).build());
@@ -123,7 +126,6 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
         || path.startsWith("/actuator/")
         || path.startsWith("/fallback/")
         || path.startsWith("/internal/metrics/")
-        || path.equals("/simulator/status")
         || path.equals("/internal/metrics/snapshot")
         || path.equals("/auth")
         || path.equals("/market-data")

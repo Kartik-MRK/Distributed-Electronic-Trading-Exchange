@@ -37,6 +37,23 @@ spec:
               value: "http://account:8082"
             - name: SIMULATOR_ORDER_URL
               value: "http://order:8083"
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres:5432/dete?currentSchema=simulator"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: dete-secrets
+                  key: POSTGRES_USER
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dete-secrets
+                  key: POSTGRES_PASSWORD
+            - name: SECURITY_JWT_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.jwtKeySecretName }}
+                  key: public-key
           resources:
             {{- toYaml .Values.simulator.resources | nindent 12 }}
           startupProbe:

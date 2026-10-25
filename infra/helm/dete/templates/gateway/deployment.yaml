@@ -57,7 +57,7 @@ spec:
               value: "http://matching-engine:8084"
             - name: RISK_SERVICE_URL
               value: "http://risk:8085"
-            - name: SIMULATOR_URL
+            - name: SIMULATOR_SERVICE_URL
               value: "http://simulator:8089"
           resources:
             {{- toYaml .Values.gateway.resources | nindent 12 }}

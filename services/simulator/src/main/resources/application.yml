@@ -4,6 +4,20 @@ server:
 spring:
   application:
     name: simulator-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:dete}?currentSchema=simulator
+    username: ${DB_USER:dete}
+    password: ${DB_PASSWORD:dete_local_secret}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 4
+      minimum-idle: 1
+      connection-timeout: 5000
+  flyway:
+    enabled: true
+    schemas: simulator
+    default-schema: simulator
+    locations: classpath:db/migration
 
 management:
   endpoints:
@@ -31,6 +45,7 @@ simulator:
   drift-interval-seconds: 10
   trade-interval-seconds: 3
   refresh-interval-seconds: 4
+  max-orders-per-second: 8
   instruments:
     - symbol: BTC-USD
       initial-mid: 65000.0

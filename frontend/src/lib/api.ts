@@ -447,21 +447,16 @@ export const api = {
 
   simulator: {
     async getStatus(): Promise<import('../types').SimulatorStatus> {
-      return request<import('../types').SimulatorStatus>('/simulator/status', {
+      return request<import('../types').SimulatorStatus>('/market-simulation/status', {
         method: 'GET',
       });
     },
 
-    async start(): Promise<void> {
-      return request<void>('/simulator/start', { method: 'POST' });
-    },
-
-    async stop(): Promise<void> {
-      return request<void>('/simulator/stop', { method: 'POST' });
-    },
-
-    async seed(): Promise<void> {
-      return request<void>('/simulator/seed', { method: 'POST' });
+    async start(durationSeconds: 30 | 60 | 120): Promise<import('../types').SimulatorStatus> {
+      return request<import('../types').SimulatorStatus>('/market-simulation/start', {
+        method: 'POST',
+        body: JSON.stringify({ durationSeconds }),
+      });
     },
   },
 };

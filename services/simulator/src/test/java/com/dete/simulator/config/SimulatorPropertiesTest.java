@@ -21,7 +21,18 @@ class SimulatorPropertiesTest {
     assertThat(props.getDriftIntervalSeconds()).isEqualTo(10);
     assertThat(props.getTradeIntervalSeconds()).isEqualTo(3);
     assertThat(props.getRefreshIntervalSeconds()).isEqualTo(4);
+    assertThat(props.getMaxOrdersPerSecond()).isEqualTo(8);
     assertThat(props.getInstruments()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("Order rate configuration is clamped to a safe bound")
+  void shouldBoundConfiguredOrderRate() {
+    SimulatorProperties props = new SimulatorProperties();
+    props.setMaxOrdersPerSecond(100);
+    assertThat(props.getMaxOrdersPerSecond()).isEqualTo(12);
+    props.setMaxOrdersPerSecond(0);
+    assertThat(props.getMaxOrdersPerSecond()).isEqualTo(1);
   }
 
   @Test

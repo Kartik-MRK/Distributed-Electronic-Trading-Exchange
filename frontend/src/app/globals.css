@@ -422,7 +422,47 @@ h2 {
 }
 .entry-region {
   grid-area: entry;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   min-width: 0;
+}
+.entry-region .order-entry {
+  height: auto;
+  flex: 1;
+  min-height: 0;
+}
+.simulation-control {
+  margin-bottom: 10px;
+}
+.simulation-control .panel-heading {
+  padding: 10px 12px;
+}
+.simulation-control .panel-heading h2 {
+  font-size: 14px;
+  margin: 2px 0 0;
+}
+.simulation-control-body {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px 12px;
+}
+.simulation-control-body label {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+}
+.simulation-control-body select {
+  width: 100%;
+  min-height: 34px;
+}
+.simulation-session-info {
+  display: grid;
+  gap: 3px;
+  font-size: 12px;
+}
+.simulation-session-info small {
+  color: var(--text-muted);
 }
 .activity-region {
   grid-area: activity;

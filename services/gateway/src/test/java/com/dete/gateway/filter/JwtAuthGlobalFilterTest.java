@@ -84,6 +84,15 @@ class JwtAuthGlobalFilterTest {
   }
 
   @Test
+  @DisplayName("Market simulation start requires authentication")
+  void marketSimulationStartRequiresAuthentication() {
+    MockServerWebExchange exchange =
+        MockServerWebExchange.from(MockServerHttpRequest.post("/market-simulation/start").build());
+    StepVerifier.create(filter.filter(exchange, ignored -> Mono.empty())).verifyComplete();
+    assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+  }
+
+  @Test
   @DisplayName("Protected path with expired token returns 401 Unauthorized")
   void testExpiredTokenReturns401() {
     String expiredToken =
@@ -136,6 +145,8 @@ class JwtAuthGlobalFilterTest {
     MockServerHttpRequest request =
         MockServerHttpRequest.get("/orders")
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+            .header("X-User-Id", UUID.randomUUID().toString())
+            .header("X-User-Roles", "ADMIN")
             .build();
     MockServerWebExchange exchange = MockServerWebExchange.from(request);
 

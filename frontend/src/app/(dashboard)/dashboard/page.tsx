@@ -3,20 +3,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { MarketSelector } from '@/components/header/MarketSelector';
 import { AppHeader } from '@/components/common/AppHeader';
-import { Loader } from '@/components/common/Loader';
 import { api } from '@/lib/api';
-import { Instrument, SystemMetricsSnapshot, SimulatorStatus } from '@/types';
+import { Instrument, SystemMetricsSnapshot } from '@/types';
 import { TradeTape } from '@/components/tradetape/TradeTape';
 import { ExternalLink, RefreshCw } from 'lucide-react';
 
 export default function SystemDashboardPage() {
   const [metrics, setMetrics] = useState<SystemMetricsSnapshot | null>(null);
-  const [simulator, setSimulator] = useState<SimulatorStatus | null>(null);
   const [refreshInterval, setRefreshInterval] = useState(2000);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [unavailable, setUnavailable] = useState(false);
-  const [simLoading, setSimLoading] = useState(false);
-  const [error, setError] = useState('');
   const [instrument, setInstrument] = useState<Instrument>('BTC_USD');
   const fetchData = useCallback(async () => {
     try {
@@ -25,11 +21,6 @@ export default function SystemDashboardPage() {
     } catch {
       setUnavailable(true);
     }
-    try {
-      setSimulator(await api.simulator.getStatus());
-    } catch {
-      setSimulator(null);
-    }
     setLastUpdated(new Date());
   }, []);
   useEffect(() => {
@@ -37,20 +28,6 @@ export default function SystemDashboardPage() {
     const timer = setInterval(fetchData, refreshInterval);
     return () => clearInterval(timer);
   }, [fetchData, refreshInterval]);
-  const handleSimAction = async (action: 'start' | 'stop' | 'seed') => {
-    setSimLoading(true);
-    setError('');
-    try {
-      await api.simulator[action]();
-      await fetchData();
-    } catch (error) {
-      setError(
-        error instanceof Error ? error.message : 'Unable to update simulator.',
-      );
-    } finally {
-      setSimLoading(false);
-    }
-  };
   const healthy =
     metrics?.servicesHealth.filter((service) => service.status === 'UP')
       .length ?? 0;
@@ -101,11 +78,6 @@ export default function SystemDashboardPage() {
             </span>
           </div>
         )}
-        {error && (
-          <div className="notice error" role="alert">
-            {error}
-          </div>
-        )}
         <section className="stats-grid" aria-label="System overview">
           <div className="panel stat-card">
             <span>Matching throughput</span>
@@ -133,49 +105,6 @@ export default function SystemDashboardPage() {
               {metrics ? `${healthy} / ${metrics.servicesHealth.length}` : '—'}
             </strong>
             <small>services reporting online</small>
-          </div>
-        </section>
-        <section className="panel">
-          <div className="panel-heading">
-            <h2>Market simulator</h2>
-            <span className="badge">
-              {simulator
-                ? simulator.running
-                  ? 'Running'
-                  : 'Paused'
-                : 'Unavailable'}
-            </span>
-          </div>
-          <div className="content-pad toolbar">
-            <button
-              className="button"
-              disabled={simLoading || !simulator}
-              aria-busy={simLoading}
-              onClick={() =>
-                handleSimAction(simulator?.running ? 'stop' : 'start')
-              }
-            >
-              {simLoading ? (
-                <Loader variant="inline" label="Updating..." />
-              ) : simulator?.running ? (
-                'Pause simulator'
-              ) : (
-                'Start simulator'
-              )}
-            </button>
-            <button
-              className="button"
-              disabled={simLoading || !simulator}
-              onClick={() => handleSimAction('seed')}
-            >
-              Re-seed funds
-            </button>
-            {simulator?.bots.map((bot) => (
-              <span className="badge font-mono" key={bot.instrument}>
-                {bot.instrument} · {bot.currentMid.toFixed(2)} ·{' '}
-                {bot.activeBids} bids / {bot.activeAsks} asks
-              </span>
-            ))}
           </div>
         </section>
         <div className="section-grid">

@@ -12,7 +12,7 @@ server {
     server_name dete.kartik-mrk.me localhost 127.0.0.1;
 
     # API Gateway routes (matches exact /orders or /orders/...)
-    location ~ ^/(api|auth|orders|accounts|market-data|internal|admin|actuator|matching)(/|$) {
+    location ~ ^/(api|auth|orders|accounts|market-data|market-simulation|internal|admin|actuator|matching)(/|$) {
         proxy_pass http://10.43.2.218:8080;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

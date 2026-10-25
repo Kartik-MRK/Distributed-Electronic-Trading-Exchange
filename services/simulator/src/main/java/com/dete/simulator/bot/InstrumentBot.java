@@ -9,12 +9,15 @@ import com.dete.simulator.config.SimulatorProperties;
 import com.dete.simulator.dto.CreateOrderDto;
 import com.dete.simulator.dto.OrderResponseDto;
 import com.dete.simulator.service.BotAccountManager;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BooleanSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,20 +29,60 @@ public class InstrumentBot {
   private final SimulatorProperties.InstrumentConfig config;
   private final ExchangeRestClient restClient;
   private final BotAccountManager accountManager;
+  private final BooleanSupplier sessionIsCurrent;
+  private final BooleanSupplier orderAdmission;
+  private final MeterRegistry meters;
   private final Random random = new Random();
 
   private volatile double currentMidPrice;
   private final Set<UUID> restingBidOrderIds = ConcurrentHashMap.newKeySet();
   private final Set<UUID> restingAskOrderIds = ConcurrentHashMap.newKeySet();
+  private final Set<UUID> restingTakerOrderIds = ConcurrentHashMap.newKeySet();
 
   public InstrumentBot(
       SimulatorProperties.InstrumentConfig config,
       ExchangeRestClient restClient,
       BotAccountManager accountManager) {
+    this(config, restClient, accountManager, () -> true, () -> true, new SimpleMeterRegistry());
+  }
+
+  public InstrumentBot(
+      SimulatorProperties.InstrumentConfig config,
+      ExchangeRestClient restClient,
+      BotAccountManager accountManager,
+      BooleanSupplier sessionIsCurrent) {
+    this(
+        config,
+        restClient,
+        accountManager,
+        sessionIsCurrent,
+        () -> true,
+        new SimpleMeterRegistry());
+  }
+
+  public InstrumentBot(
+      SimulatorProperties.InstrumentConfig config,
+      ExchangeRestClient restClient,
+      BotAccountManager accountManager,
+      BooleanSupplier sessionIsCurrent,
+      MeterRegistry meters) {
+    this(config, restClient, accountManager, sessionIsCurrent, () -> true, meters);
+  }
+
+  public InstrumentBot(
+      SimulatorProperties.InstrumentConfig config,
+      ExchangeRestClient restClient,
+      BotAccountManager accountManager,
+      BooleanSupplier sessionIsCurrent,
+      BooleanSupplier orderAdmission,
+      MeterRegistry meters) {
     this.config = config;
     this.instrument = Instrument.fromSymbol(config.getSymbol());
     this.restClient = restClient;
     this.accountManager = accountManager;
+    this.sessionIsCurrent = sessionIsCurrent;
+    this.orderAdmission = orderAdmission;
+    this.meters = meters;
     this.currentMidPrice = config.getInitialMid();
   }
 
@@ -71,7 +114,7 @@ public class InstrumentBot {
     double bestBid = currentMidPrice * (1.0 - halfSpreadPercent);
     double bestAsk = currentMidPrice * (1.0 + halfSpreadPercent);
 
-    int levels = Math.max(3, config.getLevels());
+    int levels = targetLevels();
     for (int i = 0; i < levels; i++) {
       double stepPercent = 0.02 * ((double) i / (double) levels);
       double bidPrice = bestBid * (1.0 - stepPercent);
@@ -112,6 +155,7 @@ public class InstrumentBot {
   public void refreshOrders() {
     String makerToken = accountManager.getMakerToken();
     if (makerToken == null) return;
+    refreshTakerOrderCount();
 
     // Cancel 2 random bids and 2 random asks
     cancelRandomSubset(makerToken, restingBidOrderIds, 2);
@@ -122,19 +166,29 @@ public class InstrumentBot {
     double bestBid = currentMidPrice * (1.0 - halfSpreadPercent);
     double bestAsk = currentMidPrice * (1.0 + halfSpreadPercent);
 
-    while (restingBidOrderIds.size() < config.getLevels()) {
+    int attempts = 0;
+    int maxAttempts = targetLevels();
+    while (restingBidOrderIds.size() < targetLevels()
+        && attempts++ < maxAttempts
+        && sessionIsCurrent.getAsBoolean()) {
       double step = 0.02 * random.nextDouble();
       placeMakerOrder(makerToken, OrderSide.BUY, bestBid * (1.0 - step), restingBidOrderIds);
     }
 
-    while (restingAskOrderIds.size() < config.getLevels()) {
+    attempts = 0;
+    while (restingAskOrderIds.size() < targetLevels()
+        && attempts++ < maxAttempts
+        && sessionIsCurrent.getAsBoolean()) {
       double step = 0.02 * random.nextDouble();
       placeMakerOrder(makerToken, OrderSide.SELL, bestAsk * (1.0 + step), restingAskOrderIds);
     }
   }
 
-  /** Places a small market / crossing order from the Taker bot to generate trade executions. */
+  /** Places a bounded crossing limit order; fills still occur only in the exchange matcher. */
   public void generateFill() {
+    if (!sessionIsCurrent.getAsBoolean()) return;
+    if (restingTakerOrderIds.size() >= targetLevels()) return;
+    if (!orderAdmission.getAsBoolean() || !sessionIsCurrent.getAsBoolean()) return;
     String takerToken = accountManager.getTakerToken();
     if (takerToken == null) return;
 
@@ -157,8 +211,26 @@ public class InstrumentBot {
 
     OrderResponseDto response = restClient.placeOrder(takerToken, orderRequest, UUID.randomUUID());
     if (response != null) {
+      orderCounter("taker").increment();
+      if (response.status() == com.dete.common.domain.enums.OrderStatus.FILLED
+          || response.status() == com.dete.common.domain.enums.OrderStatus.PARTIALLY_FILLED) {
+        meters
+            .counter(
+                "market.simulation.bot.fills",
+                "market",
+                instrument.symbol(),
+                "status",
+                response.status().name())
+            .increment();
+      }
+      if (response.orderId() != null
+          && response.status() != com.dete.common.domain.enums.OrderStatus.FILLED
+          && response.status() != com.dete.common.domain.enums.OrderStatus.CANCELLED
+          && response.status() != com.dete.common.domain.enums.OrderStatus.REJECTED) {
+        restingTakerOrderIds.add(response.orderId());
+      }
       log.debug(
-          "Generated simulated fill: {} {} {} @ {}",
+          "Submitted simulated taker order: {} {} {} @ {}",
           side,
           String.format("%.4f", quantity),
           instrument.symbol(),
@@ -167,6 +239,9 @@ public class InstrumentBot {
   }
 
   private void placeMakerOrder(String token, OrderSide side, double price, Set<UUID> idSet) {
+    if (!sessionIsCurrent.getAsBoolean()
+        || !orderAdmission.getAsBoolean()
+        || !sessionIsCurrent.getAsBoolean()) return;
     double sizeRange = config.getOrderSizeMax() - config.getOrderSizeMin();
     double quantity = config.getOrderSizeMin() + (random.nextDouble() * sizeRange);
 
@@ -179,7 +254,34 @@ public class InstrumentBot {
     OrderResponseDto response = restClient.placeOrder(token, request, UUID.randomUUID());
     if (response != null && response.orderId() != null) {
       idSet.add(response.orderId());
+      orderCounter("maker").increment();
     }
+  }
+
+  private io.micrometer.core.instrument.Counter orderCounter(String role) {
+    return meters.counter(
+        "market.simulation.bot.orders", "market", instrument.symbol(), "role", role);
+  }
+
+  private int targetLevels() {
+    return Math.max(3, Math.min(15, config.getLevels()));
+  }
+
+  private void refreshTakerOrderCount() {
+    String takerToken = accountManager.getTakerToken();
+    if (takerToken == null) return;
+    Set<UUID> activeIds = ConcurrentHashMap.newKeySet();
+    for (OrderResponseDto order : restClient.getActiveOrdersStrict(takerToken)) {
+      if (instrument.equals(order.instrument())
+          && order.orderId() != null
+          && order.status() != com.dete.common.domain.enums.OrderStatus.FILLED
+          && order.status() != com.dete.common.domain.enums.OrderStatus.CANCELLED
+          && order.status() != com.dete.common.domain.enums.OrderStatus.REJECTED) {
+        activeIds.add(order.orderId());
+      }
+    }
+    restingTakerOrderIds.clear();
+    restingTakerOrderIds.addAll(activeIds);
   }
 
   private void cancelRandomSubset(String token, Set<UUID> idSet, int count) {
@@ -187,6 +289,7 @@ public class InstrumentBot {
     List<UUID> list = new ArrayList<>(idSet);
     int toCancel = Math.min(count, list.size());
     for (int i = 0; i < toCancel; i++) {
+      if (!sessionIsCurrent.getAsBoolean()) return;
       int index = random.nextInt(list.size());
       UUID orderId = list.remove(index);
       idSet.remove(orderId);

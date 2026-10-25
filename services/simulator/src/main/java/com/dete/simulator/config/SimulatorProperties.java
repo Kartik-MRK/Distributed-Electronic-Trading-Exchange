@@ -17,6 +17,7 @@ public class SimulatorProperties {
   private int driftIntervalSeconds = 10;
   private int tradeIntervalSeconds = 3;
   private int refreshIntervalSeconds = 4;
+  private int maxOrdersPerSecond = 8;
   private List<InstrumentConfig> instruments = new ArrayList<>();
 
   public boolean isEnabled() {
@@ -64,7 +65,7 @@ public class SimulatorProperties {
   }
 
   public void setDriftIntervalSeconds(int driftIntervalSeconds) {
-    this.driftIntervalSeconds = driftIntervalSeconds;
+    this.driftIntervalSeconds = Math.max(1, Math.min(60, driftIntervalSeconds));
   }
 
   public int getTradeIntervalSeconds() {
@@ -72,7 +73,7 @@ public class SimulatorProperties {
   }
 
   public void setTradeIntervalSeconds(int tradeIntervalSeconds) {
-    this.tradeIntervalSeconds = tradeIntervalSeconds;
+    this.tradeIntervalSeconds = Math.max(1, Math.min(60, tradeIntervalSeconds));
   }
 
   public int getRefreshIntervalSeconds() {
@@ -80,7 +81,15 @@ public class SimulatorProperties {
   }
 
   public void setRefreshIntervalSeconds(int refreshIntervalSeconds) {
-    this.refreshIntervalSeconds = refreshIntervalSeconds;
+    this.refreshIntervalSeconds = Math.max(1, Math.min(60, refreshIntervalSeconds));
+  }
+
+  public int getMaxOrdersPerSecond() {
+    return maxOrdersPerSecond;
+  }
+
+  public void setMaxOrdersPerSecond(int maxOrdersPerSecond) {
+    this.maxOrdersPerSecond = Math.max(1, Math.min(12, maxOrdersPerSecond));
   }
 
   public List<InstrumentConfig> getInstruments() {

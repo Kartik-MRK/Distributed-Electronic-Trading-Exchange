@@ -100,4 +100,14 @@ class InstrumentBotTest {
     assertThat(bot.getActiveBidCount()).isEqualTo(5);
     assertThat(bot.getActiveAskCount()).isEqualTo(5);
   }
+
+  @Test
+  @DisplayName("A worker that lost its session fence cannot place bot orders")
+  void shouldNotSubmitWhenSessionOwnershipIsLost() {
+    InstrumentBot staleBot = new InstrumentBot(config, restClient, accountManager, () -> false);
+
+    staleBot.populateOrderBook();
+
+    org.mockito.Mockito.verifyNoInteractions(restClient);
+  }
 }

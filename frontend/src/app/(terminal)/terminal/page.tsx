@@ -18,6 +18,7 @@ import { AccountPanel } from '@/components/account/AccountPanel';
 import { ToastProvider } from '@/components/common/ToastContext';
 import { ReplayViewer } from '@/components/replay/ReplayViewer';
 import { Loader } from '@/components/common/Loader';
+import { MarketSimulationControl } from '@/components/simulation/MarketSimulationControl';
 
 type ActivityTab = 'open' | 'history' | 'trades' | 'replay';
 const tabs: [ActivityTab, string][] = [
@@ -115,6 +116,7 @@ function TradingWorkspace() {
           </div>
         </section>
         <section className="entry-region" aria-label="Place an order">
+          <MarketSimulationControl />
           <OrderEntry
             key={instrument}
             instrument={instrument}

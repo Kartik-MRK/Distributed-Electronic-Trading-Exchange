@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -27,7 +28,10 @@ public class ExchangeRestClient {
   @org.springframework.beans.factory.annotation.Autowired
   public ExchangeRestClient(SimulatorProperties properties) {
     this.properties = properties;
-    this.restClient = RestClient.builder().build();
+    SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+    requestFactory.setConnectTimeout(java.time.Duration.ofSeconds(2));
+    requestFactory.setReadTimeout(java.time.Duration.ofSeconds(2));
+    this.restClient = RestClient.builder().requestFactory(requestFactory).build();
   }
 
   public ExchangeRestClient(SimulatorProperties properties, RestClient restClient) {
@@ -144,5 +148,18 @@ public class ExchangeRestClient {
       log.debug("Failed to fetch active orders: {}", e.getMessage());
       return Collections.emptyList();
     }
+  }
+
+  public List<OrderResponseDto> getActiveOrdersStrict(String accessToken) {
+    List<OrderResponseDto> orders =
+        restClient
+            .get()
+            .uri(properties.getOrderUrl() + "/orders")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+            .retrieve()
+            .body(new ParameterizedTypeReference<List<OrderResponseDto>>() {});
+    if (orders == null)
+      throw new IllegalStateException("Order service returned no active-order response");
+    return orders;
   }
 }
