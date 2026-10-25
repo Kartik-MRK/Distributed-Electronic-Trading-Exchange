@@ -4,19 +4,24 @@ const assert = require('node:assert/strict');
 
 const {
   DEFAULT_PANEL_LAYOUT,
+  DEFAULT_COLUMN_LAYOUT,
   getResizeDeltas,
+  normalizeColumnLayout,
   normalizePanelLayout,
   readPanelLayout,
+  readColumnLayout,
   resizePanelBoundaryLayout,
+  resizeColumnBoundary,
   resizePanelLayout,
   savePanelLayout,
+  saveColumnLayout,
 } = require('../src/lib/workspace-layout.cjs');
 
 test('provides balanced default spans for all six workspace panels', () => {
   assert.deepEqual(DEFAULT_PANEL_LAYOUT, {
     chart: { columns: 6, rows: 4 },
     book: { columns: 3, rows: 4 },
-    simulation: { columns: 3, rows: 1 },
+    simulation: { columns: 3, rows: 2 },
     orderEntry: { columns: 3, rows: 3 },
     activity: { columns: 9, rows: 2 },
     balances: { columns: 3, rows: 2 },
@@ -61,6 +66,15 @@ test('clamps spans to each panel minimum and maximum', () => {
 
   assert.deepEqual(layout.chart, { columns: 12, rows: 3 });
   assert.deepEqual(layout.balances, { columns: 3, rows: 6 });
+});
+
+test('keeps the simulation controls tall enough for their content', () => {
+  const layout = normalizePanelLayout({
+    ...DEFAULT_PANEL_LAYOUT,
+    simulation: { columns: 3, rows: 1 },
+  });
+
+  assert.equal(layout.simulation.rows, 2);
 });
 
 test('converts pointer movement into width, height, and corner grid deltas', () => {
@@ -118,4 +132,86 @@ test('limits a boundary drag when either adjacent panel reaches its minimum', ()
   assert.equal(next.chart.columns, 7);
   assert.equal(next.book.columns, 2);
   assert.equal(next.chart.columns + next.book.columns, 9);
+});
+
+test('preserves sub-track pointer movement for smooth width resizing', () => {
+  assert.deepEqual(
+    getResizeDeltas('both', {
+      startX: 0,
+      startY: 0,
+      currentX: 1,
+      currentY: 56,
+      columnStep: 100,
+      rowStep: 112,
+    }),
+    { columns: 0.01, rows: 1 },
+  );
+});
+
+test('transfers fractional width between shared columns without changing total width', () => {
+  const next = resizeColumnBoundary(
+    DEFAULT_COLUMN_LAYOUT,
+    'middle',
+    'right',
+    0.25,
+  );
+
+  assert.deepEqual(next, { left: 6, middle: 3.25, right: 2.75 });
+  assert.equal(next.left + next.middle + next.right, 12);
+});
+
+test('clamps shared-column resizing at each column minimum and maximum', () => {
+  const expandedMiddle = resizeColumnBoundary(
+    DEFAULT_COLUMN_LAYOUT,
+    'middle',
+    'right',
+    20,
+  );
+  assert.deepEqual(expandedMiddle, { left: 6, middle: 3.5, right: 2.5 });
+
+  const expandedRight = resizeColumnBoundary(
+    expandedMiddle,
+    'middle',
+    'right',
+    -20,
+  );
+  assert.deepEqual(expandedRight, { left: 6, middle: 2, right: 4 });
+});
+
+test('normalizes saved column weights to a valid twelve-unit workspace', () => {
+  const layout = normalizeColumnLayout({ left: 9, middle: 1, right: 2 });
+
+  assert.equal(layout.left + layout.middle + layout.right, 12);
+  assert.ok(layout.left >= 4 && layout.left <= 8);
+  assert.ok(layout.middle >= 2 && layout.middle <= 6);
+  assert.ok(layout.right >= 2 && layout.right <= 6);
+});
+
+test('round-trips fractional column widths through browser storage', () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+  };
+  const layout = { left: 6.125, middle: 3.375, right: 2.5 };
+
+  saveColumnLayout(storage, layout);
+
+  assert.deepEqual(readColumnLayout(storage), layout);
+});
+
+test('migrates saved panel widths to shared column widths', () => {
+  const storage = { getItem: () => null };
+  const legacy = {
+    ...DEFAULT_PANEL_LAYOUT,
+    chart: { columns: 5, rows: 4 },
+    book: { columns: 3, rows: 4 },
+    simulation: { columns: 4, rows: 1 },
+  };
+
+  assert.deepEqual(readColumnLayout(storage, legacy), {
+    left: 5,
+    middle: 3,
+    right: 4,
+  });
 });

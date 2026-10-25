@@ -10,16 +10,22 @@ import {
   useState,
 } from 'react';
 import {
+  DEFAULT_COLUMN_LAYOUT,
   DEFAULT_PANEL_LAYOUT,
   getResizeDeltas,
+  normalizeColumnLayout,
   normalizePanelLayout,
+  readColumnLayout,
+  readPanelLayout,
+  resizeColumnBoundary,
+  resizePanelLayout,
+  saveColumnLayout,
+  savePanelLayout,
+  type ColumnId,
+  type ColumnLayout,
   type PanelId,
   type PanelLayout,
   type ResizeAxis,
-  readPanelLayout,
-  resizePanelBoundaryLayout,
-  resizePanelLayout,
-  savePanelLayout,
 } from '@/lib/workspace-layout.cjs';
 
 export interface WorkspacePanel {
@@ -29,21 +35,31 @@ export interface WorkspacePanel {
   content: ReactNode;
 }
 
+interface ColumnBoundary {
+  leftId: ColumnId;
+  rightId: ColumnId;
+}
+
 interface DragState {
   id: PanelId;
   axis: ResizeAxis;
-  adjacentId: PanelId | null;
+  boundary: ColumnBoundary | null;
   pointerId: number;
   startX: number;
   startY: number;
   columnStep: number;
   rowStep: number;
   initialLayout: PanelLayout;
+  initialColumns: ColumnLayout;
 }
 
-const GRID_COLUMNS = 12;
 const DESKTOP_BREAKPOINT = 1181;
 const ROW_UNIT = 100;
+const PANEL_BOUNDARIES: Partial<Record<PanelId, ColumnBoundary>> = {
+  chart: { leftId: 'left', rightId: 'middle' },
+  book: { leftId: 'middle', rightId: 'right' },
+  activity: { leftId: 'middle', rightId: 'right' },
+};
 
 export function ResizableWorkspace({
   panels,
@@ -53,13 +69,20 @@ export function ResizableWorkspace({
   const gridRef = useRef<HTMLElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const initialLayout = normalizePanelLayout(DEFAULT_PANEL_LAYOUT);
+  const initialColumns = normalizeColumnLayout(DEFAULT_COLUMN_LAYOUT);
   const layoutRef = useRef<PanelLayout>(initialLayout);
+  const columnsRef = useRef<ColumnLayout>(initialColumns);
   const [layout, setLayout] = useState<PanelLayout>(initialLayout);
+  const [columns, setColumns] = useState<ColumnLayout>(initialColumns);
 
   useEffect(() => {
-    const saved = readPanelLayout(getLocalStorage()) as PanelLayout;
-    layoutRef.current = saved;
-    setLayout(saved);
+    const storage = getLocalStorage();
+    const savedLayout = readPanelLayout(storage) as PanelLayout;
+    const savedColumns = readColumnLayout(storage, savedLayout) as ColumnLayout;
+    layoutRef.current = savedLayout;
+    columnsRef.current = savedColumns;
+    setLayout(savedLayout);
+    setColumns(savedColumns);
   }, []);
 
   function beginResize(
@@ -76,8 +99,8 @@ export function ResizableWorkspace({
     const padding =
       (Number.parseFloat(styles.paddingLeft) || 0) +
       (Number.parseFloat(styles.paddingRight) || 0);
-    const availableWidth = grid.clientWidth - padding;
-    const columnStep = (availableWidth - gap * (GRID_COLUMNS - 1)) / GRID_COLUMNS + gap;
+    const availableWidth = grid.clientWidth - padding - gap * 2;
+    const columnStep = availableWidth / 12;
     const rowGap = Number.parseFloat(styles.rowGap) || 0;
 
     event.preventDefault();
@@ -85,14 +108,14 @@ export function ResizableWorkspace({
     dragRef.current = {
       id,
       axis,
-      adjacentId:
-        axis === 'height' ? null : findAdjacentPanel(grid, id, event.clientY),
+      boundary: axis === 'height' ? null : PANEL_BOUNDARIES[id] ?? null,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       columnStep,
       rowStep: ROW_UNIT + rowGap,
       initialLayout: layoutRef.current,
+      initialColumns: columnsRef.current,
     };
   }
 
@@ -110,26 +133,35 @@ export function ResizableWorkspace({
     });
     const next = applyResize(
       drag.initialLayout,
+      drag.initialColumns,
       drag.id,
-      drag.adjacentId,
-      drag.axis,
+      drag.boundary,
       deltas,
     );
-    layoutRef.current = next;
-    setLayout(next);
+    layoutRef.current = next.layout;
+    columnsRef.current = next.columns;
+    applyGridLayout(gridRef.current, next.layout, next.columns);
   }
 
   function finishResize(event: ReactPointerEvent<HTMLButtonElement>) {
     if (dragRef.current?.pointerId !== event.pointerId) return;
     moveResize(event);
     dragRef.current = null;
-    savePanelLayout(getLocalStorage(), layoutRef.current);
+    setLayout(layoutRef.current);
+    setColumns(columnsRef.current);
+    const storage = getLocalStorage();
+    savePanelLayout(storage, layoutRef.current);
+    saveColumnLayout(storage, columnsRef.current);
   }
 
   function cancelResize(event: ReactPointerEvent<HTMLButtonElement>) {
     if (dragRef.current?.pointerId !== event.pointerId) return;
     dragRef.current = null;
-    savePanelLayout(getLocalStorage(), layoutRef.current);
+    setLayout(layoutRef.current);
+    setColumns(columnsRef.current);
+    const storage = getLocalStorage();
+    savePanelLayout(storage, layoutRef.current);
+    saveColumnLayout(storage, columnsRef.current);
   }
 
   function resizeFromKeyboard(
@@ -138,85 +170,95 @@ export function ResizableWorkspace({
     axis: ResizeAxis,
   ) {
     const deltas = { columns: 0, rows: 0 };
-    if (axis !== 'height' && event.key === 'ArrowRight') deltas.columns = 1;
-    if (axis !== 'height' && event.key === 'ArrowLeft') deltas.columns = -1;
+    if (axis !== 'height' && event.key === 'ArrowRight') deltas.columns = 0.25;
+    if (axis !== 'height' && event.key === 'ArrowLeft') deltas.columns = -0.25;
     if (axis !== 'width' && event.key === 'ArrowDown') deltas.rows = 1;
     if (axis !== 'width' && event.key === 'ArrowUp') deltas.rows = -1;
     if (deltas.columns === 0 && deltas.rows === 0) return;
 
     event.preventDefault();
-    const gripBounds = event.currentTarget.getBoundingClientRect();
-    const adjacentId =
-      axis === 'height'
-        ? null
-        : findAdjacentPanel(
-            gridRef.current,
-            id,
-            gripBounds.top + gripBounds.height / 2,
-          );
-    const next = applyResize(layoutRef.current, id, adjacentId, axis, deltas);
-    layoutRef.current = next;
-    setLayout(next);
-    savePanelLayout(getLocalStorage(), next);
+    const next = applyResize(
+      layoutRef.current,
+      columnsRef.current,
+      id,
+      axis === 'height' ? null : PANEL_BOUNDARIES[id] ?? null,
+      deltas,
+    );
+    layoutRef.current = next.layout;
+    columnsRef.current = next.columns;
+    setLayout(next.layout);
+    setColumns(next.columns);
+    const storage = getLocalStorage();
+    savePanelLayout(storage, next.layout);
+    saveColumnLayout(storage, next.columns);
   }
 
+  const activityStartRow = getActivityStartRow(layout);
   return (
     <main
       id="workspace"
       ref={gridRef}
       className="terminal-body terminal-body--resizable"
       aria-label="Trading workspace"
+      style={
+        {
+          '--workspace-left': `${columns.left}fr`,
+          '--workspace-middle': `${columns.middle}fr`,
+          '--workspace-right': `${columns.right}fr`,
+        } as CSSProperties
+      }
     >
-      {panels.map((panel) => (
-        <section
-          key={panel.id}
-          data-panel-id={panel.id}
-          className={`workspace-panel ${panel.className}`}
-          aria-label={panel.label}
-          style={
-            {
-              '--panel-columns': layout[panel.id].columns,
-              '--panel-rows': layout[panel.id].rows,
-              gridColumn: `span ${layout[panel.id].columns}`,
-              gridRow: `span ${layout[panel.id].rows}`,
-            } as CSSProperties
-          }
-        >
-          {panel.content}
-          <div className="workspace-resize-controls">
-            <ResizeGrip
-              id={panel.id}
-              label={panel.label}
-              edge="width"
-              onPointerDown={beginResize}
-              onPointerMove={moveResize}
-              onPointerUp={finishResize}
-              onPointerCancel={cancelResize}
-              onKeyDown={resizeFromKeyboard}
-            />
-            <ResizeGrip
-              id={panel.id}
-              label={panel.label}
-              edge="height"
-              onPointerDown={beginResize}
-              onPointerMove={moveResize}
-              onPointerUp={finishResize}
-              onPointerCancel={cancelResize}
-              onKeyDown={resizeFromKeyboard}
-            />
-            <ResizeGrip
-              id={panel.id}
-              label={panel.label}
-              edge="both"
-              onPointerDown={beginResize}
-              onPointerMove={moveResize}
-              onPointerUp={finishResize}
-              onPointerCancel={cancelResize}
-              onKeyDown={resizeFromKeyboard}
-            />
-          </div>
-        </section>
-      ))}
+      {panels.map((panel) => {
+        const boundary = PANEL_BOUNDARIES[panel.id];
+        const placement = getPanelGridPlacement(panel.id, layout, activityStartRow);
+        return (
+          <section
+            key={panel.id}
+            data-panel-id={panel.id}
+            className={`workspace-panel ${panel.className}`}
+            aria-label={panel.label}
+            style={placement}
+          >
+            {panel.content}
+            <div className="workspace-resize-controls">
+              {boundary && (
+                <ResizeGrip
+                  id={panel.id}
+                  label={panel.label}
+                  edge="width"
+                  onPointerDown={beginResize}
+                  onPointerMove={moveResize}
+                  onPointerUp={finishResize}
+                  onPointerCancel={cancelResize}
+                  onKeyDown={resizeFromKeyboard}
+                />
+              )}
+              <ResizeGrip
+                id={panel.id}
+                label={panel.label}
+                edge="height"
+                onPointerDown={beginResize}
+                onPointerMove={moveResize}
+                onPointerUp={finishResize}
+                onPointerCancel={cancelResize}
+                onKeyDown={resizeFromKeyboard}
+              />
+              {boundary && (
+                <ResizeGrip
+                  id={panel.id}
+                  label={panel.label}
+                  edge="both"
+                  onPointerDown={beginResize}
+                  onPointerMove={moveResize}
+                  onPointerUp={finishResize}
+                  onPointerCancel={cancelResize}
+                  onKeyDown={resizeFromKeyboard}
+                />
+              )}
+            </div>
+          </section>
+        );
+      })}
     </main>
   );
 }
@@ -231,56 +273,87 @@ function getLocalStorage(): Storage | undefined {
 
 function applyResize(
   layout: PanelLayout,
+  columns: ColumnLayout,
   id: PanelId,
-  adjacentId: PanelId | null,
-  axis: ResizeAxis,
+  boundary: ColumnBoundary | null,
   deltas: { columns: number; rows: number },
-): PanelLayout {
-  if (axis !== 'height' && adjacentId && deltas.columns !== 0) {
-    const withTransferredWidth = resizePanelBoundaryLayout(
-      layout,
-      id,
-      adjacentId,
-      deltas.columns,
-    ) as PanelLayout;
-    return deltas.rows === 0
-      ? withTransferredWidth
-      : (resizePanelLayout(withTransferredWidth, id, {
-          rows: deltas.rows,
-        }) as PanelLayout);
-  }
+): { layout: PanelLayout; columns: ColumnLayout } {
+  const nextLayout =
+    deltas.rows === 0
+      ? layout
+      : (resizePanelLayout(layout, id, { rows: deltas.rows }) as PanelLayout);
+  const nextColumns =
+    boundary && deltas.columns !== 0
+      ? (resizeColumnBoundary(
+          columns,
+          boundary.leftId,
+          boundary.rightId,
+          deltas.columns,
+        ) as ColumnLayout)
+      : columns;
 
-  return resizePanelLayout(layout, id, deltas) as PanelLayout;
+  return { layout: nextLayout, columns: nextColumns };
 }
 
-function findAdjacentPanel(
-  grid: HTMLElement | null,
-  id: PanelId,
-  pointerY: number,
-): PanelId | null {
-  if (!grid) return null;
-
-  const panels = Array.from(
-    grid.querySelectorAll<HTMLElement>('[data-panel-id]'),
+function getActivityStartRow(layout: PanelLayout): number {
+  return (
+    Math.max(
+      layout.chart.rows,
+      layout.book.rows,
+      layout.simulation.rows + layout.orderEntry.rows,
+    ) + 1
   );
-  const current = panels.find((panel) => panel.dataset.panelId === id);
-  if (!current) return null;
+}
 
-  const currentBounds = current.getBoundingClientRect();
-  const gap = Number.parseFloat(getComputedStyle(grid).columnGap) || 0;
-  const expectedLeft = currentBounds.right + gap;
-  const candidates = panels
-    .filter((panel) => panel !== current && panel.dataset.panelId)
-    .map((panel) => ({ panel, bounds: panel.getBoundingClientRect() }))
-    .filter(
-      ({ bounds }) =>
-        Math.abs(bounds.left - expectedLeft) <= 3 &&
-        pointerY >= bounds.top &&
-        pointerY <= bounds.bottom,
-    )
-    .sort((left, right) => left.bounds.left - right.bounds.left);
+function getPanelGridPlacement(
+  id: PanelId,
+  layout: PanelLayout,
+  activityStartRow: number,
+): CSSProperties {
+  if (id === 'activity') {
+    return {
+      gridColumn: '1 / span 2',
+      gridRow: `${activityStartRow} / span ${layout.activity.rows}`,
+    };
+  }
 
-  return (candidates[0]?.panel.dataset.panelId as PanelId | undefined) ?? null;
+  const gridColumns: Record<Exclude<PanelId, 'activity'>, string> = {
+    chart: '1',
+    book: '2',
+    simulation: '3',
+    orderEntry: '3',
+    balances: '3',
+  };
+  const gridRows: Record<Exclude<PanelId, 'activity'>, string> = {
+    chart: `1 / span ${layout.chart.rows}`,
+    book: `1 / span ${layout.book.rows}`,
+    simulation: `1 / span ${layout.simulation.rows}`,
+    orderEntry: `${layout.simulation.rows + 1} / span ${layout.orderEntry.rows}`,
+    balances: `${activityStartRow} / span ${layout.balances.rows}`,
+  };
+
+  return { gridColumn: gridColumns[id], gridRow: gridRows[id] };
+}
+
+function applyGridLayout(
+  grid: HTMLElement | null,
+  layout: PanelLayout,
+  columns: ColumnLayout,
+) {
+  if (!grid) return;
+  grid.style.setProperty('--workspace-left', `${columns.left}fr`);
+  grid.style.setProperty('--workspace-middle', `${columns.middle}fr`);
+  grid.style.setProperty('--workspace-right', `${columns.right}fr`);
+  const activityStartRow = getActivityStartRow(layout);
+  for (const panel of Array.from(
+    grid.querySelectorAll<HTMLElement>('[data-panel-id]'),
+  )) {
+    const id = panel.dataset.panelId as PanelId | undefined;
+    if (!id) continue;
+    const placement = getPanelGridPlacement(id, layout, activityStartRow);
+    panel.style.gridColumn = placement.gridColumn as string;
+    panel.style.gridRow = placement.gridRow as string;
+  }
 }
 
 function ResizeGrip({
@@ -310,7 +383,8 @@ function ResizeGrip({
     axis: ResizeAxis,
   ) => void;
 }) {
-  const direction = edge === 'width' ? 'width' : edge === 'height' ? 'height' : 'width and height';
+  const direction =
+    edge === 'width' ? 'width' : edge === 'height' ? 'height' : 'width and height';
   const ariaLabel = `Resize ${label} ${direction}`;
 
   return (
