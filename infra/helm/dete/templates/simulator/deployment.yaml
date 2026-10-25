@@ -37,8 +37,8 @@ spec:
               value: "http://account:8082"
             - name: SIMULATOR_ORDER_URL
               value: "http://order:8083"
-            - name: MARKET_DATA_SERVICE_URL
-              value: "http://market-data:8087"
+            - name: RISK_SERVICE_URL
+              value: "http://risk:8085"
             - name: SPRING_DATASOURCE_URL
               value: "jdbc:postgresql://postgres:5432/dete?currentSchema=simulator"
             - name: SPRING_DATASOURCE_USERNAME

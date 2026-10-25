@@ -94,17 +94,17 @@ public class ExchangeRestClient {
     }
   }
 
-  public long getLastTradedPrice(Instrument instrument) {
+  public long getRiskReferencePrice(Instrument instrument) {
     try {
-      LastPriceResponse response =
+      var response =
           restClient
               .get()
-              .uri(properties.getMarketDataUrl() + "/market-data/" + instrument.name() + "/price")
+              .uri(properties.getRiskUrl() + "/risk/instruments")
               .retrieve()
-              .body(LastPriceResponse.class);
-      return response != null ? response.lastTradedPrice() : 0L;
+              .body(new ParameterizedTypeReference<java.util.Map<String, Long>>() {});
+      return response != null ? response.getOrDefault(instrument.name(), 0L) : 0L;
     } catch (Exception e) {
-      log.debug("Could not read latest market price for {}: {}", instrument, e.getMessage());
+      log.warn("Could not read risk reference price for {}: {}", instrument, e.getMessage());
       return 0L;
     }
   }
@@ -178,7 +178,4 @@ public class ExchangeRestClient {
       throw new IllegalStateException("Order service returned no active-order response");
     return orders;
   }
-
-  private record LastPriceResponse(
-      String instrument, String symbol, long lastTradedPrice, String formattedPrice) {}
 }

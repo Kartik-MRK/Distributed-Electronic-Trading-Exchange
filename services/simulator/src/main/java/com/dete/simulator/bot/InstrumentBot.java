@@ -35,6 +35,7 @@ public class InstrumentBot {
   private final Random random = new Random();
 
   private volatile double currentMidPrice;
+  private volatile double referenceMidPrice;
   private final Set<UUID> restingBidOrderIds = ConcurrentHashMap.newKeySet();
   private final Set<UUID> restingAskOrderIds = ConcurrentHashMap.newKeySet();
   private final Set<UUID> restingTakerOrderIds = ConcurrentHashMap.newKeySet();
@@ -84,6 +85,7 @@ public class InstrumentBot {
     this.orderAdmission = orderAdmission;
     this.meters = meters;
     this.currentMidPrice = config.getInitialMid();
+    this.referenceMidPrice = config.getInitialMid();
   }
 
   public Instrument getInstrument() {
@@ -95,7 +97,11 @@ public class InstrumentBot {
   }
 
   public void setCurrentMidPrice(long scaledPrice) {
-    if (scaledPrice > 0) currentMidPrice = FixedPoint.ofScaled(scaledPrice).toDouble();
+    if (scaledPrice > 0) {
+      double referencePrice = FixedPoint.ofScaled(scaledPrice).toDouble();
+      currentMidPrice = referencePrice;
+      referenceMidPrice = referencePrice;
+    }
   }
 
   public int getActiveBidCount() {
@@ -140,14 +146,17 @@ public class InstrumentBot {
   public void driftMidPrice() {
     double delta = (random.nextDouble() * 0.006) - 0.003; // [-0.3%, +0.3%]
 
-    // Gentle mean reversion if price wanders too far from initial mid (±15%)
-    if (currentMidPrice > config.getInitialMid() * 1.15) {
+    // Keep the simulated book close to the risk service's live reference price.
+    if (currentMidPrice > referenceMidPrice * 1.05) {
       delta -= 0.001;
-    } else if (currentMidPrice < config.getInitialMid() * 0.85) {
+    } else if (currentMidPrice < referenceMidPrice * 0.95) {
       delta += 0.001;
     }
 
-    currentMidPrice = currentMidPrice * (1.0 + delta);
+    currentMidPrice =
+        Math.max(
+            referenceMidPrice * 0.92,
+            Math.min(referenceMidPrice * 1.08, currentMidPrice * (1.0 + delta)));
     log.debug(
         "Drifted mid-price for {} to {} (delta: {}%)",
         instrument.symbol(),

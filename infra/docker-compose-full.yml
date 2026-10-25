@@ -409,6 +409,7 @@ services:
       AUTH_SERVICE_URL: http://auth:8081
       ACCOUNT_SERVICE_URL: http://account:8082
       ORDER_SERVICE_URL: http://order:8083
+      RISK_SERVICE_URL: http://risk:8085
     ports:
       - "8089:8089"
     networks:

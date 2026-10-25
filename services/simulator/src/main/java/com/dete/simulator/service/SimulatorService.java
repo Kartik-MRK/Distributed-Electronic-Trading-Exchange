@@ -201,8 +201,15 @@ public class SimulatorService {
         if (!ownsSession(claim)) return;
         InstrumentBot bot = bots.get(Instrument.fromSymbol(config.getSymbol()));
         if (bot != null) {
-          long lastTradedPrice = restClient.getLastTradedPrice(bot.getInstrument());
-          if (lastTradedPrice > 0) bot.setCurrentMidPrice(lastTradedPrice);
+          long riskReferencePrice = restClient.getRiskReferencePrice(bot.getInstrument());
+          if (riskReferencePrice > 0) {
+            bot.setCurrentMidPrice(riskReferencePrice);
+          } else {
+            log.warn(
+                "Risk reference unavailable for {}; using configured midpoint {}",
+                bot.getInstrument(),
+                bot.getCurrentMidPrice());
+          }
           bot.populateOrderBook();
         }
       }

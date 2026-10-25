@@ -42,20 +42,20 @@ simulator:
   auth-url: ${AUTH_SERVICE_URL:http://localhost:8081}
   account-url: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
   order-url: ${ORDER_SERVICE_URL:http://localhost:8083}
-  market-data-url: ${MARKET_DATA_SERVICE_URL:http://localhost:8087}
+  risk-url: ${RISK_SERVICE_URL:http://localhost:8085}
   drift-interval-seconds: 10
   trade-interval-seconds: 3
   refresh-interval-seconds: 4
   max-orders-per-second: 8
   instruments:
     - symbol: BTC-USD
-      initial-mid: 65000.0
+      initial-mid: 60000.0
       spread-bps: 20
       levels: 6
       order-size-min: 0.001
       order-size-max: 0.05
     - symbol: ETH-USD
-      initial-mid: 3500.0
+      initial-mid: 3000.0
       spread-bps: 20
       levels: 6
       order-size-min: 0.01

@@ -112,8 +112,8 @@ class InstrumentBotTest {
     }
 
     double currentMid = bot.getCurrentMidPrice();
-    // After 10 cycles of ±0.3%, price should stay within ±5%
-    assertThat(currentMid).isBetween(initialMid * 0.95, initialMid * 1.05);
+    // Drift remains inside the risk service's 10% band with room for quote spread.
+    assertThat(currentMid).isBetween(initialMid * 0.92, initialMid * 1.08);
   }
 
   @Test

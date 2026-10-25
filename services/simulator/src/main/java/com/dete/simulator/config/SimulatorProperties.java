@@ -14,7 +14,7 @@ public class SimulatorProperties {
   private String authUrl = "http://localhost:8081";
   private String accountUrl = "http://localhost:8082";
   private String orderUrl = "http://localhost:8083";
-  private String marketDataUrl = "http://localhost:8087";
+  private String riskUrl = "http://localhost:8085";
   private int driftIntervalSeconds = 10;
   private int tradeIntervalSeconds = 3;
   private int refreshIntervalSeconds = 4;
@@ -61,12 +61,12 @@ public class SimulatorProperties {
     this.orderUrl = orderUrl;
   }
 
-  public String getMarketDataUrl() {
-    return marketDataUrl;
+  public String getRiskUrl() {
+    return riskUrl;
   }
 
-  public void setMarketDataUrl(String marketDataUrl) {
-    this.marketDataUrl = marketDataUrl;
+  public void setRiskUrl(String riskUrl) {
+    this.riskUrl = riskUrl;
   }
 
   public int getDriftIntervalSeconds() {
