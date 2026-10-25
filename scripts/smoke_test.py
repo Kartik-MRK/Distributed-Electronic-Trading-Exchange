@@ -62,6 +62,15 @@ def balances(token):
     return {row['asset']: (row['available'], row['reserved']) for row in rows}
 
 
+def verify_simulator_api(token):
+    call('/market-simulation/status', expected=(401,))
+    session = call('/market-simulation/status', token=token)
+    if not isinstance(session, dict) or session.get('status') not in {
+            'IDLE', 'ACTIVE', 'STOPPING', 'COMPLETED', 'FAILED'
+    }:
+        raise RuntimeError('Invalid authenticated market simulation status')
+
+
 def select_price(book):
     bid = max((level['price'] for level in book['bids']), default=0)
     ask = min((level['price'] for level in book['asks']), default=0)
@@ -85,8 +94,6 @@ def verify_deltas(before_buyer, after_buyer, before_seller, after_seller, quanti
 
 def run_smoke_test():
     created_orders = []
-    simulator_url = None
-    resume_simulator = False
     try:
         page = call('/')
         if not isinstance(page, str) or '<html' not in page.lower():
@@ -94,15 +101,9 @@ def run_smoke_test():
         if not call('/auth/.well-known/jwks.json').get('keys'):
             raise RuntimeError('JWKS is empty')
         print('PASS: frontend and auth reachable through ingress', flush=True)
-        simulator_ip = subprocess.check_output(['kubectl', 'get', 'service', 'simulator', '-n', 'dete',
-            '-o', 'jsonpath={.spec.clusterIP}'], text=True).strip()
-        simulator_url = 'http://' + simulator_ip + ':8089'
-        eventually(lambda: call('/simulator/status', base=simulator_url).get('initialized'), 'simulator initialization', 90)
-        resume_simulator = call('/simulator/status', base=simulator_url).get('running', False)
-        call('/simulator/stop', 'POST', base=simulator_url)
-        time.sleep(2)
         buyer, buyer_token = new_account('buyer')
         seller, seller_token = new_account('seller')
+        verify_simulator_api(buyer_token)
         eventually(lambda: balances(buyer_token).get('USD', (0, 0))[0] >= 1_000 * SCALE, 'buyer funding')
         eventually(lambda: balances(seller_token).get('USD', (0, 0))[0] > 0, 'seller funding')
         account_url = os.environ.get('ACCOUNT_SERVICE_URL')
@@ -157,9 +158,5 @@ def run_smoke_test():
                     call('/orders/' + order_id, 'DELETE', token=token, expected=(200, 202))
             except Exception:
                 print('Cleanup needs inspection for smoke order ' + order_id, flush=True)
-        if simulator_url and resume_simulator:
-            call('/simulator/start', 'POST', base=simulator_url)
-
-
 if __name__ == '__main__':
     sys.exit(0 if run_smoke_test() else 1)

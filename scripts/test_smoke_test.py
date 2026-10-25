@@ -1,8 +1,33 @@
 import unittest
-from smoke_test import select_price, verify_deltas
+from unittest.mock import call as mock_call, patch
+
+from smoke_test import select_price, verify_deltas, verify_simulator_api
 
 
 class SmokeAssertionsTest(unittest.TestCase):
+    @patch('smoke_test.call')
+    def test_simulator_status_requires_auth_and_uses_session_route(self, request):
+        request.side_effect = [None, {'status': 'IDLE'}]
+
+        verify_simulator_api('buyer-token')
+
+        self.assertEqual(
+            [
+                mock_call('/market-simulation/status', expected=(401,)),
+                mock_call('/market-simulation/status', token='buyer-token'),
+            ],
+            request.call_args_list,
+        )
+
+    @patch('smoke_test.call')
+    def test_simulator_status_rejects_unknown_response(self, request):
+        request.side_effect = [None, {'status': 'running'}]
+
+        with self.assertRaisesRegex(
+                RuntimeError, 'Invalid authenticated market simulation status'
+        ):
+            verify_simulator_api('buyer-token')
+
     def test_success_requires_both_sides_and_reservation_release(self):
         buyer = {"USD": (1000, 0), "BTC": (0, 0)}
         seller = {"USD": (0, 0), "BTC": (10, 0)}
