@@ -28,17 +28,17 @@ class SimulatorControllerTest {
             UUID.randomUUID(),
             userId,
             "ACTIVE",
-            30,
+            60,
             Instant.now(),
-            Instant.now().plusSeconds(30),
+            Instant.now().plusSeconds(60),
             null,
             null);
-    when(simulatorService.start(userId, 30))
+    when(simulatorService.start(userId, 60))
         .thenReturn(new SimulatorService.StartResult(true, session));
-    var response = controller.start(userId, new SimulatorController.StartRequest(30));
+    var response = controller.start(userId, new SimulatorController.StartRequest(60));
     assertThat(response.getStatusCode().value()).isEqualTo(202);
     assertThat(response.getBody().status()).isEqualTo("ACTIVE");
-    assertThat(response.getBody().durationSeconds()).isEqualTo(30);
+    assertThat(response.getBody().durationSeconds()).isEqualTo(60);
   }
 
   @Test
@@ -67,9 +67,10 @@ class SimulatorControllerTest {
   void unsupportedDurationIsRejected() throws Exception {
     UUID userId = UUID.randomUUID();
     when(simulatorService.start(userId, 45))
-        .thenThrow(new IllegalArgumentException("Duration must be 30, 60, or 120 seconds"));
+        .thenThrow(new IllegalArgumentException("Duration must be 60, 120, 300, or 600 seconds"));
     var response = controller.start(userId, new SimulatorController.StartRequest(45));
     assertThat(response.getStatusCode().value()).isEqualTo(400);
-    assertThat(response.getBody().message()).isEqualTo("Duration must be 30, 60, or 120 seconds");
+    assertThat(response.getBody().message())
+        .isEqualTo("Duration must be 60, 120, 300, or 600 seconds");
   }
 }

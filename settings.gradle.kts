@@ -5,7 +5,8 @@ include(
     "libs:common-domain",
     "libs:common-events",
     "libs:common-security",
-    "libs:common-test"
+    "libs:common-test",
+    "libs:simulation-control"
 )
 
 // Services

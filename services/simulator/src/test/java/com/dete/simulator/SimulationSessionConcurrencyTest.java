@@ -8,8 +8,6 @@ import com.dete.simulator.config.SimulatorProperties;
 import com.dete.simulator.service.BotAccountManager;
 import com.dete.simulator.service.SimulatorService;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.sql.Timestamp;
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -57,6 +55,17 @@ class SimulationSessionConcurrencyTest {
   @MockBean private BotAccountManager accountManager;
   @MockBean private ExchangeRestClient mockRestClient;
 
+  @org.junit.jupiter.api.BeforeEach
+  void initializeEpoch() throws Exception {
+    // Let any previous test worker finish before resetting this isolated database.
+    Thread.sleep(1500);
+    properties.setInstruments(java.util.List.of());
+    jdbc.execute("TRUNCATE simulator.market_clock,simulator.simulation_session CASCADE");
+    jdbc.update(
+        "INSERT INTO simulator.market_clock(epoch_id,initialized_at,maintenance) VALUES (?,date_trunc('milliseconds',clock_timestamp()),false)",
+        UUID.randomUUID());
+  }
+
   @Test
   void separateServiceInstancesCannotClaimConcurrentSessions() throws Exception {
     when(accountManager.initializeSimulationAccounts()).thenReturn(true);
@@ -90,36 +99,23 @@ class SimulationSessionConcurrencyTest {
   @Test
   void expiredSessionIsReconciledBeforeANewClaim() {
     when(accountManager.initializeSimulationAccounts()).thenReturn(true);
-    UUID oldSession = UUID.randomUUID();
-    Instant started = Instant.now().minusSeconds(180);
+    var control = new com.dete.simulation.control.SimulationControlRepository(jdbc, transactions);
+    var old = control.claim(UUID.randomUUID(), 60).snapshot();
+    control.activate(old.sessionId(), old.fence());
     jdbc.update(
-        "INSERT INTO simulator.simulation_session (session_id, owner_user_id, status, "
-            + "duration_seconds, starts_at, expires_at, worker_owner, lease_until, fencing_token) "
-            + "VALUES (?, ?, 'ACTIVE', 30, ?, ?, ?, ?, 1)",
-        oldSession,
-        UUID.randomUUID(),
-        Timestamp.from(started),
-        Timestamp.from(started.plusSeconds(30)),
-        UUID.randomUUID(),
-        Timestamp.from(started.plusSeconds(45)));
-
-    SimulatorService.StartResult result = simulatorService.start(UUID.randomUUID(), 30);
-
+        "UPDATE simulator.simulation_session SET lease_until=clock_timestamp()-interval '1 second',progress_ms=1234 WHERE session_id=?",
+        old.sessionId());
+    var result = simulatorService.start(UUID.randomUUID(), 60);
     assertThat(result.started()).isTrue();
     assertThat(
             jdbc.queryForObject(
                 "SELECT status FROM simulator.simulation_session WHERE session_id=?",
                 String.class,
-                oldSession))
+                old.sessionId()))
         .isEqualTo("COMPLETED");
-    assertThat(
-            jdbc.queryForObject(
-                "SELECT completion_reason FROM simulator.simulation_session WHERE session_id=?",
-                String.class,
-                oldSession))
-        .isEqualTo("RECOVERED_EXPIRED");
+    assertThat(control.snapshot().elapsedMs()).isGreaterThanOrEqualTo(1234);
     jdbc.update(
-        "UPDATE simulator.simulation_session SET status='COMPLETED', completed_at=now() WHERE session_id=?",
+        "UPDATE simulator.simulation_session SET lease_until=clock_timestamp()-interval '1 second' WHERE session_id=?",
         result.session().sessionId());
   }
 
@@ -128,6 +124,6 @@ class SimulationSessionConcurrencyTest {
       throws InterruptedException {
     ready.countDown();
     start.await();
-    return service.start(UUID.randomUUID(), 30);
+    return service.start(UUID.randomUUID(), 60);
   }
 }

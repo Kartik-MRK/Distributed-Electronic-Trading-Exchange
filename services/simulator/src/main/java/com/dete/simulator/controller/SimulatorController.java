@@ -24,7 +24,8 @@ public class SimulatorController {
 
   @GetMapping("/status")
   public ResponseEntity<SessionResponse> getStatus() {
-    return ResponseEntity.ok(SessionResponse.from(simulatorService.getStatus()));
+    return ResponseEntity.ok(
+        SessionResponse.from(simulatorService.getStatus(), simulatorService.getClock()));
   }
 
   @PostMapping("/start")
@@ -33,7 +34,8 @@ public class SimulatorController {
     try {
       SimulatorService.StartResult result =
           simulatorService.start(userId, request.durationSeconds());
-      SessionResponse response = SessionResponse.from(result.session());
+      SessionResponse response =
+          SessionResponse.from(result.session(), simulatorService.getClock());
       return ResponseEntity.status(result.started() ? HttpStatus.ACCEPTED : HttpStatus.CONFLICT)
           .body(response);
     } catch (IllegalArgumentException e) {
@@ -55,10 +57,22 @@ public class SimulatorController {
       Instant expiresAt,
       Instant completedAt,
       String completionReason,
-      String message) {
-    static SessionResponse from(SimulationSession session) {
+      String message,
+      com.dete.common.domain.simulation.MarketClockSnapshot clock) {
+    static SessionResponse from(
+        SimulationSession session, com.dete.common.domain.simulation.MarketClockSnapshot clock) {
       return session == null
-          ? new SessionResponse("IDLE", null, null, null, null, null, null, null, null)
+          ? new SessionResponse(
+              clock == null ? "IDLE" : clock.status(),
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              clock)
           : new SessionResponse(
               session.status(),
               session.sessionId(),
@@ -68,11 +82,12 @@ public class SimulatorController {
               session.expiresAt(),
               session.completedAt(),
               session.completionReason(),
-              null);
+              null,
+              clock);
     }
 
     static SessionResponse error(String message) {
-      return new SessionResponse("IDLE", null, null, null, null, null, null, null, message);
+      return new SessionResponse("IDLE", null, null, null, null, null, null, null, message, null);
     }
   }
 }
