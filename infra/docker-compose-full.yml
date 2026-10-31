@@ -206,6 +206,7 @@ services:
     environment:
       AUTH_JWT_PRIVATE_KEY: ${AUTH_JWT_PRIVATE_KEY:?Set the RSA private key}
       AUTH_JWT_PUBLIC_KEY: ${SECURITY_JWT_PUBLIC_KEY:?Set the RSA public key}
+      ACCOUNT_SERVICE_URL: http://account:8082
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dete?currentSchema=auth
       SPRING_DATASOURCE_USERNAME: dete

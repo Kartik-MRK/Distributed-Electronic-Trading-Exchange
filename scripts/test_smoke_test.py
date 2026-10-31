@@ -51,6 +51,14 @@ class SmokeAssertionsTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             verify_deltas(buyer, after_buyer, seller, seller, 10, 100)
 
+    def test_independent_ioc_fill_deltas_release_all_reservations(self):
+        from smoke_test import verify_execution_delta
+        before={'USD':(1000,0),'BTC':(0,0)}
+        rows=[{'price':100000000,'quantity':100}]
+        verify_execution_delta(before,{'USD':(900,0),'BTC':(100,0)},rows,'BUY')
+        with self.assertRaises(RuntimeError):
+            verify_execution_delta(before,{'USD':(900,10),'BTC':(100,0)},rows,'BUY')
+
     def test_smoke_price_does_not_cross_existing_orders(self):
         self.assertEqual(105, select_price({"bids": [{"price": 100}], "asks": [{"price": 110}]}))
         with self.assertRaises(RuntimeError):

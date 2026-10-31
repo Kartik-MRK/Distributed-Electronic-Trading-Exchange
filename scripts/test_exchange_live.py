@@ -306,22 +306,11 @@ def main():
     
     test_health()
     
-    token, user_id = test_auth_login("demo", "DemoPassword123!")
-    bot_token, bot_id = test_auth_login("bot_maker", "BotMakerPass123!")
-    
-    if token and user_id:
-        test_account_balances(token, user_id)
-        test_order_placement(token, user_id, side="BUY", instrument="BTC_USD", price_usd=65000.0, qty=0.01)
-    
-    if bot_token and bot_id:
-        test_order_placement(bot_token, bot_id, side="SELL", instrument="BTC_USD", price_usd=65000.0, qty=0.01)
-    
-    time.sleep(1.0)
+    from smoke_test import run_smoke_test
+    if not run_smoke_test():
+        return 1
     test_market_data("BTC_USD")
-    
-    if token and user_id and bot_token and bot_id:
-        run_trading_benchmark(token, user_id, bot_token, bot_id, pairs=10)
-    
+
     test_gateway_metrics()
     test_prometheus_targets()
     
@@ -330,4 +319,4 @@ def main():
     print("=" * 60)
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
