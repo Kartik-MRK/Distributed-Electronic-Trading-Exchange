@@ -14,6 +14,16 @@ public class SimulatorProperties {
   private String authUrl = "http://localhost:8081";
   private String accountUrl = "http://localhost:8082";
   private String orderUrl = "http://localhost:8083";
+  private String matchingUrl = "http://localhost:8084";
+
+  public String getMatchingUrl() {
+    return matchingUrl;
+  }
+
+  public void setMatchingUrl(String url) {
+    matchingUrl = url;
+  }
+
   private String riskUrl = "http://localhost:8085";
   private int driftIntervalSeconds = 10;
   private int tradeIntervalSeconds = 3;

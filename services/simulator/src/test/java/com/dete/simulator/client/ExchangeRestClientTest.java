@@ -30,4 +30,22 @@ class ExchangeRestClientTest {
     assertThat(client.getRiskReferencePrice(Instrument.ETH_USD)).isEqualTo(300000000000L);
     server.verify();
   }
+
+  @Test
+  void readsActualBestBidAndAsk() {
+    var builder = RestClient.builder();
+    var server = MockRestServiceServer.bindTo(builder).build();
+    server
+        .expect(requestTo("http://localhost:8084/matching/orderbook/ETH_USD?depth=1"))
+        .andRespond(
+            withSuccess(
+                "{\"bids\":[{\"price\":2999,\"volume\":1,\"orderCount\":1}],\"asks\":[{\"price\":3001,\"volume\":1,\"orderCount\":1}]}",
+                MediaType.APPLICATION_JSON));
+    var quotes =
+        new ExchangeRestClient(new SimulatorProperties(), builder.build())
+            .getBestQuotes(Instrument.ETH_USD);
+    assertThat(quotes.bid()).isEqualTo(2999);
+    assertThat(quotes.ask()).isEqualTo(3001);
+    server.verify();
+  }
 }

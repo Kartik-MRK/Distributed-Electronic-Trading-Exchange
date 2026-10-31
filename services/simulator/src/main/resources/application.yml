@@ -42,6 +42,7 @@ simulator:
   auth-url: ${AUTH_SERVICE_URL:http://localhost:8081}
   account-url: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
   order-url: ${ORDER_SERVICE_URL:http://localhost:8083}
+  matching-url: ${MATCHING_ENGINE_URL:http://localhost:8084}
   risk-url: ${RISK_SERVICE_URL:http://localhost:8085}
   drift-interval-seconds: 10
   trade-interval-seconds: 3

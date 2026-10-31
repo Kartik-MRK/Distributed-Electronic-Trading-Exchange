@@ -128,11 +128,11 @@ public class SimulatorService {
         TimeUnit.MILLISECONDS);
     String reason = "DEADLINE_REACHED";
     try {
-      for (var bot : bots.values()) {
-        if (!trading.get()) break;
-        long reference = restClient.getRiskReferencePrice(bot.getInstrument());
-        if (reference > 0) bot.setCurrentMidPrice(reference);
-        bot.populateOrderBook();
+      for (int level = 0; level < 15 && trading.get(); level++) {
+        for (var config : properties.getInstruments()) {
+          if (!trading.get()) break;
+          bots.get(Instrument.fromSymbol(config.getSymbol())).seedLevel(level);
+        }
       }
       long drift = 0, fill = 0, refresh = 0;
       while (trading.get()) {
@@ -194,6 +194,15 @@ public class SimulatorService {
               },
               this::allowBotOrder,
               meters);
+      long reference = restClient.getRiskReferencePrice(bot.getInstrument());
+      var saved =
+          jdbc.query(
+              "SELECT price FROM simulator.market_resume_price WHERE epoch_id=? AND instrument=?",
+              (rs, n) -> rs.getLong(1),
+              session.epochId(),
+              bot.getInstrument().name());
+      long startingPrice = saved.isEmpty() ? reference : saved.getFirst();
+      if (startingPrice > 0) bot.setCurrentMidPrice(startingPrice);
       bot.bindSession(session.sessionId());
       bots.put(bot.getInstrument(), bot);
     }

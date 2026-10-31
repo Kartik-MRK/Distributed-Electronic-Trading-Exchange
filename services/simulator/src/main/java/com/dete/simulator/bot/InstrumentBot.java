@@ -119,34 +119,21 @@ public class InstrumentBot {
     return restingAskOrderIds.size();
   }
 
-  /** Initializes order book depth with N levels of bids and asks. */
+  /** Seed one level at a time so the scheduler can interleave all markets. */
+  public void seedLevel(int level) {
+    if (level >= targetLevels()) return;
+    String token = accountManager.getMakerToken();
+    if (token == null) return;
+    double halfSpread = config.getSpreadBps() / 20000.0;
+    double step = level * 0.0005;
+    placeMakerOrder(
+        token, OrderSide.BUY, currentMidPrice * (1 - halfSpread - step), restingBidOrderIds);
+    placeMakerOrder(
+        token, OrderSide.SELL, currentMidPrice * (1 + halfSpread + step), restingAskOrderIds);
+  }
+
   public void populateOrderBook() {
-    String makerToken = accountManager.getMakerToken();
-    if (makerToken == null) {
-      log.warn("Cannot populate order book for {}: Maker token unavailable", instrument.symbol());
-      return;
-    }
-
-    double halfSpreadPercent = (config.getSpreadBps() / 10000.0) / 2.0;
-    double bestBid = currentMidPrice * (1.0 - halfSpreadPercent);
-    double bestAsk = currentMidPrice * (1.0 + halfSpreadPercent);
-
-    int levels = targetLevels();
-    for (int i = 0; i < levels; i++) {
-      double stepPercent = 0.02 * ((double) i / (double) levels);
-      double bidPrice = bestBid * (1.0 - stepPercent);
-      double askPrice = bestAsk * (1.0 + stepPercent);
-
-      placeMakerOrder(makerToken, OrderSide.BUY, bidPrice, restingBidOrderIds);
-      placeMakerOrder(makerToken, OrderSide.SELL, askPrice, restingAskOrderIds);
-    }
-
-    log.info(
-        "Populated order book for {} with {} bids and {} asks around mid {}",
-        instrument.symbol(),
-        restingBidOrderIds.size(),
-        restingAskOrderIds.size(),
-        String.format("%.2f", currentMidPrice));
+    for (int level = 0; level < targetLevels(); level++) seedLevel(level);
   }
 
   /** Drifts mid-price randomly within [-0.3%, +0.3%] every cycle. */
@@ -171,37 +158,28 @@ public class InstrumentBot {
         String.format("%.3f", delta * 100));
   }
 
-  /** Refreshes resting orders, cancels stale quotes, and replenishes depth at the new mid price. */
+  /** One pair per turn; retain cancelling orders until the exchange acknowledges removal. */
   public void refreshOrders() {
+    if (!sessionIsCurrent.getAsBoolean()) return;
     String makerToken = accountManager.getMakerToken();
     if (makerToken == null) return;
+    var active = restClient.getActiveOrdersStrict(makerToken);
+    var ids = new java.util.HashSet<UUID>();
+    for (var order : active) if (order.instrument() == instrument) ids.add(order.orderId());
+    restingBidOrderIds.retainAll(ids);
+    restingAskOrderIds.retainAll(ids);
     refreshTakerOrderCount();
-
-    // Cancel 2 random bids and 2 random asks
-    cancelRandomSubset(makerToken, restingBidOrderIds, 2);
-    cancelRandomSubset(makerToken, restingAskOrderIds, 2);
-
-    // Replenish quotes to maintain configured levels
-    double halfSpreadPercent = (config.getSpreadBps() / 10000.0) / 2.0;
-    double bestBid = currentMidPrice * (1.0 - halfSpreadPercent);
-    double bestAsk = currentMidPrice * (1.0 + halfSpreadPercent);
-
-    int attempts = 0;
-    int maxAttempts = targetLevels();
-    while (restingBidOrderIds.size() < targetLevels()
-        && attempts++ < maxAttempts
-        && sessionIsCurrent.getAsBoolean()) {
-      double step = 0.02 * random.nextDouble();
-      placeMakerOrder(makerToken, OrderSide.BUY, bestBid * (1.0 - step), restingBidOrderIds);
-    }
-
-    attempts = 0;
-    while (restingAskOrderIds.size() < targetLevels()
-        && attempts++ < maxAttempts
-        && sessionIsCurrent.getAsBoolean()) {
-      double step = 0.02 * random.nextDouble();
-      placeMakerOrder(makerToken, OrderSide.SELL, bestAsk * (1.0 + step), restingAskOrderIds);
-    }
+    if (restingBidOrderIds.size() >= targetLevels())
+      cancelRandomSubset(makerToken, restingBidOrderIds, 1);
+    if (restingAskOrderIds.size() >= targetLevels())
+      cancelRandomSubset(makerToken, restingAskOrderIds, 1);
+    double halfSpread = config.getSpreadBps() / 20000.0;
+    if (restingBidOrderIds.size() < targetLevels())
+      placeMakerOrder(
+          makerToken, OrderSide.BUY, currentMidPrice * (1 - halfSpread), restingBidOrderIds);
+    if (restingAskOrderIds.size() < targetLevels())
+      placeMakerOrder(
+          makerToken, OrderSide.SELL, currentMidPrice * (1 + halfSpread), restingAskOrderIds);
   }
 
   /** Places a bounded crossing limit order; fills still occur only in the exchange matcher. */
@@ -218,31 +196,23 @@ public class InstrumentBot {
         config.getOrderSizeMin() + (random.nextDouble() * Math.max(0.0001, sizeRange * 0.3));
     long quantityNanos = Math.round(quantity * FixedPoint.SCALE);
 
-    double halfSpreadPercent = (config.getSpreadBps() / 10000.0) / 2.0;
-    // Crossing price to ensure immediate execution with price improvement
-    double crossingPrice =
-        (side == OrderSide.BUY)
-            ? currentMidPrice * (1.0 + halfSpreadPercent * 2.0)
-            : currentMidPrice * (1.0 - halfSpreadPercent * 2.0);
-    long priceNanos = Math.round(crossingPrice * FixedPoint.SCALE);
+    var quotes = restClient.getBestQuotes(instrument);
+    if (quotes == null) return;
+    long priceNanos = side == OrderSide.BUY ? quotes.ask() : quotes.bid();
+    double crossingPrice = priceNanos / (double) FixedPoint.SCALE;
+    if (priceNanos <= 0
+        || crossingPrice < referenceMidPrice * 0.91
+        || crossingPrice > referenceMidPrice * 1.09) return;
 
     CreateOrderDto orderRequest =
-        new CreateOrderDto(instrument, side, OrderType.LIMIT, priceNanos, quantityNanos, sessionId);
+        new CreateOrderDto(instrument, side, OrderType.IOC, priceNanos, quantityNanos, sessionId);
 
+    meters
+        .counter("market.simulation.bot.proposed", "market", instrument.symbol(), "role", "taker")
+        .increment();
     OrderResponseDto response = restClient.placeOrder(takerToken, orderRequest, UUID.randomUUID());
     if (response != null) {
       orderCounter("taker").increment();
-      if (response.status() == com.dete.common.domain.enums.OrderStatus.FILLED
-          || response.status() == com.dete.common.domain.enums.OrderStatus.PARTIALLY_FILLED) {
-        meters
-            .counter(
-                "market.simulation.bot.fills",
-                "market",
-                instrument.symbol(),
-                "status",
-                response.status().name())
-            .increment();
-      }
       if (response.orderId() != null
           && response.status() != com.dete.common.domain.enums.OrderStatus.FILLED
           && response.status() != com.dete.common.domain.enums.OrderStatus.CANCELLED
@@ -271,8 +241,14 @@ public class InstrumentBot {
     CreateOrderDto request =
         new CreateOrderDto(instrument, side, OrderType.LIMIT, priceNanos, quantityNanos, sessionId);
 
+    meters
+        .counter("market.simulation.bot.proposed", "market", instrument.symbol(), "role", "maker")
+        .increment();
     OrderResponseDto response = restClient.placeOrder(token, request, UUID.randomUUID());
-    if (response != null && response.orderId() != null) {
+    if (response != null
+        && response.orderId() != null
+        && response.status() != com.dete.common.domain.enums.OrderStatus.REJECTED
+        && response.status() != com.dete.common.domain.enums.OrderStatus.FILLED) {
       idSet.add(response.orderId());
       orderCounter("maker").increment();
     }
@@ -312,7 +288,6 @@ public class InstrumentBot {
       if (!sessionIsCurrent.getAsBoolean()) return;
       int index = random.nextInt(list.size());
       UUID orderId = list.remove(index);
-      idSet.remove(orderId);
       restClient.cancelOrder(token, orderId);
     }
   }

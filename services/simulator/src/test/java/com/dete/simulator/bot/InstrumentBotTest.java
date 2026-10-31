@@ -33,6 +33,10 @@ class InstrumentBotTest {
     restClient = mock(ExchangeRestClient.class);
     accountManager = mock(BotAccountManager.class);
 
+    when(restClient.getBestQuotes(any()))
+        .thenReturn(
+            new ExchangeRestClient.BestQuotes(
+                64000L * FixedPoint.SCALE, 66000L * FixedPoint.SCALE));
     when(accountManager.getMakerToken()).thenReturn("mock-maker-token");
     when(accountManager.getTakerToken()).thenReturn("mock-taker-token");
 
@@ -132,9 +136,9 @@ class InstrumentBotTest {
     bot.populateOrderBook();
     bot.refreshOrders();
 
-    // After refresh, the bot cancels 2 and replenishes back up to config.levels
-    assertThat(bot.getActiveBidCount()).isEqualTo(5);
-    assertThat(bot.getActiveAskCount()).isEqualTo(5);
+    // Empty authoritative book removes consumed orders; one pair is replenished per turn.
+    assertThat(bot.getActiveBidCount()).isEqualTo(1);
+    assertThat(bot.getActiveAskCount()).isEqualTo(1);
   }
 
   @Test
@@ -145,5 +149,73 @@ class InstrumentBotTest {
     staleBot.populateOrderBook();
 
     org.mockito.Mockito.verifyNoInteractions(restClient);
+  }
+
+  @Test
+  void takerCrossesActualQuoteAndCarriesItsSession() {
+    var session = UUID.randomUUID();
+    bot.bindSession(session);
+    when(restClient.getBestQuotes(Instrument.BTC_USD))
+        .thenReturn(
+            new ExchangeRestClient.BestQuotes(
+                64000L * FixedPoint.SCALE, 66000L * FixedPoint.SCALE));
+    var requests = new java.util.ArrayList<CreateOrderDto>();
+    org.mockito.Mockito.doAnswer(
+            inv -> {
+              requests.add(inv.getArgument(1));
+              return null;
+            })
+        .when(restClient)
+        .placeOrder(eq("mock-taker-token"), any(), any());
+    for (int i = 0; i < 20; i++) bot.generateFill();
+    assertThat(requests).hasSize(20);
+    for (var request : requests) {
+      assertThat(request.sessionId()).isEqualTo(session);
+      assertThat(request.price())
+          .isEqualTo(
+              (request.side() == com.dete.common.domain.enums.OrderSide.BUY ? 66000L : 64000L)
+                  * FixedPoint.SCALE);
+      assertThat(request.orderType()).isEqualTo(com.dete.common.domain.enums.OrderType.IOC);
+    }
+  }
+
+  @Test
+  void reconciliationRemovesConsumedOrdersAndRefreshIsBounded() {
+    bot.populateOrderBook();
+    when(restClient.getActiveOrdersStrict("mock-maker-token")).thenReturn(java.util.List.of());
+    bot.refreshOrders();
+    assertThat(bot.getActiveBidCount()).isEqualTo(1);
+    assertThat(bot.getActiveAskCount()).isEqualTo(1);
+  }
+
+  @Test
+  void pendingCancellationsDoNotPermitPrematureReplacement() {
+    var active = new java.util.ArrayList<OrderResponseDto>();
+    org.mockito.Mockito.doAnswer(
+            inv -> {
+              CreateOrderDto req = inv.getArgument(1);
+              var response =
+                  new OrderResponseDto(
+                      UUID.randomUUID(),
+                      UUID.randomUUID(),
+                      req.instrument(),
+                      req.side(),
+                      req.orderType(),
+                      OrderStatus.ACCEPTED,
+                      req.price(),
+                      req.quantity(),
+                      0,
+                      req.quantity());
+              active.add(response);
+              return response;
+            })
+        .when(restClient)
+        .placeOrder(any(), any(), any());
+    bot.populateOrderBook();
+    when(restClient.getActiveOrdersStrict("mock-maker-token")).thenReturn(active);
+    bot.refreshOrders();
+    assertThat(active).hasSize(10);
+    assertThat(bot.getActiveBidCount()).isEqualTo(5);
+    assertThat(bot.getActiveAskCount()).isEqualTo(5);
   }
 }

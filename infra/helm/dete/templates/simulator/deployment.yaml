@@ -37,6 +37,8 @@ spec:
               value: "http://account:8082"
             - name: SIMULATOR_ORDER_URL
               value: "http://order:8083"
+            - name: MATCHING_ENGINE_URL
+              value: "http://matching-engine:8084"
             - name: RISK_SERVICE_URL
               value: "http://risk:8085"
             - name: SPRING_DATASOURCE_URL

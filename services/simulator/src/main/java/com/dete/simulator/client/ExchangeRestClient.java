@@ -23,6 +23,9 @@ public class ExchangeRestClient {
 
   private static final Logger log = LoggerFactory.getLogger(ExchangeRestClient.class);
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private io.micrometer.core.instrument.MeterRegistry meters;
+
   private final SimulatorProperties properties;
   private final RestClient restClient;
 
@@ -94,6 +97,30 @@ public class ExchangeRestClient {
     }
   }
 
+  public record BestQuotes(long bid, long ask) {}
+
+  public record QuoteLevel(long price, long volume, int orderCount) {}
+
+  public record Depth(
+      Instrument instrument, long sequenceNumber, List<QuoteLevel> bids, List<QuoteLevel> asks) {}
+
+  public BestQuotes getBestQuotes(Instrument instrument) {
+    var depth =
+        restClient
+            .get()
+            .uri(
+                properties.getMatchingUrl()
+                    + "/matching/orderbook/"
+                    + instrument.name()
+                    + "?depth=1")
+            .retrieve()
+            .body(Depth.class);
+    if (depth == null) throw new IllegalStateException("Matching engine returned no depth");
+    return new BestQuotes(
+        depth.bids() == null || depth.bids().isEmpty() ? 0 : depth.bids().getFirst().price(),
+        depth.asks() == null || depth.asks().isEmpty() ? 0 : depth.asks().getFirst().price());
+  }
+
   public long getRiskReferencePrice(Instrument instrument) {
     try {
       var response =
@@ -123,6 +150,17 @@ public class ExchangeRestClient {
           .retrieve()
           .body(OrderResponseDto.class);
     } catch (Exception e) {
+      if (meters != null)
+        meters
+            .counter(
+                "market.simulation.bot.rejections",
+                "market",
+                orderRequest.instrument().symbol(),
+                "reason",
+                e instanceof org.springframework.web.client.RestClientResponseException http
+                    ? Integer.toString(http.getStatusCode().value())
+                    : "transport")
+            .increment();
       log.debug(
           "Failed to place order ({} {} {} @ {}): {}",
           orderRequest.side(),
