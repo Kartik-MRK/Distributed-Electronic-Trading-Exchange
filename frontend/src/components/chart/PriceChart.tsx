@@ -5,12 +5,13 @@ import {
   createChart,
   IChartApi,
   ISeriesApi,
-  CandlestickData,
   CandlestickSeries,
   Time,
   ColorType,
 } from 'lightweight-charts';
-import { Instrument } from '../../types';
+import { useSimulationClock } from '../../hooks/useSimulationClock';
+import { mergeCandles } from '../../lib/simulation-clock';
+import { CandleData, Instrument } from '../../types';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { api } from '../../lib/api';
 import { toBackendInstrument } from '../../lib/format';
@@ -26,7 +27,13 @@ export function PriceChart({ instrument }: PriceChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
-  const [interval, setInterval] = useState<Interval>('5m');
+  const [interval, setInterval] = useState<Interval>('1m');
+  const clock = useSimulationClock();
+  const epoch = clock.snapshot?.epochId;
+  const status = clock.snapshot?.status;
+  const recordsRef = useRef<{epoch: string | null; candles: CandleData[]}>({epoch: null, candles: []});
+  const fittedRef = useRef(false);
+  const [dataError, setDataError] = useState('');
   const [lastPrice, setLastPrice] = useState<string>('');
   const { subscribe, connectionState } = useWebSocket();
 
@@ -78,28 +85,9 @@ export function PriceChart({ instrument }: PriceChartProps) {
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
 
-    let active = true;
+    recordsRef.current = {epoch: null, candles: []};
+    fittedRef.current = false;
     setLastPrice('');
-    void api.marketData.getCandles(instrument, interval).then((candles) => {
-      if (!active) return;
-      const history = candles.map((candle) => ({
-        time: Math.floor(Number(candle.openTime) / 1000) as Time,
-        open: Number(candle.open) / 100_000_000,
-        high: Number(candle.high) / 100_000_000,
-        low: Number(candle.low) / 100_000_000,
-        close: Number(candle.close) / 100_000_000,
-      }));
-      const merged = new Map<number, CandlestickData<Time>>();
-      history.forEach((candle) => merged.set(Number(candle.time), candle));
-      // Preserve ticks that arrived while history was loading.
-      candleSeries.data().forEach((candle) => {
-        if ('open' in candle) merged.set(Number(candle.time), candle);
-      });
-      const data = [...merged.values()].sort((a, b) => Number(a.time) - Number(b.time));
-      candleSeries.setData(data);
-      if (data.length) setLastPrice(data[data.length - 1].close.toFixed(2));
-      chart.timeScale().fitContent();
-    }).catch(() => { /* Live ticks may still populate the chart. */ });
 
     // Handle container resize
     const handleResize = () => {
@@ -115,7 +103,6 @@ export function PriceChart({ instrument }: PriceChartProps) {
     resizeObserver.observe(containerRef.current);
 
     return () => {
-      active = false;
       resizeObserver.disconnect();
       chart.remove();
       chartRef.current = null;
@@ -123,57 +110,43 @@ export function PriceChart({ instrument }: PriceChartProps) {
     };
   }, [instrument, interval]);
 
-  // Subscribe to live candle ticks
+  // History and streaming updates share the same revision-aware projection.
   useEffect(() => {
-    const backendInst = toBackendInstrument(instrument);
-    const primaryTopic = `/topic/candles.${backendInst}.${interval}`;
-    const altTopic = `/topic/candles.${instrument}.${interval}`;
-
-    const handleIncomingCandle = (candle: Record<string, unknown>) => {
-      if (!candle || !candleSeriesRef.current) return;
-      const rawTime = candle.openTime ?? candle.time;
-      const timeSec =
-        typeof rawTime === 'number'
-          ? (rawTime > 1_000_000_000_000 ? Math.floor(rawTime / 1000) : rawTime)
-          : Math.floor(Date.now() / 1000);
-
-      const o =
-        Number(candle.open) / 100_000_000;
-      const h =
-        Number(candle.high) / 100_000_000;
-      const l =
-        Number(candle.low) / 100_000_000;
-      const c =
-        Number(candle.close) / 100_000_000;
-
+    const series = candleSeriesRef.current;
+    const chart = chartRef.current;
+    if (!epoch || !series || !chart) return;
+    let active = true;
+    if (recordsRef.current.epoch !== epoch) {
+      recordsRef.current = {epoch, candles: []};
+      series.setData([]);
+      fittedRef.current = false;
+      setLastPrice('');
+    }
+    const apply = (incoming: CandleData[], history: boolean) => {
+      if (!active) return;
       try {
-        candleSeriesRef.current.update({
-          time: timeSec as unknown as Time,
-          open: o,
-          high: h,
-          low: l,
-          close: c,
-        });
-        setLastPrice(c.toFixed(2));
-      } catch {
-        // Safe catch for timestamp ordering differences
-      }
+        const range = chart.timeScale().getVisibleLogicalRange();
+        const previous = recordsRef.current.candles;
+        const following = !range || range.to >= previous.length - 1;
+        const merged = mergeCandles(previous, incoming, epoch);
+        recordsRef.current.candles = merged;
+        series.setData(merged.map(c => ({time: c.openTime / 1000 as Time,
+          open: c.open / 100_000_000, high: c.high / 100_000_000,
+          low: c.low / 100_000_000, close: c.close / 100_000_000})));
+        if (merged.length) setLastPrice((merged[merged.length - 1].close / 100_000_000).toFixed(2));
+        if (history && !fittedRef.current && merged.length) {
+          chart.timeScale().fitContent(); fittedRef.current = true;
+        } else if (range && !following) chart.timeScale().setVisibleLogicalRange(range);
+        else if (following) chart.timeScale().scrollToRealTime();
+        setDataError('');
+      } catch (cause) { setDataError(cause instanceof Error ? cause.message : 'Unable to update chart.'); }
     };
-
-    const unsubscribePrimary = subscribe<Record<string, unknown>>(
-      primaryTopic,
-      handleIncomingCandle
-    );
-    const unsubscribeAlt =
-      primaryTopic !== altTopic
-        ? subscribe<Record<string, unknown>>(altTopic, handleIncomingCandle)
-        : () => {};
-
-    return () => {
-      unsubscribePrimary();
-      unsubscribeAlt();
-    };
-  }, [instrument, interval, subscribe]);
+    const unsubscribe = subscribe<CandleData>(`/topic/candles.${toBackendInstrument(instrument)}.${interval}`, candle => apply([candle], false));
+    void api.marketData.getCandles(instrument, interval, 1000, epoch)
+      .then(candles => apply(candles, true))
+      .catch(() => { if (active) setDataError('History unavailable. Reconnecting will retry.'); });
+    return () => { active = false; unsubscribe(); };
+  }, [instrument, interval, epoch, status, connectionState, subscribe]);
 
   return (
     <div className="panel price-chart">
@@ -214,8 +187,8 @@ export function PriceChart({ instrument }: PriceChartProps) {
       </div>
       <div className="chart-canvas" ref={containerRef} />
       <div className="chart-caption">
-        <span>Candlestick chart</span>
-        <span>{connectionState === 'connected' ? 'Exchange history / Scroll to zoom' : 'Feed unavailable'}</span>
+        <span>Simulation time ? 1m = one active minute</span>
+        <span>{dataError || (connectionState === 'connected' ? 'Exchange history / Scroll to zoom' : 'Feed unavailable')}</span>
       </div>
     </div>
   );

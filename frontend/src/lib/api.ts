@@ -287,6 +287,7 @@ export const api = {
       price: string;
       quantity: string;
       idempotencyKey?: string;
+      sessionId?: string;
     }): Promise<OrderRecord> {
       const idempotencyKey = params.idempotencyKey || generateUUID();
 
@@ -307,6 +308,7 @@ export const api = {
         quantity: scaledQty,
       };
 
+      if (params.sessionId) requestBody.sessionId = params.sessionId;
       if (scaledPrice != null && scaledPrice > 0) {
         requestBody.price = scaledPrice;
       }
@@ -389,11 +391,13 @@ export const api = {
     async getCandles(
       instrument: Instrument,
       interval = '1m',
-      limit = 100
+      limit = 100,
+      epoch?: string,
+      before?: number
     ): Promise<CandleData[]> {
       const backendInst = toBackendInstrument(instrument);
       return request<CandleData[]>(
-        `/market-data/${backendInst}/candles?interval=${interval}&limit=${limit}`,
+        `/market-data/${backendInst}/candles?interval=${interval}&limit=${limit}${epoch ? `&epoch=${encodeURIComponent(epoch)}` : ''}${before !== undefined ? `&before=${before}` : ''}`,
         {
           method: 'GET',
         }
@@ -452,7 +456,7 @@ export const api = {
       });
     },
 
-    async start(durationSeconds: 30 | 60 | 120): Promise<import('../types').SimulatorStatus> {
+    async start(durationSeconds: 60 | 120 | 300 | 600): Promise<import('../types').SimulatorStatus> {
       return request<import('../types').SimulatorStatus>('/market-simulation/start', {
         method: 'POST',
         body: JSON.stringify({ durationSeconds }),

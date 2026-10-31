@@ -1,125 +1,58 @@
-'use client';
+ 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { api, ApiError } from '@/lib/api';
-import { getCurrentUser } from '@/lib/auth';
-import { SimulatorStatus } from '@/types';
+import { useState } from 'react';
+import { api } from '@/lib/api';
+import { useSimulationClock } from '@/hooks/useSimulationClock';
 import { Loader } from '@/components/common/Loader';
 
-type Duration = 30 | 60 | 120;
-const RECOVERY_GRACE_MS = 15_000;
+type Duration = 60 | 120 | 300 | 600;
+const durationLabel = (ms: number) => {
+  const seconds = Math.floor(ms / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+};
 
 export function MarketSimulationControl() {
-  const [session, setSession] = useState<SimulatorStatus | null>(null);
+  const clock = useSimulationClock();
   const [duration, setDuration] = useState<Duration>(60);
   const [starting, setStarting] = useState(false);
-  const [now, setNow] = useState(0);
-  const [userId, setUserId] = useState<string | undefined>();
   const [error, setError] = useState('');
-
-  const refresh = useCallback(async () => {
-    try {
-      setSession(await api.simulator.getStatus());
-    } catch {
-      setSession(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-    setUserId(getCurrentUser()?.userId);
-    const poll = setInterval(() => void refresh(), 2000);
-    const clock = setInterval(() => setNow(Date.now()), 1000);
-    setNow(Date.now());
-    return () => {
-      clearInterval(poll);
-      clearInterval(clock);
-    };
-  }, [refresh]);
-
-  const active = session?.status === 'ACTIVE' || session?.status === 'STOPPING';
-  const remaining = session?.expiresAt
-    ? Math.max(0, Math.ceil((new Date(session.expiresAt).getTime() - now) / 1000))
-    : 0;
-  const canRecover = Boolean(
-    session?.status === 'STOPPING'
-      && session.expiresAt
-      && now >= new Date(session.expiresAt).getTime() + RECOVERY_GRACE_MS,
-  );
-  const label = starting
-    ? 'Starting'
-    : session?.status === 'ACTIVE'
-      ? 'Running'
-      : session?.status === 'STOPPING'
-        ? 'Stopping'
-        : session?.status === 'COMPLETED'
-          ? 'Ended'
-          : session?.status === 'FAILED'
-            ? 'Failed'
-            : session?.status === 'IDLE'
-              ? 'Idle'
-              : 'Loading';
-
+  const snapshot = clock.snapshot;
+  const finalizing = snapshot?.status === 'STOPPING' || (snapshot?.status === 'ACTIVE' && clock.remainingMs === 0);
+  const canStart = clock.fresh && snapshot && ['IDLE', 'COMPLETED', 'FAILED', 'STOPPING'].includes(snapshot.status);
+  const label = starting || snapshot?.status === 'STARTING' ? 'Preparing market'
+    : !clock.fresh ? 'Status unavailable'
+    : clock.tradingAllowed ? 'Running'
+    : finalizing ? 'Finalizing'
+    : snapshot?.status === 'MAINTENANCE' || snapshot?.status === 'UNINITIALIZED' ? 'Maintenance' : 'Paused';
   const start = async () => {
-    setStarting(true);
-    setError('');
-    try {
-      setSession(await api.simulator.start(duration));
-    } catch (cause) {
-      if (cause instanceof ApiError && cause.status === 409) {
-        const current = await api.simulator.getStatus().catch(() => null);
-        if (current) setSession(current);
-        setError(current?.ownerUserId === userId
-          ? 'Your market simulation session is already active.'
-          : 'Another user has already started the global market simulation.');
-      } else {
-        setError(cause instanceof Error ? cause.message : 'Unable to start the simulation.');
-      }
-    } finally {
-      setStarting(false);
-    }
+    setStarting(true); setError('');
+    try { await api.simulator.start(duration); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to start the simulation.'); }
+    finally { await clock.refresh(); setStarting(false); }
   };
-
   return (
     <section className="panel simulation-control" aria-label="Market simulation controls">
       <div className="panel-heading">
-        <div>
-          <span className="eyebrow">Shared across all traders</span>
-          <h2>Simulate market</h2>
-        </div>
+        <div><span className="eyebrow">Shared across all traders</span><h2>Simulate market</h2></div>
         <span className="badge" role="status">{label}</span>
       </div>
       <div className="content-pad simulation-control-body">
-        <label>
-          <span className="muted">Duration</span>
-          <select
-            aria-label="Simulation duration"
-            value={duration}
-            disabled={starting || (Boolean(active) && !canRecover) || !session}
-            onChange={(event) => setDuration(Number(event.target.value) as Duration)}
-          >
-            <option value={30}>30 seconds</option>
-            <option value={60}>1 minute</option>
-            <option value={120}>2 minutes</option>
+        <label><span className="muted">Duration</span>
+          <select aria-label="Simulation duration" value={duration} disabled={starting || !canStart}
+            onChange={event => setDuration(Number(event.target.value) as Duration)}>
+            <option value={60}>1 minute</option><option value={120}>2 minutes</option>
+            <option value={300}>5 minutes</option><option value={600}>10 minutes</option>
           </select>
         </label>
-        <button className="button" disabled={starting || (Boolean(active) && !canRecover) || !session} aria-busy={starting} onClick={start}>
-          {starting ? <Loader variant="inline" label="Starting..." /> : canRecover ? 'Recover and start simulation' : 'Start simulation'}
+        <button className="button" disabled={starting || !canStart} aria-busy={starting} onClick={start}>
+          {starting ? <Loader variant="inline" label="Preparing..." /> : snapshot?.status === 'STOPPING' ? 'Retry cleanup and start' : 'Start simulation'}
         </button>
-        {active && (
-          <div className="simulation-session-info" role="status">
-            <strong>{canRecover ? 'The previous session needs recovery' : session?.ownerUserId === userId ? 'Your session' : 'Another trader started the session'}</strong>
-            <span>{canRecover ? 'Start a new session to recover it' : remaining > 0 ? `${remaining}s remaining` : 'Finishing'}</span>
-            {session?.startsAt && session.expiresAt && (
-              <small>
-                Started {new Date(session.startsAt).toLocaleTimeString()}
-                {' · '}Ends {new Date(session.expiresAt).toLocaleTimeString()}
-              </small>
-            )}
-          </div>
-        )}
-        {session?.status === 'COMPLETED' && <span className="muted">The previous session has ended.</span>}
-        {session?.status === 'FAILED' && <span className="muted">The previous session ended with an error.</span>}
+        <div className="simulation-session-info">
+          <strong>Market elapsed: {durationLabel(clock.elapsedMs)}</strong>
+          <span>{clock.tradingAllowed ? `${Math.ceil(clock.remainingMs / 1000)}s remaining` : finalizing ? 'Settling fills and releasing unused funds' : 'Market time is paused'}</span>
+          {snapshot?.initializedAt && <small>Simulation starts at {new Date(snapshot.initializedAt).toLocaleString()}</small>}
+          <small>BTC, ETH and SOL share this clock. Anyone can trade during an active session.</small>
+        </div>
         {error && <div className="notice error" role="alert">{error}</div>}
       </div>
     </section>

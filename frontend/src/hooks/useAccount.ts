@@ -121,6 +121,7 @@ export function useAccount() {
       type: OrderType;
       price: string;
       quantity: string;
+      sessionId?: string;
     }): Promise<OrderRecord> => {
       const order = await api.orders.placeOrder(params);
       setOrders((prev) => [order, ...prev]);

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Instrument, OrderSide, OrderType, BalanceRecord } from '../../types';
 import { INSTRUMENT_METAS } from '../../lib/api';
+import { useSimulationClock } from '../../hooks/useSimulationClock';
 import { useToast } from '../common/ToastContext';
 
 interface OrderEntryProps {
@@ -15,6 +16,7 @@ interface OrderEntryProps {
     type: OrderType;
     price: string;
     quantity: string;
+    sessionId?: string;
   }) => Promise<unknown>;
 }
 
@@ -24,6 +26,7 @@ export function OrderEntry({
   balances,
   onPlaceOrder,
 }: OrderEntryProps) {
+  const clock = useSimulationClock();
   const { showToast } = useToast();
   const meta = INSTRUMENT_METAS[instrument];
   const [side, setSide] = useState<OrderSide>('BUY');
@@ -72,6 +75,10 @@ export function OrderEntry({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!clock.tradingAllowed || !clock.snapshot?.sessionId) {
+      showToast("warning", "Market paused", "Trading requires an active simulation.");
+      return;
+    }
     if (!Number.isFinite(numQty) || numQty <= 0) {
       showToast(
         'error',
@@ -111,6 +118,7 @@ export function OrderEntry({
         type,
         price: type === 'MARKET' ? meta.lastPrice : price,
         quantity,
+        sessionId: clock.snapshot.sessionId,
       });
 
       showToast(
@@ -136,6 +144,7 @@ export function OrderEntry({
         <span className="badge">Spot</span>
       </div>
       <form onSubmit={handleSubmit} className="order-form">
+        <p className="order-hint" role="status">{clock.tradingAllowed ? 'Trading is open for everyone. Unfilled orders expire when the session ends.' : 'Market paused. Start a simulation to buy or sell. Existing orders can still be cancelled.'}</p>
         <div className="segmented side-selector" aria-label="Order side">
           {(['BUY', 'SELL'] as OrderSide[]).map((value) => (
             <button
@@ -244,7 +253,7 @@ export function OrderEntry({
         <button
           type="submit"
           className="button primary order-submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || !clock.tradingAllowed}
         >
           {isSubmitting
             ? 'Submitting order...'

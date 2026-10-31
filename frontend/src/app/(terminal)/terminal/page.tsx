@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Instrument } from '@/types';
 import { isAuthenticated } from '@/lib/auth';
 import { useWebSocket } from '@/hooks/useWebSocket';
+import { SimulationClockProvider } from '@/hooks/useSimulationClock';
 import { useAccount } from '@/hooks/useAccount';
 import { Header } from '@/components/header/Header';
 import { OrderBook } from '@/components/orderbook/OrderBook';
@@ -43,7 +44,7 @@ export default function TerminalPage() {
   return (
     <ToastProvider>
       {ready ? (
-        <TradingWorkspace />
+        <SimulationClockProvider><TradingWorkspace /></SimulationClockProvider>
       ) : (
         <Loader variant="page" label="Loading trading workspace..." />
       )}

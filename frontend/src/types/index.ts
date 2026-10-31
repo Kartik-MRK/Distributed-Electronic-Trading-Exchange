@@ -39,6 +39,10 @@ export interface TradeRecord {
 }
 
 export interface CandleData {
+  epochId: string;
+  revision: number;
+  synthetic: boolean;
+  tradeCount: number;
   openTime: number; // Exchange window start in epoch milliseconds
   open: number;
   high: number;
@@ -214,7 +218,8 @@ export interface AuditQueryParams {
 }
 
 export interface SimulatorStatus {
-  status: 'IDLE' | 'ACTIVE' | 'STOPPING' | 'COMPLETED' | 'FAILED';
+  status: 'IDLE' | 'STARTING' | 'ACTIVE' | 'STOPPING' | 'COMPLETED' | 'FAILED' | 'MAINTENANCE' | 'UNINITIALIZED';
+  clock: MarketClockSnapshot;
   sessionId: string | null;
   ownerUserId: string | null;
   durationSeconds: number | null;
@@ -223,4 +228,22 @@ export interface SimulatorStatus {
   completedAt: string | null;
   completionReason: string | null;
   message: string | null;
+}
+
+export interface MarketClockSnapshot {
+  epochId: string | null;
+  initializedAt: string | null;
+  serverNow: string;
+  sessionId: string | null;
+  ownerUserId: string | null;
+  status: SimulatorStatus['status'];
+  fence: number;
+  elapsedMs: number;
+  remainingMs: number;
+  startsAt: string | null;
+  expiresAt: string | null;
+  leaseUntil: string | null;
+  tradingAllowed: boolean;
+  durationSeconds: number | null;
+  completionReason: string | null;
 }
