@@ -38,9 +38,13 @@ public class MarketDataService {
   private final Map<Instrument, AtomicLong> lastTradedPrices = new EnumMap<>(Instrument.class);
   private final Map<Instrument, java.time.Instant> lastTradeTimes = new EnumMap<>(Instrument.class);
   private final int tapeCapacity;
+  private final Map<Instrument, Long> lastTradeSequences = new EnumMap<>(Instrument.class);
 
   private final Map<UUID, UUID> orderToAccountMap = new ConcurrentHashMap<>();
   private final Map<UUID, Instrument> orderToInstrumentMap = new ConcurrentHashMap<>();
+
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.dete.marketdata.repository.CandleRepository candles;
 
   private final OHLCVManager ohlcvManager;
   private final MarketDataTradeRepository tradeRepository;
@@ -88,11 +92,14 @@ public class MarketDataService {
                 record.quantity(),
                 record.sequenceNumber(),
                 record.executedAt(),
-                1);
+                record.simulation() == null ? 1 : 2,
+                record.simulation());
         tradeTapes.get(instrument).addTrade(trade);
-        ohlcvManager.onTrade(instrument, trade.price(), trade.quantity(), trade.timestamp());
+        if (candles == null)
+          ohlcvManager.onTrade(instrument, trade.price(), trade.quantity(), trade.timestamp());
         lastTradedPrices.get(instrument).set(trade.price());
         lastTradeTimes.put(instrument, trade.timestamp());
+        lastTradeSequences.put(instrument, trade.sequenceNumber());
       }
     }
   }
@@ -119,7 +126,15 @@ public class MarketDataService {
   }
 
   public List<Candle> getCandles(Instrument instrument, Interval interval, int limit) {
-    return ohlcvManager.getCandles(instrument, interval, limit);
+    return getCandles(instrument, interval, null, null, limit);
+  }
+
+  public List<Candle> getCandles(
+      Instrument instrument, Interval interval, UUID epoch, Long before, int limit) {
+    return candles == null
+        ? ohlcvManager.getCandles(instrument, interval, limit)
+        : candles.history(
+            epoch == null ? candles.currentEpoch() : epoch, instrument, interval, before, limit);
   }
 
   public long getLastTradedPrice(Instrument instrument) {
@@ -259,12 +274,10 @@ public class MarketDataService {
 
     // 1. Update Last Traded Price
     AtomicLong ltp = lastTradedPrices.get(instrument);
-    if (ltp != null
-        && !trade
-            .timestamp()
-            .isBefore(lastTradeTimes.getOrDefault(instrument, java.time.Instant.MIN))) {
+    if (ltp != null && trade.sequenceNumber() > lastTradeSequences.getOrDefault(instrument, -1L)) {
       ltp.set(trade.price());
       lastTradeTimes.put(instrument, trade.timestamp());
+      lastTradeSequences.put(instrument, trade.sequenceNumber());
     }
 
     // 2. Append to in-memory Trade Tape
@@ -275,7 +288,9 @@ public class MarketDataService {
 
     // 3. Update OHLCV Candles for all 5 intervals
     Map<Interval, Candle> updatedCandles =
-        ohlcvManager.onTrade(instrument, trade.price(), trade.quantity(), trade.timestamp());
+        candles == null
+            ? ohlcvManager.onTrade(instrument, trade.price(), trade.quantity(), trade.timestamp())
+            : candles.forTrade(trade);
 
     // 5. Cache account bindings if present
     if (trade.buyOrderId() != null && trade.buyAccountId() != null) {
@@ -342,6 +357,7 @@ public class MarketDataService {
     }
     ohlcvManager.clear();
     lastTradeTimes.clear();
+    lastTradeSequences.clear();
     orderToAccountMap.clear();
     orderToInstrumentMap.clear();
   }

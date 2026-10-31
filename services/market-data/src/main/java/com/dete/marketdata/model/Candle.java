@@ -12,8 +12,22 @@ public record Candle(
     long low, // low price
     long close, // close price
     long volume, // total volume traded in window
-    int tradeCount // total count of trades in window
-    ) {
+    int tradeCount, // total count of trades in window
+    java.util.UUID epochId,
+    long revision,
+    boolean synthetic) {
+
+  public Candle(
+      long openTime,
+      long closeTime,
+      long open,
+      long high,
+      long low,
+      long close,
+      long volume,
+      int tradeCount) {
+    this(openTime, closeTime, open, high, low, close, volume, tradeCount, null, tradeCount, false);
+  }
 
   public static Candle ofFirstTrade(long windowStart, long windowEnd, long price, long quantity) {
     return new Candle(windowStart, windowEnd, price, price, price, price, quantity, 1);

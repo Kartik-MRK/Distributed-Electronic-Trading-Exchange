@@ -73,10 +73,14 @@ public class MarketDataController {
   public ResponseEntity<List<Candle>> getCandles(
       @PathVariable String instrument,
       @RequestParam(defaultValue = "1m") String interval,
+      @RequestParam(required = false) java.util.UUID epoch,
+      @RequestParam(required = false) Long before,
       @RequestParam(defaultValue = "100") int limit) {
     Instrument inst = resolveInstrument(instrument);
     Interval parsedInterval = Interval.fromCode(interval);
-    List<Candle> candles = marketDataService.getCandles(inst, parsedInterval, limit);
+    List<Candle> candles =
+        marketDataService.getCandles(
+            inst, parsedInterval, epoch, before, Math.min(Math.max(limit, 1), 1000));
     return ResponseEntity.ok(candles);
   }
 

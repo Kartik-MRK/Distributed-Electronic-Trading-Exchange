@@ -69,6 +69,7 @@ class MarketDataIntegrationTest extends FullStackTestBase {
 
   @BeforeEach
   void cleanState() {
+    simulationJdbc.execute("TRUNCATE market_data.candles,market_data.trades");
     marketDataService.resetAll();
   }
 
@@ -106,7 +107,8 @@ class MarketDataIntegrationTest extends FullStackTestBase {
             quantity,
             101L,
             Instant.now(),
-            1);
+            2,
+            com.dete.common.test.SimulationTestSupport.context(simulationJdbc));
 
     kafkaTemplate
         .send(
@@ -293,7 +295,8 @@ class MarketDataIntegrationTest extends FullStackTestBase {
             1_00000000L,
             201L,
             Instant.now(),
-            1);
+            2,
+            com.dete.common.test.SimulationTestSupport.context(simulationJdbc));
 
     kafkaTemplate
         .send(

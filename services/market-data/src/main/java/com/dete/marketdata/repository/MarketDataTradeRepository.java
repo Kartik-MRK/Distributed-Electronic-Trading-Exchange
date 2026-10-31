@@ -26,6 +26,9 @@ public class MarketDataTradeRepository {
   private static final Logger log = LoggerFactory.getLogger(MarketDataTradeRepository.class);
 
   private final JdbcTemplate jdbcTemplate;
+  @org.springframework.beans.factory.annotation.Autowired private CandleRepository candles;
+  private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
+      new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
 
   public MarketDataTradeRepository(JdbcTemplate jdbcTemplate) {
     this.jdbcTemplate = jdbcTemplate;
@@ -35,15 +38,15 @@ public class MarketDataTradeRepository {
       """
       INSERT INTO market_data.trades (
           trade_id, instrument, sequence_number, price, quantity,
-          buy_order_id, sell_order_id, buy_account_id, sell_account_id, executed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          buy_order_id, sell_order_id, buy_account_id, sell_account_id, executed_at, epoch_id, simulation_context, market_time, elapsed_ms
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?)
       ON CONFLICT (trade_id) DO NOTHING
       """;
 
   private static final String SELECT_BY_INSTRUMENT_SQL =
       """
       SELECT trade_id, instrument, sequence_number, price, quantity,
-             buy_order_id, sell_order_id, buy_account_id, sell_account_id, executed_at
+             buy_order_id, sell_order_id, buy_account_id, sell_account_id, executed_at, epoch_id, simulation_context, market_time, elapsed_ms
       FROM market_data.trades
       WHERE instrument = ?
       ORDER BY executed_at DESC, sequence_number DESC, trade_id DESC
@@ -53,7 +56,7 @@ public class MarketDataTradeRepository {
   private static final String SELECT_BY_WINDOW_SQL =
       """
       SELECT trade_id, instrument, sequence_number, price, quantity,
-             buy_order_id, sell_order_id, buy_account_id, sell_account_id, executed_at
+             buy_order_id, sell_order_id, buy_account_id, sell_account_id, executed_at, epoch_id, simulation_context, market_time, elapsed_ms
       FROM market_data.trades
       WHERE instrument = ? AND executed_at >= ? AND executed_at <= ?
       ORDER BY executed_at DESC
@@ -63,28 +66,38 @@ public class MarketDataTradeRepository {
   private static final String SELECT_BY_SEQ_RANGE_SQL =
       """
       SELECT trade_id, instrument, sequence_number, price, quantity,
-             buy_order_id, sell_order_id, buy_account_id, sell_account_id, executed_at
+             buy_order_id, sell_order_id, buy_account_id, sell_account_id, executed_at, epoch_id, simulation_context, market_time, elapsed_ms
       FROM market_data.trades
       WHERE instrument = ? AND sequence_number >= ? AND sequence_number <= ?
       ORDER BY sequence_number ASC
       """;
 
+  @org.springframework.transaction.annotation.Transactional
   public boolean saveTrade(TradeExecutedEvent trade) {
     if (trade == null) return false;
     try {
-      return jdbcTemplate.update(
-              INSERT_TRADE_SQL,
-              trade.tradeId(),
-              trade.instrument().name(),
-              trade.sequenceNumber(),
-              trade.price(),
-              trade.quantity(),
-              trade.buyOrderId(),
-              trade.sellOrderId(),
-              trade.buyAccountId(),
-              trade.sellAccountId(),
-              Timestamp.from(trade.timestamp()))
-          == 1;
+      if (candles != null) candles.validate(trade);
+      var context = trade.simulation();
+      boolean inserted =
+          jdbcTemplate.update(
+                  INSERT_TRADE_SQL,
+                  trade.tradeId(),
+                  trade.instrument().name(),
+                  trade.sequenceNumber(),
+                  trade.price(),
+                  trade.quantity(),
+                  trade.buyOrderId(),
+                  trade.sellOrderId(),
+                  trade.buyAccountId(),
+                  trade.sellAccountId(),
+                  Timestamp.from(trade.timestamp()),
+                  context == null ? null : context.epochId(),
+                  context == null ? null : encode(context),
+                  context == null ? null : Timestamp.from(context.marketTime()),
+                  context == null ? null : context.elapsedMs())
+              == 1;
+      if (inserted && candles != null) candles.project(trade);
+      return inserted;
     } catch (Exception e) {
       log.error("Failed to persist trade {}", trade.tradeId(), e);
       throw e;
@@ -115,6 +128,23 @@ public class MarketDataTradeRepository {
         SELECT_BY_SEQ_RANGE_SQL, new TradeRowMapper(), instrument.name(), fromSeq, toSeq);
   }
 
+  private static String encode(Object value) {
+    try {
+      return JSON.writeValueAsString(value);
+    } catch (Exception e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  private static com.dete.common.domain.simulation.SimulationContext decode(String value) {
+    if (value == null) return null;
+    try {
+      return JSON.readValue(value, com.dete.common.domain.simulation.SimulationContext.class);
+    } catch (Exception e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
   private static class TradeRowMapper implements RowMapper<MarketDataTradeRecord> {
     @Override
     public MarketDataTradeRecord mapRow(ResultSet rs, int rowNum) throws SQLException {
@@ -128,7 +158,8 @@ public class MarketDataTradeRepository {
           rs.getObject("sell_order_id", UUID.class),
           rs.getObject("buy_account_id", UUID.class),
           rs.getObject("sell_account_id", UUID.class),
-          rs.getTimestamp("executed_at").toInstant());
+          rs.getTimestamp("executed_at").toInstant(),
+          decode(rs.getString("simulation_context")));
     }
   }
 }

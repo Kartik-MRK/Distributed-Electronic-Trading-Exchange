@@ -12,7 +12,20 @@ public record PublicTrade(
     long sequenceNumber,
     long price,
     long quantity,
-    Instant timestamp) {
+    Instant timestamp,
+    UUID epochId,
+    Instant marketTime,
+    Long elapsedMs) {
+  public PublicTrade(
+      UUID tradeId,
+      Instrument instrument,
+      long sequenceNumber,
+      long price,
+      long quantity,
+      Instant timestamp) {
+    this(tradeId, instrument, sequenceNumber, price, quantity, timestamp, null, null, null);
+  }
+
   public static PublicTrade from(TradeExecutedEvent trade) {
     return new PublicTrade(
         trade.tradeId(),
@@ -20,7 +33,10 @@ public record PublicTrade(
         trade.sequenceNumber(),
         trade.price(),
         trade.quantity(),
-        trade.timestamp());
+        trade.timestamp(),
+        trade.simulation() == null ? null : trade.simulation().epochId(),
+        trade.simulation() == null ? null : trade.simulation().marketTime(),
+        trade.simulation() == null ? null : trade.simulation().elapsedMs());
   }
 
   public static PublicTrade from(MarketDataTradeRecord trade) {
@@ -30,7 +46,10 @@ public record PublicTrade(
         trade.sequenceNumber(),
         trade.price(),
         trade.quantity(),
-        trade.executedAt());
+        trade.executedAt(),
+        trade.simulation() == null ? null : trade.simulation().epochId(),
+        trade.simulation() == null ? null : trade.simulation().marketTime(),
+        trade.simulation() == null ? null : trade.simulation().elapsedMs());
   }
 
   @com.fasterxml.jackson.annotation.JsonProperty("executedAt")
