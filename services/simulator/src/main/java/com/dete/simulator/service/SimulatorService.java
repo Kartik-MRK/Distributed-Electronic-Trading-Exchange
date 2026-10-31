@@ -22,6 +22,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class SimulatorService {
   private static final Logger log = LoggerFactory.getLogger(SimulatorService.class);
   private static final int BOT_CLEANUP_TIMEOUT_SECONDS = 60;
+  @org.springframework.beans.factory.annotation.Autowired private SessionFinalizer finalizer;
   private final SimulatorProperties properties;
   private final ExchangeRestClient restClient;
   private final BotAccountManager accountManager;
@@ -87,7 +88,7 @@ public class SimulatorService {
     try {
       if (!accountManager.initializeSimulationAccounts())
         throw new IllegalStateException("Bot accounts unavailable");
-      buildBots();
+      buildBots(s);
       var active = control.activate(s.sessionId(), s.fence());
       workerRunning.set(true);
       trading.set(true);
@@ -172,10 +173,11 @@ public class SimulatorService {
   }
 
   private void finalizeSession(MarketClockSnapshot session) {
-    cancelAllBotOrders();
+    if (finalizer != null) finalizer.finish(session);
+    else cancelAllBotOrders();
   }
 
-  private void buildBots() {
+  private void buildBots(MarketClockSnapshot session) {
     bots.clear();
     for (var config : properties.getInstruments()) {
       var bot =
@@ -183,9 +185,16 @@ public class SimulatorService {
               config,
               restClient,
               accountManager,
-              () -> trading.get() && control.snapshot().tradingAllowed(),
+              () -> {
+                if (!trading.get()) return false;
+                var current = control.snapshot();
+                return current.tradingAllowed()
+                    && session.sessionId().equals(current.sessionId())
+                    && session.fence() == current.fence();
+              },
               this::allowBotOrder,
               meters);
+      bot.bindSession(session.sessionId());
       bots.put(bot.getInstrument(), bot);
     }
   }

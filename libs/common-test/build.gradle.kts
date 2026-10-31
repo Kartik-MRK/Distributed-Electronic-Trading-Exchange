@@ -24,6 +24,8 @@ dependencies {
     api(libs.testcontainers.postgresql)
     api(libs.testcontainers.redis)
 
+    implementation(libs.spring.boot.starter.jdbc)
+
     // Spring test support
     api(libs.spring.boot.starter.test)
     api(libs.spring.kafka.test)

@@ -11,7 +11,6 @@ import com.dete.common.events.order.OrderCancelCommand;
 import com.dete.common.events.order.OrderModifyCommand;
 import com.dete.common.events.order.OrderPlacedEvent;
 import com.dete.common.events.trade.TradeExecutedEvent;
-import com.dete.common.test.KafkaTestContainerBase;
 import com.dete.matching.consumer.OrderCommandConsumer;
 import com.dete.matching.engine.OrderBook;
 import com.dete.matching.publisher.MatchingEventPublisher;
@@ -50,9 +49,17 @@ import org.springframework.test.context.DynamicPropertySource;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-public class MatchingEngineIntegrationTest extends KafkaTestContainerBase {
+public class MatchingEngineIntegrationTest extends com.dete.common.test.FullStackTestBase {
 
+  @Autowired private org.springframework.jdbc.core.JdbcTemplate simulationJdbc;
   @LocalServerPort private int port;
+
+  private String encode(Object event) throws Exception {
+    if (event instanceof OrderPlacedEvent placed)
+      event =
+          placed.withSimulation(com.dete.common.test.SimulationTestSupport.context(simulationJdbc));
+    return objectMapper.writeValueAsString(event);
+  }
 
   @Autowired private KafkaTemplate<String, String> kafkaTemplate;
 
@@ -73,6 +80,7 @@ public class MatchingEngineIntegrationTest extends KafkaTestContainerBase {
 
   @BeforeEach
   void setUpConsumer() {
+    com.dete.common.test.SimulationTestSupport.initialize(simulationJdbc);
     Properties props = new Properties();
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
     props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-verifier-" + UUID.randomUUID());
@@ -122,7 +130,7 @@ public class MatchingEngineIntegrationTest extends KafkaTestContainerBase {
         .send(
             OrderCommandConsumer.TOPIC_ORDER_COMMANDS,
             Instrument.BTC_USD.symbol(),
-            objectMapper.writeValueAsString(sellOrder))
+            encode(sellOrder))
         .get(5, TimeUnit.SECONDS);
 
     // Wait until resting order is in the book
@@ -155,7 +163,7 @@ public class MatchingEngineIntegrationTest extends KafkaTestContainerBase {
         .send(
             OrderCommandConsumer.TOPIC_ORDER_COMMANDS,
             Instrument.BTC_USD.symbol(),
-            objectMapper.writeValueAsString(buyOrder))
+            encode(buyOrder))
         .get(5, TimeUnit.SECONDS);
 
     // Verify trade and events emitted
@@ -214,10 +222,7 @@ public class MatchingEngineIntegrationTest extends KafkaTestContainerBase {
             1);
 
     kafkaTemplate
-        .send(
-            OrderCommandConsumer.TOPIC_ORDER_COMMANDS,
-            Instrument.ETH_USD.symbol(),
-            objectMapper.writeValueAsString(bid))
+        .send(OrderCommandConsumer.TOPIC_ORDER_COMMANDS, Instrument.ETH_USD.symbol(), encode(bid))
         .get(5, TimeUnit.SECONDS);
 
     await()
@@ -235,7 +240,7 @@ public class MatchingEngineIntegrationTest extends KafkaTestContainerBase {
         .send(
             OrderCommandConsumer.TOPIC_ORDER_COMMANDS,
             Instrument.ETH_USD.symbol(),
-            objectMapper.writeValueAsString(cancelCommand))
+            encode(cancelCommand))
         .get(5, TimeUnit.SECONDS);
 
     await()
@@ -250,7 +255,7 @@ public class MatchingEngineIntegrationTest extends KafkaTestContainerBase {
 
   @Test
   @Order(3)
-  @DisplayName("Order modification via Kafka executes cancel-and-reinsert with new sequence number")
+  @DisplayName("Unsupported modification cannot mutate the book or create a fill")
   void testModifyCommandIntegration() throws Exception {
     UUID account = UUID.randomUUID();
     UUID orderId = UUID.randomUUID();
@@ -270,10 +275,7 @@ public class MatchingEngineIntegrationTest extends KafkaTestContainerBase {
             1);
 
     kafkaTemplate
-        .send(
-            OrderCommandConsumer.TOPIC_ORDER_COMMANDS,
-            Instrument.SOL_USD.symbol(),
-            objectMapper.writeValueAsString(bid))
+        .send(OrderCommandConsumer.TOPIC_ORDER_COMMANDS, Instrument.SOL_USD.symbol(), encode(bid))
         .get(5, TimeUnit.SECONDS);
 
     await()
@@ -293,18 +295,28 @@ public class MatchingEngineIntegrationTest extends KafkaTestContainerBase {
         .send(
             OrderCommandConsumer.TOPIC_ORDER_COMMANDS,
             Instrument.SOL_USD.symbol(),
-            objectMapper.writeValueAsString(modifyCommand))
+            encode(modifyCommand))
         .get(5, TimeUnit.SECONDS);
 
+    await()
+        .atMost(Duration.ofSeconds(5))
+        .untilAsserted(
+            () ->
+                assertThat(
+                        simulationJdbc.queryForObject(
+                            "SELECT count(*) FROM simulator.matching_admission WHERE command_event_id=? AND NOT allowed AND published",
+                            Integer.class,
+                            modifyCommand.eventId()))
+                    .isEqualTo(1));
     await()
         .atMost(Duration.ofSeconds(5))
         .untilAsserted(
             () -> {
               OrderBook book = matchingEngineService.getOrderBook(Instrument.SOL_USD);
               assertThat(book.getOrder(orderId)).isNotNull();
-              assertThat(book.getOrder(orderId).price()).isEqualTo(152 * FixedPoint.SCALE);
+              assertThat(book.getOrder(orderId).price()).isEqualTo(150 * FixedPoint.SCALE);
               assertThat(book.getOrder(orderId).remainingQuantity())
-                  .isEqualTo(15 * FixedPoint.SCALE);
+                  .isEqualTo(10 * FixedPoint.SCALE);
             });
   }
 
@@ -313,7 +325,7 @@ public class MatchingEngineIntegrationTest extends KafkaTestContainerBase {
   @DisplayName(
       "Kafka event replay reconstructs in-memory order books accurately upon engine restart")
   void testKafkaReplayReconstruction() {
-    // Current in-memory book state has 1 BTC resting ask and 15 SOL resting bid
+    // Current in-memory book state has 1 BTC resting ask and 10 SOL resting bid
     int replayed = replayService.replayFromBeginning();
     assertThat(replayed).isGreaterThanOrEqualTo(3);
 
@@ -321,8 +333,8 @@ public class MatchingEngineIntegrationTest extends KafkaTestContainerBase {
     assertThat(btcBook.totalAskVolume()).isEqualTo(1 * FixedPoint.SCALE);
 
     OrderBook solBook = matchingEngineService.getOrderBook(Instrument.SOL_USD);
-    assertThat(solBook.totalBidVolume()).isEqualTo(15 * FixedPoint.SCALE);
-    assertThat(solBook.bestBidPrice()).isEqualTo(152 * FixedPoint.SCALE);
+    assertThat(solBook.totalBidVolume()).isEqualTo(10 * FixedPoint.SCALE);
+    assertThat(solBook.bestBidPrice()).isEqualTo(150 * FixedPoint.SCALE);
   }
 
   @Test

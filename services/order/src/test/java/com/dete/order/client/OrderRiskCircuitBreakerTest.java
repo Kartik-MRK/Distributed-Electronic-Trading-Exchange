@@ -53,6 +53,12 @@ import org.springframework.test.context.DynamicPropertySource;
       "resilience4j.circuitbreaker.instances.riskService.wait-duration-in-open-state=5000ms"
     })
 class OrderRiskCircuitBreakerTest extends FullStackTestBase {
+  @Autowired private org.springframework.jdbc.core.JdbcTemplate simulationJdbc;
+
+  @org.junit.jupiter.api.BeforeEach
+  void initializeSimulation() {
+    com.dete.common.test.SimulationTestSupport.initialize(simulationJdbc);
+  }
 
   private static final KeyPair TEST_KEY_PAIR;
 

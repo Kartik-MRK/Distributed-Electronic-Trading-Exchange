@@ -28,6 +28,18 @@ spec:
             - containerPort: {{ .Values.matchingEngine.port }}
               name: http
           env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres:5432/dete"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: dete-secrets
+                  key: POSTGRES_USER
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dete-secrets
+                  key: POSTGRES_PASSWORD
             - name: SPRING_PROFILES_ACTIVE
               value: "docker"
             - name: PORT

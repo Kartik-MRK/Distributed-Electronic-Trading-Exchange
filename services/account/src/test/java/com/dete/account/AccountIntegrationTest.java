@@ -36,9 +36,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = "simulation.reservation-reconciliation.enabled=false")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class AccountIntegrationTest extends FullStackTestBase {
+  // Exercise real accounting independently of the separately tested admission authority.
+  @org.springframework.boot.test.mock.mockito.MockBean
+  private com.dete.simulation.control.SimulationControlRepository simulationControl;
 
   @Test
   void concurrentRetriesReserveAndReleaseOnlyOnce() throws Exception {
@@ -70,6 +75,33 @@ class AccountIntegrationTest extends FullStackTestBase {
     assertThatThrownBy(
             () -> accountService.reserveFunds(new ReserveFundsRequest(account, order, "BTC", 400L)))
         .isInstanceOf(com.dete.account.exception.InvalidOperationException.class);
+  }
+
+  @Test
+  void aTradeCannotSpendFundsReservedForADifferentOrder() {
+    UUID buyer = UUID.randomUUID(), seller = UUID.randomUUID();
+    long quote = 60000L * FixedPoint.SCALE;
+    accountService.deposit(buyer, "USD", quote, null);
+    accountService.reserveFunds(new ReserveFundsRequest(buyer, UUID.randomUUID(), "USD", quote));
+    var trade =
+        new TradeExecutedEvent(
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            Instrument.BTC_USD,
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            buyer,
+            seller,
+            quote,
+            FixedPoint.SCALE,
+            1,
+            Instant.now(),
+            1);
+    assertThatThrownBy(() -> accountService.settleTrade(trade))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("another order");
+    assertThat(accountService.getBalance(buyer, "USD").reserved()).isEqualTo(quote);
+    assertThat(settlementRepository.existsByTradeId(trade.tradeId())).isFalse();
   }
 
   @Autowired private AccountService accountService;
@@ -139,6 +171,7 @@ class AccountIntegrationTest extends FullStackTestBase {
     UUID buyerId = UUID.randomUUID();
     UUID sellerId = UUID.randomUUID();
     UUID tradeId = UUID.randomUUID();
+    UUID buyOrderId = UUID.randomUUID(), sellOrderId = UUID.randomUUID();
 
     long price = 60_000L * FixedPoint.SCALE;
     long quantity = 1L * FixedPoint.SCALE;
@@ -146,21 +179,19 @@ class AccountIntegrationTest extends FullStackTestBase {
 
     // Buyer deposits & reserves quote currency (USD)
     accountService.deposit(buyerId, "USD", quoteAmount, null);
-    accountService.reserveFunds(
-        new ReserveFundsRequest(buyerId, UUID.randomUUID(), "USD", quoteAmount));
+    accountService.reserveFunds(new ReserveFundsRequest(buyerId, buyOrderId, "USD", quoteAmount));
 
     // Seller deposits & reserves base currency (BTC)
     accountService.deposit(sellerId, "BTC", quantity, null);
-    accountService.reserveFunds(
-        new ReserveFundsRequest(sellerId, UUID.randomUUID(), "BTC", quantity));
+    accountService.reserveFunds(new ReserveFundsRequest(sellerId, sellOrderId, "BTC", quantity));
 
     TradeExecutedEvent tradeEvent =
         new TradeExecutedEvent(
             UUID.randomUUID(),
             tradeId,
             Instrument.BTC_USD,
-            UUID.randomUUID(),
-            UUID.randomUUID(),
+            buyOrderId,
+            sellOrderId,
             buyerId,
             sellerId,
             price,
@@ -317,15 +348,16 @@ class AccountIntegrationTest extends FullStackTestBase {
   void sellerDebitFailureRollsBackBuyerDebitAndDoesNotCreateSettlement() {
     UUID buyer = UUID.randomUUID();
     UUID seller = UUID.randomUUID();
+    UUID buyOrderId = UUID.randomUUID();
     long quote = 60_000L * FixedPoint.SCALE;
     accountService.deposit(buyer, "USD", quote, null);
-    accountService.reserveFunds(new ReserveFundsRequest(buyer, UUID.randomUUID(), "USD", quote));
+    accountService.reserveFunds(new ReserveFundsRequest(buyer, buyOrderId, "USD", quote));
     TradeExecutedEvent event =
         new TradeExecutedEvent(
             UUID.randomUUID(),
             UUID.randomUUID(),
             Instrument.BTC_USD,
-            UUID.randomUUID(),
+            buyOrderId,
             UUID.randomUUID(),
             buyer,
             seller,
@@ -335,7 +367,7 @@ class AccountIntegrationTest extends FullStackTestBase {
             Instant.now(),
             1);
     assertThatThrownBy(() -> accountService.settleTrade(event))
-        .isInstanceOf(InsufficientFundsException.class);
+        .isInstanceOf(IllegalStateException.class);
     assertThat(accountService.getBalance(buyer, "USD").reserved()).isEqualTo(quote);
     assertThat(accountService.getBalance(buyer, "BTC").available()).isZero();
     assertThat(accountService.getBalance(seller, "USD").available()).isZero();

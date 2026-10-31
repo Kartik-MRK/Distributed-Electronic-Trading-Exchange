@@ -53,6 +53,7 @@ class SimulationSessionConcurrencyTest {
   @Autowired private TransactionTemplate transactions;
   @Autowired private MeterRegistry meters;
   @MockBean private BotAccountManager accountManager;
+  @MockBean private com.dete.simulator.service.SessionFinalizer finalizer;
   @MockBean private ExchangeRestClient mockRestClient;
 
   @org.junit.jupiter.api.BeforeEach

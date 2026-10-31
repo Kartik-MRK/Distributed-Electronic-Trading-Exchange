@@ -14,6 +14,7 @@ dependencyManagement {
 
 dependencies {
     implementation(project(":libs:common-domain"))
+    implementation(project(":libs:simulation-control"))
     implementation(project(":libs:common-events"))
     implementation(project(":libs:common-security"))
     implementation(libs.jjwt.api)

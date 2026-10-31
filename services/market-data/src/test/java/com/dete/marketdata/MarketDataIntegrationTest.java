@@ -51,6 +51,13 @@ import org.springframework.web.socket.messaging.WebSocketStompClient;
       "spring.kafka.consumer.auto-offset-reset=earliest"
     })
 class MarketDataIntegrationTest extends FullStackTestBase {
+  @org.springframework.beans.factory.annotation.Autowired
+  private org.springframework.jdbc.core.JdbcTemplate simulationJdbc;
+
+  @org.junit.jupiter.api.BeforeEach
+  void initializeSimulation() {
+    com.dete.common.test.SimulationTestSupport.initialize(simulationJdbc);
+  }
 
   @LocalServerPort private int port;
 

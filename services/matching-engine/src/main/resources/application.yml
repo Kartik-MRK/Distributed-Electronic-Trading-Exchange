@@ -2,6 +2,13 @@ server:
   port: ${PORT:8084}
 
 spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:dete}
+    username: ${DB_USER:dete}
+    password: ${DB_PASSWORD:dete_local_secret}
+    hikari:
+      maximum-pool-size: 4
+      connection-timeout: 5000
   application:
     name: matching-engine
   kafka:

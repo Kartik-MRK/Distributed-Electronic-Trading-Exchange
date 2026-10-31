@@ -304,6 +304,9 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dete
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-dete}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-dete_local_secret}
       PORT: 8084
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092

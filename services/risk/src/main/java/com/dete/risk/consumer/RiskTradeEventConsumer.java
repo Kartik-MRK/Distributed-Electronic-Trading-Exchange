@@ -20,6 +20,9 @@ public class RiskTradeEventConsumer {
   private static final Logger log = LoggerFactory.getLogger(RiskTradeEventConsumer.class);
   public static final String TOPIC_TRADE_EXECUTIONS = "trade.executions";
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.dete.simulation.control.SimulationControlRepository simulationControl;
+
   private final RiskRuleEvaluator riskRuleEvaluator;
   private final ObjectMapper objectMapper;
 
@@ -42,8 +45,10 @@ public class RiskTradeEventConsumer {
         riskRuleEvaluator.updateLastTradePrice(instrument, price);
         log.debug("Updated last trade price from Kafka for {}: {}", instrument, price);
       }
+      if (simulationControl != null)
+        simulationControl.receipt("risk", java.util.UUID.fromString(node.path("eventId").asText()));
     } catch (Exception e) {
-      log.error("Failed to process trade execution event in Risk Service", e);
+      throw new IllegalStateException("Risk trade event failed", e);
     }
   }
 }

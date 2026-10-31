@@ -43,6 +43,12 @@ public class AccountService {
   public static final String TOPIC_LEDGER_EVENTS = "ledger.events";
   public static final String TOPIC_AUDIT_EVENTS = "audit.events";
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.dete.simulation.control.SimulationControlRepository simulationControl;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.dete.account.repository.OrderReservationRepository orderReservations;
+
   private final AccountRepository accountRepository;
   private final BalanceRepository balanceRepository;
   private final LedgerRepository ledgerRepository;
@@ -164,6 +170,8 @@ public class AccountService {
           balance.reserved());
     }
 
+    if (simulationControl != null)
+      simulationControl.requireReservation(orderId, accountId, asset, amount);
     int rowsUpdated = balanceRepository.reserve(accountId, asset, amount);
     if (rowsUpdated == 0) {
       Balance current =
@@ -175,6 +183,8 @@ public class AccountService {
               "Insufficient available balance to reserve %d %s (available: %d)",
               amount, asset, current.available()));
     }
+
+    if (orderReservations != null) orderReservations.create(orderId, accountId, asset, amount);
 
     long seq = ledgerRepository.getNextSequenceNum(accountId);
     LedgerEntry entry =
@@ -239,6 +249,7 @@ public class AccountService {
           balance.available(),
           balance.reserved());
     }
+    if (orderReservations != null) orderReservations.release(orderId, accountId, asset, amount);
     int rowsUpdated = balanceRepository.release(accountId, asset, amount);
     if (rowsUpdated == 0) {
       Balance current =
@@ -319,6 +330,10 @@ public class AccountService {
       throw new IllegalArgumentException("Settlement notional must be positive");
     }
 
+    if (orderReservations != null) {
+      orderReservations.spend(event.buyOrderId(), buyerId, quoteAsset, quoteAmount, quantity);
+      orderReservations.spend(event.sellOrderId(), sellerId, baseAsset, quantity, quantity);
+    }
     // 2. Double-entry balance state updates
     // Buyer: debited quote amount from reserved, credited base asset to available
     int buyerDebited = balanceRepository.debitReserved(buyerId, quoteAsset, quoteAmount);

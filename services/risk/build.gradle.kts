@@ -14,10 +14,13 @@ dependencyManagement {
 
 dependencies {
     implementation(project(":libs:common-domain"))
+    implementation(project(":libs:simulation-control"))
     implementation(project(":libs:common-events"))
 
     // Web & Actuator
     implementation(libs.spring.boot.starter.web)
+    implementation(libs.spring.boot.starter.jdbc)
+    runtimeOnly(libs.postgresql)
     implementation(libs.spring.boot.starter.actuator)
 
     // Kafka

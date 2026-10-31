@@ -24,6 +24,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/accounts")
 public class AccountController {
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.dete.simulation.control.SimulationControlRepository simulationControl;
+
   private final AccountService accountService;
 
   public AccountController(AccountService accountService) {
@@ -71,6 +74,7 @@ public class AccountController {
 
   @PostMapping("/deposit")
   public ResponseEntity<BalanceResponse> deposit(@Valid @RequestBody DepositRequest request) {
+    simulationControl.requireActiveMutation();
     BalanceResponse response =
         accountService.deposit(
             request.accountId(), request.asset(), request.amount(), request.referenceId());

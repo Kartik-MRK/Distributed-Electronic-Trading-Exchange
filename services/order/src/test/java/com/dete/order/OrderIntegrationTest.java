@@ -70,6 +70,12 @@ import org.springframework.kafka.core.KafkaTemplate;
     })
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class OrderIntegrationTest extends FullStackTestBase {
+  @Autowired private org.springframework.jdbc.core.JdbcTemplate simulationJdbc;
+
+  @org.junit.jupiter.api.BeforeEach
+  void initializeSimulation() {
+    com.dete.common.test.SimulationTestSupport.initialize(simulationJdbc);
+  }
 
   private static final KeyPair TEST_KEY_PAIR;
 

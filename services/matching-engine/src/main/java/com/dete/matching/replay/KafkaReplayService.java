@@ -33,6 +33,7 @@ public class KafkaReplayService {
   private String groupId;
 
   @Autowired private KafkaListenerEndpointRegistry registry;
+  @Autowired private com.dete.simulation.control.SimulationControlRepository simulationControl;
   private final MatchingEngineService engine;
   private final OrderCommandConsumer liveConsumer;
   private final ObjectMapper mapper;
@@ -110,13 +111,28 @@ public class KafkaReplayService {
             if (record.offset() >= targets.get(partition)) continue;
             var node = mapper.readTree(record.value());
             String type = node.path("eventType").asText();
+            var admission =
+                simulationControl == null
+                    ? null
+                    : simulationControl.replayAdmission(
+                        record.topic(),
+                        record.partition(),
+                        record.offset(),
+                        com.dete.simulation.control.SimulationControlRepository.hash(
+                            record.value()));
             if (OrderModifyCommand.EVENT_TYPE.equals(type) || node.has("newPrice")) {
-              engine.modifyOrder(mapper.treeToValue(node, OrderModifyCommand.class)).join();
+              if (simulationControl == null)
+                engine.modifyOrder(mapper.treeToValue(node, OrderModifyCommand.class)).join();
             } else if (OrderCancelCommand.EVENT_TYPE.equals(type)
                 || (!node.has("price") && !node.has("side"))) {
               engine.cancelOrder(mapper.treeToValue(node, OrderCancelCommand.class)).join();
             } else {
-              engine.processOrder(mapper.treeToValue(node, OrderPlacedEvent.class)).join();
+              var event = mapper.treeToValue(node, OrderPlacedEvent.class);
+              if (admission == null || admission.allowed())
+                engine
+                    .processOrder(
+                        admission == null ? event : event.withSimulation(admission.context()))
+                    .join();
             }
             count++;
           }

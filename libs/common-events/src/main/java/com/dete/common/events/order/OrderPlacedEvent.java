@@ -22,8 +22,53 @@ public record OrderPlacedEvent(
     long quantity, // scaled fixed-point
     UUID idempotencyKey,
     Instant timestamp,
-    int version)
+    int version,
+    com.dete.common.domain.simulation.SimulationContext simulation)
     implements DeteEvent {
+
+  public OrderPlacedEvent(
+      UUID eventId,
+      UUID orderId,
+      UUID accountId,
+      Instrument instrument,
+      OrderSide side,
+      OrderType orderType,
+      long price,
+      long quantity,
+      UUID idempotencyKey,
+      Instant timestamp,
+      int version) {
+    this(
+        eventId,
+        orderId,
+        accountId,
+        instrument,
+        side,
+        orderType,
+        price,
+        quantity,
+        idempotencyKey,
+        timestamp,
+        version,
+        null);
+  }
+
+  public OrderPlacedEvent withSimulation(
+      com.dete.common.domain.simulation.SimulationContext context) {
+    return new OrderPlacedEvent(
+        eventId,
+        orderId,
+        accountId,
+        instrument,
+        side,
+        orderType,
+        price,
+        quantity,
+        idempotencyKey,
+        timestamp,
+        2,
+        context);
+  }
 
   public static final String EVENT_TYPE = "ORDER_PLACED";
 

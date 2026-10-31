@@ -41,7 +41,8 @@ class SimulationControlIntegrationTest {
     var scripts = root.resolve("services/simulator/src/main/resources/db/migration");
     new ResourceDatabasePopulator(
             new FileSystemResource(scripts.resolve("V1__create_simulation_sessions.sql")),
-            new FileSystemResource(scripts.resolve("V2__simulation_market_clock.sql")))
+            new FileSystemResource(scripts.resolve("V2__simulation_market_clock.sql")),
+            new FileSystemResource(scripts.resolve("V3__simulation_matching_admissions.sql")))
         .execute(ds);
     control =
         new SimulationControlRepository(
@@ -54,6 +55,22 @@ class SimulationControlIntegrationTest {
     jdbc.update(
         "INSERT INTO simulator.market_clock(epoch_id,initialized_at,maintenance) VALUES (?,date_trunc('milliseconds',clock_timestamp()),false)",
         UUID.randomUUID());
+  }
+
+  @Test
+  void recordedAdmissionSurvivesExpiryButLateCommandsAreRejected() {
+    var s = control.claim(UUID.randomUUID(), 60).snapshot();
+    control.activate(s.sessionId(), s.fence());
+    var submitted = control.requireActiveMutation();
+    var admitted = control.decideMatching("order.commands", 0, 1, submitted, "aaa");
+    assertThat(admitted.allowed()).isTrue();
+    control.beginStopping(s.sessionId(), s.fence(), "TEST");
+    assertThat(control.decideMatching("order.commands", 0, 1, submitted, "aaa"))
+        .isEqualTo(admitted);
+    assertThat(control.decideMatching("order.commands", 0, 2, submitted, "bbb").allowed())
+        .isFalse();
+    assertThatThrownBy(() -> control.decideMatching("order.commands", 0, 1, submitted, "wrong"))
+        .isInstanceOf(IllegalStateException.class);
   }
 
   @Test
@@ -123,6 +140,27 @@ class SimulationControlIntegrationTest {
         .isInstanceOf(IllegalArgumentException.class);
     var s = control.claim(UUID.randomUUID(), 60).snapshot();
     assertThatThrownBy(() -> control.activate(s.sessionId(), s.fence() + 1))
+        .isInstanceOf(SimulationClosedException.class);
+  }
+
+  @Test
+  void oldIntentCannotAdmitRiskInNewSession() {
+    var first = control.claim(UUID.randomUUID(), 60).snapshot();
+    control.activate(first.sessionId(), first.fence());
+    var order = UUID.randomUUID();
+    control.recordOrderIntent(
+        order,
+        UUID.randomUUID(),
+        UUID.randomUUID(),
+        "USD",
+        100,
+        "test",
+        control.requireActiveMutation());
+    control.beginStopping(first.sessionId(), first.fence(), "TEST");
+    control.complete(first.sessionId(), first.fence());
+    var next = control.claim(UUID.randomUUID(), 60).snapshot();
+    control.activate(next.sessionId(), next.fence());
+    assertThatThrownBy(() -> control.duringActiveOrder(order, () -> true))
         .isInstanceOf(SimulationClosedException.class);
   }
 }

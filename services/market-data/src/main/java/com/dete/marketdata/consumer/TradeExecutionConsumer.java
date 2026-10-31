@@ -21,6 +21,9 @@ public class TradeExecutionConsumer {
   private static final Logger log = LoggerFactory.getLogger(TradeExecutionConsumer.class);
   public static final String TOPIC_TRADE_EXECUTIONS = "trade.executions";
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.dete.simulation.control.SimulationControlRepository simulationControl;
+
   private final MarketDataService marketDataService;
   private final ObjectMapper objectMapper;
 
@@ -37,6 +40,7 @@ public class TradeExecutionConsumer {
     try {
       TradeExecutedEvent trade = objectMapper.readValue(record.value(), TradeExecutedEvent.class);
       marketDataService.handleTradeExecuted(trade);
+      if (simulationControl != null) simulationControl.receipt("market-data", trade.eventId());
       log.debug(
           "Processed TradeExecutedEvent: tradeId={}, instrument={}, price={}, qty={}",
           trade.tradeId(),

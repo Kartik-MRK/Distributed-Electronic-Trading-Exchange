@@ -11,7 +11,6 @@ import com.dete.common.domain.risk.ValidateOrderResponse;
 import com.dete.common.domain.types.FixedPoint;
 import com.dete.common.events.order.OrderCancelledEvent;
 import com.dete.common.events.trade.TradeExecutedEvent;
-import com.dete.common.test.KafkaTestContainerBase;
 import com.dete.risk.consumer.RiskOrderEventConsumer;
 import com.dete.risk.consumer.RiskTradeEventConsumer;
 import com.dete.risk.engine.RiskRuleEvaluator;
@@ -39,7 +38,28 @@ import org.springframework.kafka.core.KafkaTemplate;
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"spring.main.allow-bean-definition-overriding=true", "risk.grpc.port=0"})
-class RiskIntegrationTest extends KafkaTestContainerBase {
+class RiskIntegrationTest extends com.dete.common.test.FullStackTestBase {
+
+  @Autowired private org.springframework.jdbc.core.JdbcTemplate simulationJdbc;
+
+  @org.junit.jupiter.api.BeforeEach
+  void initializeSimulation() {
+    com.dete.common.test.SimulationTestSupport.initialize(simulationJdbc);
+  }
+
+  @Autowired private com.dete.simulation.control.SimulationControlRepository control;
+
+  private ValidateOrderRequest admit(ValidateOrderRequest request) {
+    control.recordOrderIntent(
+        request.orderId(),
+        UUID.randomUUID(),
+        request.accountId(),
+        "USD",
+        1,
+        "test:" + request.orderId(),
+        control.requireActiveMutation());
+    return request;
+  }
 
   @Autowired private RiskGrpcServer riskGrpcServer;
   @Autowired private RiskRuleEvaluator riskRuleEvaluator;
@@ -71,7 +91,7 @@ class RiskIntegrationTest extends KafkaTestContainerBase {
 
       ValidateOrderResponse validResp =
           ClientCalls.blockingUnaryCall(
-              channel, validateOrderMethod, CallOptions.DEFAULT, validReq);
+              channel, validateOrderMethod, CallOptions.DEFAULT, admit(validReq));
 
       assertThat(validResp).isNotNull();
       assertThat(validResp.approved()).isTrue();
@@ -88,7 +108,7 @@ class RiskIntegrationTest extends KafkaTestContainerBase {
 
       ValidateOrderResponse invalidResp =
           ClientCalls.blockingUnaryCall(
-              channel, validateOrderMethod, CallOptions.DEFAULT, invalidReq);
+              channel, validateOrderMethod, CallOptions.DEFAULT, admit(invalidReq));
 
       assertThat(invalidResp).isNotNull();
       assertThat(invalidResp.approved()).isFalse();
@@ -141,7 +161,7 @@ class RiskIntegrationTest extends KafkaTestContainerBase {
             90_000L * FixedPoint.SCALE,
             1L * FixedPoint.SCALE);
 
-    ValidateOrderResponse response = riskRuleEvaluator.evaluate(aggressiveBuy);
+    ValidateOrderResponse response = riskRuleEvaluator.evaluate(admit(aggressiveBuy));
     assertThat(response.approved()).isFalse();
     assertThat(response.rejectionReason()).contains("Rule 4 Violation");
   }
@@ -163,7 +183,7 @@ class RiskIntegrationTest extends KafkaTestContainerBase {
             150L * FixedPoint.SCALE,
             5L * FixedPoint.SCALE);
 
-    ValidateOrderResponse approved = riskRuleEvaluator.evaluate(order);
+    ValidateOrderResponse approved = riskRuleEvaluator.evaluate(admit(order));
     assertThat(approved.approved()).isTrue();
     assertThat(riskRuleEvaluator.getAccountState(accountId).getOpenOrdersCount())
         .isGreaterThanOrEqualTo(1);
@@ -215,7 +235,7 @@ class RiskIntegrationTest extends KafkaTestContainerBase {
             1L * FixedPoint.SCALE);
 
     ResponseEntity<ValidateOrderResponse> valResp =
-        restTemplate.postForEntity("/risk/validate", request, ValidateOrderResponse.class);
+        restTemplate.postForEntity("/risk/validate", admit(request), ValidateOrderResponse.class);
     assertThat(valResp.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(valResp.getBody()).isNotNull();
     assertThat(valResp.getBody().approved()).isTrue();

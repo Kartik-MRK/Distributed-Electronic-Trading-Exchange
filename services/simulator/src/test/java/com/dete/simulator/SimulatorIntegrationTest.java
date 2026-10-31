@@ -30,6 +30,7 @@ class SimulatorIntegrationTest {
   @Autowired private SimulatorProperties properties;
   @Autowired private SimulatorService simulatorService;
   @MockBean private ExchangeRestClient restClient;
+  @MockBean private com.dete.simulator.service.SessionFinalizer finalizer;
   @Autowired private MockMvc mockMvc;
 
   @Test

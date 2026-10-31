@@ -25,6 +25,9 @@ public class OrderEventConsumer {
   public static final String TOPIC_ORDER_EVENTS = "order.events";
   public static final String TOPIC_ORDER_EVENTS_DLQ = "order.events.DLQ";
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.dete.simulation.control.SimulationControlRepository simulationControl;
+
   private final OrderService orderService;
   private final KafkaTemplate<String, String> kafkaTemplate;
   private final ObjectMapper objectMapper;
@@ -70,6 +73,8 @@ public class OrderEventConsumer {
         log.warn("Unrecognized order event payload on topic {}: {}", TOPIC_ORDER_EVENTS, payload);
       }
 
+      if (simulationControl != null)
+        simulationControl.receipt("order", UUID.fromString(node.path("eventId").asText()));
       if (ack != null) {
         ack.acknowledge();
       }

@@ -26,6 +26,13 @@ public class InstrumentBot {
   private static final Logger log = LoggerFactory.getLogger(InstrumentBot.class);
 
   private final Instrument instrument;
+  private UUID sessionId;
+
+  public void bindSession(UUID sessionId) {
+    if (this.sessionId != null) throw new IllegalStateException("Bot already bound");
+    this.sessionId = java.util.Objects.requireNonNull(sessionId);
+  }
+
   private final SimulatorProperties.InstrumentConfig config;
   private final ExchangeRestClient restClient;
   private final BotAccountManager accountManager;
@@ -220,7 +227,7 @@ public class InstrumentBot {
     long priceNanos = Math.round(crossingPrice * FixedPoint.SCALE);
 
     CreateOrderDto orderRequest =
-        new CreateOrderDto(instrument, side, OrderType.LIMIT, priceNanos, quantityNanos);
+        new CreateOrderDto(instrument, side, OrderType.LIMIT, priceNanos, quantityNanos, sessionId);
 
     OrderResponseDto response = restClient.placeOrder(takerToken, orderRequest, UUID.randomUUID());
     if (response != null) {
@@ -262,7 +269,7 @@ public class InstrumentBot {
     long quantityNanos = Math.round(quantity * FixedPoint.SCALE);
 
     CreateOrderDto request =
-        new CreateOrderDto(instrument, side, OrderType.LIMIT, priceNanos, quantityNanos);
+        new CreateOrderDto(instrument, side, OrderType.LIMIT, priceNanos, quantityNanos, sessionId);
 
     OrderResponseDto response = restClient.placeOrder(token, request, UUID.randomUUID());
     if (response != null && response.orderId() != null) {

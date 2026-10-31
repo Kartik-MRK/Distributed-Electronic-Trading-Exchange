@@ -6,7 +6,6 @@ import com.dete.common.events.order.OrderPlacedEvent;
 import com.dete.matching.engine.model.MatchResult;
 import com.dete.matching.publisher.MatchingEventPublisher;
 import com.dete.matching.service.MatchingEngineService;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
@@ -25,6 +24,9 @@ public class OrderCommandConsumer {
   private static final Logger log = LoggerFactory.getLogger(OrderCommandConsumer.class);
 
   public static final String TOPIC_ORDER_COMMANDS = "order.commands";
+
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.dete.simulation.control.SimulationControlRepository simulationControl;
 
   private final MatchingEngineService matchingEngineService;
   private final MatchingEventPublisher eventPublisher;
@@ -66,61 +68,85 @@ public class OrderCommandConsumer {
 
     String recordId = record.topic() + ":" + record.partition() + ":" + record.offset();
     try {
-      MatchResult pending = pendingPublications.get(recordId);
-      if (pending != null) {
-        eventPublisher.publishMatchResult(pending);
-        if (ack != null) ack.acknowledge();
-        pendingPublications.remove(recordId);
-        return;
+      var node = objectMapper.readTree(record.value());
+      String type = node.path("eventType").asText();
+      boolean modify = OrderModifyCommand.EVENT_TYPE.equals(type) || node.has("newPrice");
+      boolean cancel =
+          !modify
+              && (OrderCancelCommand.EVENT_TYPE.equals(type)
+                  || (!node.has("price") && !node.has("side")));
+      OrderPlacedEvent event =
+          (!modify && !cancel) ? objectMapper.treeToValue(node, OrderPlacedEvent.class) : null;
+      com.dete.simulation.control.MatchingAdmission admission = null;
+      if (simulationControl != null) {
+        var hash = com.dete.simulation.control.SimulationControlRepository.hash(record.value());
+        admission =
+            cancel
+                ? simulationControl.decideCancellation(
+                    record.topic(), record.partition(), record.offset(), hash)
+                : simulationControl.decideMatching(
+                    record.topic(),
+                    record.partition(),
+                    record.offset(),
+                    event == null ? null : event.simulation(),
+                    hash);
       }
-      String payload = record.value();
-      JsonNode node = objectMapper.readTree(payload);
-
-      // Determine command type from explicit eventType field or JSON shape
-      String eventType = node.has("eventType") ? node.get("eventType").asText() : "";
-
-      if (OrderModifyCommand.EVENT_TYPE.equals(eventType)
-          || (node.has("newPrice") && node.has("newQuantity"))) {
-        OrderModifyCommand command = objectMapper.treeToValue(node, OrderModifyCommand.class);
-        log.debug("Consumed OrderModifyCommand for orderId: {}", command.orderId());
-        MatchResult result = matchingEngineService.modifyOrder(command).join();
+      if (admission != null)
+        simulationControl.attachCommand(
+            record.topic(),
+            record.partition(),
+            record.offset(),
+            admission.context().epochId(),
+            java.util.UUID.fromString(node.path("eventId").asText()));
+      MatchResult result = pendingPublications.get(recordId);
+      if (result == null) {
+        if (modify) {
+          // Modification is disabled at the public API. Do not release or mutate an existing order.
+          result = new MatchResult();
+        } else if (cancel) {
+          result =
+              matchingEngineService
+                  .cancelOrder(objectMapper.treeToValue(node, OrderCancelCommand.class))
+                  .join();
+        } else if (admission != null && !admission.allowed()) {
+          result =
+              MatchResult.rejected(
+                  com.dete.common.events.order.OrderRejectedEvent.of(
+                      event.orderId(), admission.reason()));
+        } else {
+          result =
+              matchingEngineService
+                  .processOrder(
+                      admission == null ? event : event.withSimulation(admission.context()))
+                  .join();
+        }
         pendingPublications.put(recordId, result);
-        eventPublisher.publishMatchResult(result);
-      } else if (OrderCancelCommand.EVENT_TYPE.equals(eventType)
-          || (node.has("orderId")
-              && !node.has("price")
-              && !node.has("newPrice")
-              && !node.has("side"))) {
-        OrderCancelCommand command = objectMapper.treeToValue(node, OrderCancelCommand.class);
-        log.debug("Consumed OrderCancelCommand for orderId: {}", command.orderId());
-        MatchResult result = matchingEngineService.cancelOrder(command).join();
-        pendingPublications.put(recordId, result);
-        eventPublisher.publishMatchResult(result);
-      } else {
-        OrderPlacedEvent event = objectMapper.treeToValue(node, OrderPlacedEvent.class);
-        log.debug(
-            "Consumed OrderPlacedEvent for orderId: {}, instrument: {}",
-            event.orderId(),
-            event.instrument());
-        MatchResult result = matchingEngineService.processOrder(event).join();
-        pendingPublications.put(recordId, result);
-        eventPublisher.publishMatchResult(result);
       }
-
-      if (ack != null) {
-        ack.acknowledge();
+      if (admission == null) eventPublisher.publishMatchResult(result);
+      else {
+        var outputs =
+            new java.util.ArrayList<
+                com.dete.simulation.control.SimulationControlRepository.StoredOutput>();
+        for (var output : result.allEvents()) {
+          outputs.add(
+              new com.dete.simulation.control.SimulationControlRepository.StoredOutput(
+                  output.eventId(),
+                  output instanceof com.dete.common.events.trade.TradeExecutedEvent
+                      ? "trade.executions"
+                      : "order.events",
+                  objectMapper.writeValueAsString(output)));
+        }
+        var persisted =
+            simulationControl.recordOutputs(
+                record.topic(), record.partition(), record.offset(), admission, outputs);
+        eventPublisher.publishStoredOutputs(persisted);
+        simulationControl.markPublished(
+            record.topic(), record.partition(), record.offset(), admission.context().epochId());
       }
+      if (ack != null) ack.acknowledge();
       pendingPublications.remove(recordId);
     } catch (Exception e) {
-      // A failure before a complete result is captured may have partially mutated the book.
-      // Retrying it in-place could suppress its outputs through order-id deduplication.
-      // Require recovery from the committed log before processing any more commands.
       if (!pendingPublications.containsKey(recordId)) liveProcessingEnabled = false;
-      log.error(
-          "Failed to process order command from partition {} offset {}",
-          record.partition(),
-          record.offset(),
-          e);
       throw new IllegalStateException("Order command was not completed", e);
     }
   }

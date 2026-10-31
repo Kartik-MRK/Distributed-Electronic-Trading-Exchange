@@ -378,8 +378,11 @@ public final class OrderBook {
                 matchPrice,
                 fillQty,
                 tradeSeq,
-                incoming.timestamp(),
-                1);
+                incoming.simulation() == null
+                    ? incoming.timestamp()
+                    : incoming.simulation().realTime(),
+                incoming.simulation() == null ? 1 : 2,
+                incoming.simulation());
         result.addTrade(trade);
 
         // Record fill events for resting maker

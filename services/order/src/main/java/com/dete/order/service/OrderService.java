@@ -33,6 +33,9 @@ public class OrderService {
   private static final Logger log = LoggerFactory.getLogger(OrderService.class);
   public static final String TOPIC_ORDER_COMMANDS = "order.commands";
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.dete.simulation.control.SimulationControlRepository simulationControl;
+
   private final OrderRepository orderRepository;
   private final OrderOutboxRepository outboxRepository;
   private final AccountClient accountClient;
@@ -98,6 +101,13 @@ public class OrderService {
       return response;
     }
 
+    var simulation = simulationControl == null ? null : simulationControl.requireActiveMutation();
+    if (simulation != null
+        && request.sessionId() != null
+        && !request.sessionId().equals(simulation.sessionId()))
+      throw new com.dete.simulation.control.SimulationClosedException(
+          "Requested simulation has ended");
+
     // 3. Pre-trade Risk Validation with persistent order ID
     UUID orderId = UUID.randomUUID();
 
@@ -123,10 +133,30 @@ public class OrderService {
     if (reserveAmount <= 0) {
       throw new InvalidOrderException("Order reservation must be positive at supported precision");
     }
+    if (simulationControl != null) {
+      orderId =
+          simulationControl.recordOrderIntent(
+              orderId,
+              idempotencyKey,
+              accountId,
+              reserveAsset,
+              reserveAmount,
+              com.dete.simulation.control.SimulationControlRepository.hash(
+                  accountId + ":" + request.toString()),
+              simulation);
+    }
     riskValidator.validateOrder(request, accountId, orderId);
 
     // 5. Synchronous balance reservation via Account Service
     accountClient.reserveFunds(accountId, orderId, reserveAsset, reserveAmount);
+
+    if (simulationControl != null) {
+      var stillActive = simulationControl.requireActiveMutation();
+      if (!simulation.sessionId().equals(stillActive.sessionId())
+          || simulation.fence() != stillActive.fence())
+        throw new com.dete.simulation.control.SimulationClosedException(
+            "Session ended during admission");
+    }
 
     // 6. Persist order in SUBMITTED status
     OrderRecord order =
@@ -153,6 +183,7 @@ public class OrderService {
             request.quantity(),
             idempotencyKey);
 
+    if (simulation != null) event = event.withSimulation(simulation);
     try {
       String payload = objectMapper.writeValueAsString(event);
       outboxRepository.save(TOPIC_ORDER_COMMANDS, request.instrument().name(), payload);

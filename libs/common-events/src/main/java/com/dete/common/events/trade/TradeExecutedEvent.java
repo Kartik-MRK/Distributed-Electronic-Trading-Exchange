@@ -21,8 +21,38 @@ public record TradeExecutedEvent(
     long quantity, // fixed-point fill quantity
     long sequenceNumber, // global, per-instrument, monotonically increasing
     Instant timestamp,
-    int version)
+    int version,
+    com.dete.common.domain.simulation.SimulationContext simulation)
     implements DeteEvent {
+
+  public TradeExecutedEvent(
+      UUID eventId,
+      UUID tradeId,
+      Instrument instrument,
+      UUID buyOrderId,
+      UUID sellOrderId,
+      UUID buyAccountId,
+      UUID sellAccountId,
+      long price,
+      long quantity,
+      long sequenceNumber,
+      Instant timestamp,
+      int version) {
+    this(
+        eventId,
+        tradeId,
+        instrument,
+        buyOrderId,
+        sellOrderId,
+        buyAccountId,
+        sellAccountId,
+        price,
+        quantity,
+        sequenceNumber,
+        timestamp,
+        version,
+        null);
+  }
 
   public static final String EVENT_TYPE = "TRADE_EXECUTED";
 

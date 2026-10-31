@@ -21,6 +21,9 @@ public class RiskRuleEvaluator {
 
   private static final Logger log = LoggerFactory.getLogger(RiskRuleEvaluator.class);
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.dete.simulation.control.SimulationControlRepository simulationControl;
+
   private final RiskProperties properties;
 
   // Real-time last traded price per instrument (scaled fixed-point)
@@ -42,6 +45,16 @@ public class RiskRuleEvaluator {
   }
 
   public synchronized ValidateOrderResponse evaluate(ValidateOrderRequest request) {
+    if (simulationControl == null) return evaluateRules(request);
+    try {
+      return simulationControl.duringActiveOrder(
+          request == null ? null : request.orderId(), () -> evaluateRules(request));
+    } catch (com.dete.simulation.control.SimulationClosedException e) {
+      return ValidateOrderResponse.reject("SIMULATION_NOT_ACTIVE");
+    }
+  }
+
+  private ValidateOrderResponse evaluateRules(ValidateOrderRequest request) {
     if (request == null) {
       return ValidateOrderResponse.reject("Order request cannot be null");
     }

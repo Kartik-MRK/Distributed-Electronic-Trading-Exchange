@@ -72,6 +72,24 @@ public class MatchingEventPublisher {
     }
   }
 
+  public void publishStoredOutputs(
+      java.util.List<com.dete.simulation.control.SimulationControlRepository.StoredOutput>
+          outputs) {
+    try {
+      for (var output : outputs) {
+        var node = objectMapper.readTree(output.payload());
+        String key =
+            output.topic().equals(TOPIC_TRADE_EXECUTIONS)
+                ? node.path("instrument").asText()
+                : node.path("orderId").asText();
+        kafkaTemplate.send(output.topic(), key, output.payload()).get(5, TimeUnit.SECONDS);
+      }
+    } catch (Exception e) {
+      if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+      throw new IllegalStateException("Matching output publication failed", e);
+    }
+  }
+
   private void publishTrade(TradeExecutedEvent trade) throws Exception {
     String payload = objectMapper.writeValueAsString(trade);
     String key = trade.instrument().symbol();

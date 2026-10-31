@@ -12,6 +12,9 @@ public class TradeSettlementConsumer {
 
   private static final Logger log = LoggerFactory.getLogger(TradeSettlementConsumer.class);
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.dete.simulation.control.SimulationControlRepository simulationControl;
+
   private final AccountService accountService;
   private final ObjectMapper objectMapper;
 
@@ -36,6 +39,7 @@ public class TradeSettlementConsumer {
           event.sellAccountId());
 
       accountService.settleTrade(event);
+      if (simulationControl != null) simulationControl.receipt("account", event.eventId());
     } catch (Exception e) {
       log.error(
           "Failed to process settlement for trade payload {}: {}", payload, e.getMessage(), e);

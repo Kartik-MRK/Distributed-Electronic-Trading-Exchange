@@ -113,6 +113,24 @@ public class SimulationControlRepository {
     return s;
   }
 
+  public <T> T duringActiveOrder(UUID orderId, Supplier<T> action) {
+    return locked(
+        () -> {
+          var current = snapshotLocked();
+          if (!current.tradingAllowed())
+            throw new SimulationClosedException("Trading requires an active simulation");
+          if (jdbc.queryForObject(
+                  "SELECT count(*) FROM simulator.order_intent WHERE order_id=? AND NOT closed AND epoch_id=? AND session_id=? AND fencing_token=?",
+                  Long.class,
+                  orderId,
+                  current.epochId(),
+                  current.sessionId(),
+                  current.fence())
+              != 1) throw new SimulationClosedException("Order intent is not active");
+          return action.get();
+        });
+  }
+
   public SimulationContext requireActiveMutation() {
     return locked(
         () -> {
@@ -231,6 +249,255 @@ public class SimulationControlRepository {
               fence);
           return snapshotLocked();
         });
+  }
+
+  public MatchingAdmission decideMatching(
+      String topic, int partition, long offset, SimulationContext submitted, String hash) {
+    return decide(topic, partition, offset, submitted, hash, false);
+  }
+
+  public MatchingAdmission decideCancellation(
+      String topic, int partition, long offset, String hash) {
+    return decide(topic, partition, offset, null, hash, true);
+  }
+
+  private MatchingAdmission decide(
+      String topic,
+      int partition,
+      long offset,
+      SimulationContext submitted,
+      String hash,
+      boolean cancellation) {
+    return locked(
+        () -> {
+          var current = snapshotLocked();
+          if (current.epochId() == null) throw new IllegalStateException("Uninitialized market");
+          var saved =
+              jdbc.query(
+                  "SELECT payload_hash,allowed,reason,context::text FROM simulator.matching_admission WHERE epoch_id=? AND topic=? AND partition_id=? AND record_offset=?",
+                  (rs, n) -> {
+                    if (!hash.equals(rs.getString(1)))
+                      throw new IllegalStateException("Matching command payload changed");
+                    return new MatchingAdmission(
+                        rs.getBoolean(2),
+                        rs.getString(3),
+                        decode(rs.getString(4), SimulationContext.class));
+                  },
+                  current.epochId(),
+                  topic,
+                  partition,
+                  offset);
+          if (!saved.isEmpty()) return saved.getFirst();
+          boolean allowed =
+              cancellation
+                  || (submitted != null
+                      && current.tradingAllowed()
+                      && current.epochId().equals(submitted.epochId())
+                      && current.sessionId().equals(submitted.sessionId())
+                      && current.fence() == submitted.fence());
+          var decision =
+              new MatchingAdmission(
+                  allowed, allowed ? "ADMITTED" : "SIMULATION_NOT_ACTIVE", current.context());
+          jdbc.update(
+              "INSERT INTO simulator.matching_admission(epoch_id,topic,partition_id,record_offset,payload_hash,session_id,fencing_token,allowed,reason,context) VALUES (?,?,?,?,?,?,?,?,?,?::jsonb)",
+              current.epochId(),
+              topic,
+              partition,
+              offset,
+              hash,
+              current.sessionId(),
+              current.fence(),
+              allowed,
+              decision.reason(),
+              encode(decision.context()));
+          return decision;
+        });
+  }
+
+  /** Replay may read decisions but must never invent one using the current session. */
+  public MatchingAdmission replayAdmission(String topic, int partition, long offset, String hash) {
+    return locked(
+        () -> {
+          var current = snapshotLocked();
+          var rows =
+              jdbc.query(
+                  "SELECT payload_hash,allowed,reason,context::text FROM simulator.matching_admission WHERE epoch_id=? AND topic=? AND partition_id=? AND record_offset=?",
+                  (rs, n) -> {
+                    if (!hash.equals(rs.getString(1)))
+                      throw new IllegalStateException("Replay payload mismatch");
+                    return new MatchingAdmission(
+                        rs.getBoolean(2),
+                        rs.getString(3),
+                        decode(rs.getString(4), SimulationContext.class));
+                  },
+                  current.epochId(),
+                  topic,
+                  partition,
+                  offset);
+          if (rows.isEmpty())
+            throw new IllegalStateException("Committed command is missing its admission decision");
+          return rows.getFirst();
+        });
+  }
+
+  public List<StoredOutput> recordOutputs(
+      String topic,
+      int partition,
+      long offset,
+      MatchingAdmission admission,
+      List<StoredOutput> outputs) {
+    return locked(
+        () -> {
+          var ctx = admission.context();
+          var saved =
+              jdbc.query(
+                  "SELECT event_id,event_topic,payload::text FROM simulator.matching_output WHERE epoch_id=? AND topic=? AND partition_id=? AND record_offset=? ORDER BY ordinal",
+                  (rs, n) ->
+                      new StoredOutput(
+                          rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3)),
+                  ctx.epochId(),
+                  topic,
+                  partition,
+                  offset);
+          if (!saved.isEmpty()) return saved;
+          for (int i = 0; i < outputs.size(); i++) {
+            var o = outputs.get(i);
+            jdbc.update(
+                "INSERT INTO simulator.matching_output(epoch_id,topic,partition_id,record_offset,ordinal,session_id,event_id,event_topic,payload) VALUES (?,?,?,?,?,?,?,?,?::jsonb)",
+                ctx.epochId(),
+                topic,
+                partition,
+                offset,
+                i,
+                ctx.sessionId(),
+                o.eventId(),
+                o.topic(),
+                o.payload());
+          }
+          return outputs;
+        });
+  }
+
+  public void attachCommand(String topic, int partition, long offset, UUID epochId, UUID eventId) {
+    jdbc.update(
+        "UPDATE simulator.matching_admission SET command_event_id=? WHERE epoch_id=? AND topic=? AND partition_id=? AND record_offset=?",
+        eventId,
+        epochId,
+        topic,
+        partition,
+        offset);
+  }
+
+  public void markPublished(String topic, int partition, long offset, UUID epochId) {
+    jdbc.update(
+        "UPDATE simulator.matching_admission SET published=true WHERE epoch_id=? AND topic=? AND partition_id=? AND record_offset=?",
+        epochId,
+        topic,
+        partition,
+        offset);
+  }
+
+  public void receipt(String consumer, UUID eventId) {
+    jdbc.update(
+        "INSERT INTO simulator.consumer_receipt(consumer_name,event_id) VALUES (?,?) ON CONFLICT DO NOTHING",
+        consumer,
+        eventId);
+  }
+
+  public UUID recordOrderIntent(
+      UUID orderId,
+      UUID idempotencyKey,
+      UUID accountId,
+      String asset,
+      long amount,
+      String requestHash,
+      SimulationContext ctx) {
+    return locked(
+        () -> {
+          var current = snapshotLocked();
+          if (!current.tradingAllowed()
+              || !current.sessionId().equals(ctx.sessionId())
+              || current.fence() != ctx.fence())
+            throw new SimulationClosedException("Simulation has ended");
+          var existing =
+              jdbc.query(
+                  "SELECT order_id,request_hash,session_id,closed FROM simulator.order_intent WHERE idempotency_key=?",
+                  (rs, n) -> {
+                    if (!requestHash.equals(rs.getString(2))
+                        || !ctx.sessionId().equals(rs.getObject(3, UUID.class))
+                        || rs.getBoolean(4))
+                      throw new SimulationClosedException(
+                          "Order attempt belongs to different terms or an ended session; use a new key");
+                    return rs.getObject(1, UUID.class);
+                  },
+                  idempotencyKey);
+          if (!existing.isEmpty()) return existing.getFirst();
+          jdbc.update(
+              "INSERT INTO simulator.order_intent(order_id,idempotency_key,epoch_id,session_id,fencing_token,account_id,asset,amount,request_hash) VALUES (?,?,?,?,?,?,?,?,?)",
+              orderId,
+              idempotencyKey,
+              ctx.epochId(),
+              ctx.sessionId(),
+              ctx.fence(),
+              accountId,
+              asset,
+              amount,
+              requestHash);
+          return orderId;
+        });
+  }
+
+  public void requireReservation(UUID orderId, UUID accountId, String asset, long amount) {
+    locked(
+        () -> {
+          var s = snapshotLocked();
+          Integer valid =
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM simulator.order_intent WHERE order_id=? AND account_id=? AND asset=? AND amount=? AND epoch_id=? AND session_id=? AND fencing_token=? AND NOT closed",
+                  Integer.class,
+                  orderId,
+                  accountId,
+                  asset,
+                  amount,
+                  s.epochId(),
+                  s.sessionId(),
+                  s.fence());
+          if (!s.tradingAllowed() || valid == null || valid != 1)
+            throw new SimulationClosedException("Reservation requires a current order intent");
+          return null;
+        });
+  }
+
+  public record StoredOutput(UUID eventId, String topic, String payload) {}
+
+  private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
+      new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+
+  private static String encode(Object value) {
+    try {
+      return JSON.writeValueAsString(value);
+    } catch (Exception e) {
+      throw new IllegalStateException("Cannot encode simulation data", e);
+    }
+  }
+
+  private static <T> T decode(String value, Class<T> type) {
+    try {
+      return JSON.readValue(value, type);
+    } catch (Exception e) {
+      throw new IllegalStateException("Cannot decode simulation data", e);
+    }
+  }
+
+  public static String hash(String payload) {
+    try {
+      return java.util.HexFormat.of()
+          .formatHex(
+              java.security.MessageDigest.getInstance("SHA-256")
+                  .digest(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    } catch (java.security.NoSuchAlgorithmException e) {
+      throw new IllegalStateException(e);
+    }
   }
 
   private MarketClockSnapshot requireOwner(UUID id, long fence) {

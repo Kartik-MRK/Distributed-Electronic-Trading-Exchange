@@ -106,6 +106,25 @@ public class GlobalExceptionHandler {
                 "An order with this idempotency key already exists"));
   }
 
+  @ExceptionHandler(com.dete.simulation.control.SimulationClosedException.class)
+  public ResponseEntity<java.util.Map<String, Object>> handleSimulationClosed(
+      com.dete.simulation.control.SimulationClosedException ex) {
+    return ResponseEntity.status(409)
+        .body(java.util.Map.of("code", "SIMULATION_NOT_ACTIVE", "message", ex.getMessage()));
+  }
+
+  @ExceptionHandler(org.springframework.dao.DataAccessException.class)
+  public ResponseEntity<java.util.Map<String, Object>> handleDatabaseUnavailable(
+      org.springframework.dao.DataAccessException ex) {
+    return ResponseEntity.status(503)
+        .body(
+            java.util.Map.of(
+                "code",
+                "MARKET_UNAVAILABLE",
+                "message",
+                "Market authority is unavailable; try again shortly."));
+  }
+
   @ExceptionHandler(Exception.class)
   public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
     log.error("Unhandled error in order service: ", ex);

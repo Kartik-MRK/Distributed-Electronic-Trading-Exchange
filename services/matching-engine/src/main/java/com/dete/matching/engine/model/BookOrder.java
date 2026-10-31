@@ -26,6 +26,11 @@ public final class BookOrder {
   private long sequenceNumber;
   private OrderStatus status;
   private final Instant timestamp;
+  private com.dete.common.domain.simulation.SimulationContext simulation;
+
+  public com.dete.common.domain.simulation.SimulationContext simulation() {
+    return simulation;
+  }
 
   public BookOrder(
       UUID orderId,
@@ -53,18 +58,21 @@ public final class BookOrder {
   }
 
   public static BookOrder fromEvent(OrderPlacedEvent event, long sequenceNumber) {
-    return new BookOrder(
-        event.orderId(),
-        event.accountId(),
-        event.instrument(),
-        event.side(),
-        event.orderType(),
-        event.price(),
-        event.quantity(),
-        event.quantity(),
-        sequenceNumber,
-        OrderStatus.ACCEPTED,
-        event.timestamp());
+    BookOrder order =
+        new BookOrder(
+            event.orderId(),
+            event.accountId(),
+            event.instrument(),
+            event.side(),
+            event.orderType(),
+            event.price(),
+            event.quantity(),
+            event.quantity(),
+            sequenceNumber,
+            OrderStatus.ACCEPTED,
+            event.timestamp());
+    order.simulation = event.simulation();
+    return order;
   }
 
   public UUID orderId() {

@@ -28,7 +28,11 @@ public class HttpAccountClient implements AccountClient {
   public HttpAccountClient(
       RestTemplateBuilder restTemplateBuilder,
       @Value("${order.account-service.url:http://localhost:8082}") String accountServiceUrl) {
-    this.restTemplate = restTemplateBuilder.build();
+    this.restTemplate =
+        restTemplateBuilder
+            .setConnectTimeout(java.time.Duration.ofSeconds(2))
+            .setReadTimeout(java.time.Duration.ofSeconds(5))
+            .build();
     this.accountServiceUrl = accountServiceUrl;
   }
 

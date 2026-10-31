@@ -14,7 +14,13 @@ public record CreateOrderRequest(
         @JsonAlias({"type", "order_type"})
         OrderType orderType,
     Long price,
-    @Positive(message = "Quantity must be strictly positive") long quantity) {
+    @Positive(message = "Quantity must be strictly positive") long quantity,
+    java.util.UUID sessionId) {
+
+  public CreateOrderRequest(
+      Instrument instrument, OrderSide side, OrderType orderType, Long price, long quantity) {
+    this(instrument, side, orderType, price, quantity, null);
+  }
 
   public boolean isValid() {
     if (orderType == OrderType.LIMIT || orderType == OrderType.IOC || orderType == OrderType.FOK) {

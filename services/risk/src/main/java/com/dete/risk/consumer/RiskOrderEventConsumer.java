@@ -23,6 +23,9 @@ public class RiskOrderEventConsumer {
   private static final Logger log = LoggerFactory.getLogger(RiskOrderEventConsumer.class);
   public static final String TOPIC_ORDER_EVENTS = "order.events";
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.dete.simulation.control.SimulationControlRepository simulationControl;
+
   private final RiskRuleEvaluator riskRuleEvaluator;
   private final ObjectMapper objectMapper;
 
@@ -56,8 +59,10 @@ public class RiskOrderEventConsumer {
         riskRuleEvaluator.onOrderClosed(accountId, orderId);
         log.debug("Processed terminal order event {} for account {}", orderId, accountId);
       }
+      if (simulationControl != null)
+        simulationControl.receipt("risk", java.util.UUID.fromString(node.path("eventId").asText()));
     } catch (Exception e) {
-      log.error("Failed to process order event in Risk Service", e);
+      throw new IllegalStateException("Risk order event failed", e);
     }
   }
 }
