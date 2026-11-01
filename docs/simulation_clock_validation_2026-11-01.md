@@ -9,7 +9,7 @@ The approved change adds a persistent shared market clock, active-session tradin
 | Full Java suite with PostgreSQL/Kafka integration | 336 tests, zero failures or skips |
 | Java formatting and all backend boot jars | Passed |
 | Frontend tests, type checking, lint and production build | 26 tests passed; all checks passed |
-| Python operator/validation/smoke tests | 11 passed |
+| Python operator/validation/smoke tests | 12 passed |
 | Helm lint and deployment shell syntax | Passed |
 | Operator migration launcher and reset SQL | Passed on disposable full schema; reset transaction rolled back |
 
@@ -39,5 +39,7 @@ Cold restart preserved the first six minutes of candle history. An administrator
 ## Production operation
 
 Pending: sealed backup and restore rehearsal, coordinated reset, exact-commit CI/CD deployment, then the controlled first five-minute production run and pause/resume validation. No production success is claimed by the pre-deployment evidence above.
+
+The maintenance backup exposed a legacy storage defect: ZooKeeper's image-declared child volumes shadowed its parent PVC mount, so restarting the pod lost its metadata. The original PostgreSQL dump and Kafka log archive remained intact. Metadata reconstructed from the captured cluster ID, topic IDs, partition assignments and configuration passed an isolated recovery check against all 14 topic identities, command-log ends and consumer offsets, including replacement of the ZooKeeper container. Explicit persistent mounts now cover both child directories; a regression test prevents backup shutdown on the unsafe configuration. The backup retains the original empty ZooKeeper archive and records the reconstruction explicitly.
 
 Browser surfaces were unavailable during implementation. API, database and frontend build/tests provide evidence; visual browser interaction remains a separate limitation.
