@@ -5,6 +5,21 @@ from smoke_test import new_account, select_price, verify_deltas, verify_simulato
 
 
 class SmokeAssertionsTest(unittest.TestCase):
+    def test_completion_polling_stays_within_authenticated_gateway_budget(self):
+        from smoke_test import wait_for_session_completion, HTTPStatusError
+        elapsed=0
+        requests=0
+        def sleep(seconds):
+            nonlocal elapsed
+            elapsed+=seconds
+        def status(*args,**kwargs):
+            nonlocal requests
+            requests+=1
+            if requests>100: raise HTTPStatusError('GET','/market-simulation/status',429,(200,))
+            return {'status':'COMPLETED' if elapsed>=60 else 'ACTIVE'}
+        with patch('smoke_test.time.monotonic',side_effect=lambda:elapsed), patch('smoke_test.time.sleep',side_effect=sleep), patch('smoke_test.call',side_effect=status):
+            self.assertEqual('COMPLETED',wait_for_session_completion('token')['status'])
+
     @patch('smoke_test.time.sleep')
     @patch('smoke_test.call')
     def test_smoke_recovers_stopping_session_and_retries_busy_cleanup(self, request, sleep):

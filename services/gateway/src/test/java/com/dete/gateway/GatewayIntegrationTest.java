@@ -78,6 +78,7 @@ class GatewayIntegrationTest extends RedisTestContainerBase {
     registry.add("MARKET_DATA_SERVICE_URL", () -> "http://localhost:" + wireMock.port());
     registry.add("AUDIT_SERVICE_URL", () -> "http://localhost:" + wireMock.port());
     registry.add("MARKET_DATA_WS_URL", () -> "ws://localhost:" + wireMock.port());
+    registry.add("SIMULATOR_SERVICE_URL", () -> "http://localhost:" + wireMock.port());
   }
 
   @TestConfiguration
@@ -90,6 +91,65 @@ class GatewayIntegrationTest extends RedisTestContainerBase {
   }
 
   @Autowired private WebTestClient webTestClient;
+
+  @Test
+  @Order(8)
+  void clockPollingHasABoundedBudgetIndependentOfAccountReads() {
+    wireMock.stubFor(
+        get(urlEqualTo("/market-simulation/status"))
+            .willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "application/json")
+                    .withBody("{}")));
+    wireMock.stubFor(
+        get(urlEqualTo("/accounts/me/balances"))
+            .willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "application/json")
+                    .withBody("[]")));
+    String token = generateToken(UUID.randomUUID(), "clock-viewer", List.of("TRADER"), 120000);
+    // One minute of the existing 500ms clock polling plus the terminal's 80 account reads.
+    for (int i = 0; i < 120; i++)
+      webTestClient
+          .get()
+          .uri("/market-simulation/status")
+          .headers(h -> h.setBearerAuth(token))
+          .exchange()
+          .expectStatus()
+          .isOk();
+    for (int i = 0; i < 80; i++)
+      webTestClient
+          .get()
+          .uri("/accounts/me/balances")
+          .headers(h -> h.setBearerAuth(token))
+          .exchange()
+          .expectStatus()
+          .isOk();
+    for (int i = 120; i < 300; i++)
+      webTestClient
+          .get()
+          .uri("/market-simulation/status")
+          .headers(h -> h.setBearerAuth(token))
+          .exchange()
+          .expectStatus()
+          .isOk();
+    webTestClient
+        .get()
+        .uri("/market-simulation/status")
+        .headers(h -> h.setBearerAuth(token))
+        .exchange()
+        .expectStatus()
+        .isEqualTo(429);
+    webTestClient
+        .get()
+        .uri("/accounts/me/balances")
+        .headers(h -> h.setBearerAuth(token))
+        .exchange()
+        .expectStatus()
+        .isOk();
+  }
 
   private String generateToken(
       UUID accountId, String username, List<String> roles, long ttlMillis) {

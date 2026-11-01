@@ -50,7 +50,12 @@ public class RateLimiterGlobalFilter implements GlobalFilter, Ordered {
     int windowSeconds = 60;
 
     if (userId != null && !userId.isBlank()) {
-      if (HttpMethod.POST.equals(method) && path.startsWith("/orders")) {
+      if (HttpMethod.GET.equals(method) && path.equals("/market-simulation/status")) {
+        // The shared clock polls twice per second. Keep it bounded without consuming
+        // the account/order-history budget, including when a trader opens two tabs.
+        key = "ratelimit:simulation-status:" + userId;
+        limit = 300;
+      } else if (HttpMethod.POST.equals(method) && path.startsWith("/orders")) {
         // Authenticated order placement: 20 req/min
         key = "ratelimit:order:" + userId;
         limit = 20;

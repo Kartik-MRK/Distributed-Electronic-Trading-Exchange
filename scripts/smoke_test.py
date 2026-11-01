@@ -42,13 +42,13 @@ def call(path, method='GET', data=None, token=None, expected=(200,), key=None, b
             return raw.decode()
 
 
-def eventually(check, label, timeout=40):
+def eventually(check, label, timeout=40, poll_interval=1):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         value = check()
         if value:
             return value
-        time.sleep(0.5)
+        time.sleep(poll_interval)
     raise RuntimeError('Timed out: ' + label)
 
 
@@ -124,7 +124,11 @@ def start_smoke_session(token):
         except HTTPStatusError as error:
             if error.status!=409: raise
             return None  # Another session or its worker still owns cleanup; retry after polling.
-    return eventually(attempt,'start or recover smoke session',timeout=720)
+    return eventually(attempt,'start or recover smoke session',timeout=720,poll_interval=2)
+
+
+def wait_for_session_completion(token):
+    return eventually(lambda:(c if (c:=call('/market-simulation/status',token=token))['status']=='COMPLETED' else None),'session finalization',timeout=150,poll_interval=2)
 
 
 def run_smoke_test():
@@ -152,7 +156,7 @@ def run_smoke_test():
         session_id=started['clock']['sessionId']
         before_buyer=balances(buyer_token);before_seller=balances(seller_token)
         def liquid_book():
-            book=call('/market-data/BTC_USD/orderbook')
+            book=call('/market-data/BTC_USD/orderbook',token=buyer_token)
             return book if book['bids'] and book['asks'] else None
         eventually(liquid_book,'two-sided bot liquidity')
         def place(side,token):
@@ -172,11 +176,11 @@ def run_smoke_test():
         sell_trades=eventually(lambda:executions(seller_token),'seller settlement')
         ids={t['tradeId'] for t in buy_trades+sell_trades}
         def tape_visible():
-            rows=call('/market-data/BTC_USD/trades?limit=500')
+            rows=call('/market-data/BTC_USD/trades?limit=500',token=buyer_token)
             if any(set(row)&{'buyAccountId','sellAccountId','buyOrderId','sellOrderId'} for row in rows): raise RuntimeError('Public tape exposes private identifiers')
             return ids.issubset({row['tradeId'] for row in rows})
         eventually(tape_visible,'settled trades on tape')
-        completed=eventually(lambda:(c if (c:=call('/market-simulation/status',token=buyer_token))['status']=='COMPLETED' else None),'session finalization',timeout=150)
+        completed=wait_for_session_completion(buyer_token)
         if completed['sessionId']!=session_id: raise RuntimeError('Unexpected session replaced smoke session')
         verify_execution_delta(before_buyer,balances(buyer_token),buy_trades,'BUY')
         verify_execution_delta(before_seller,balances(seller_token),sell_trades,'SELL')
