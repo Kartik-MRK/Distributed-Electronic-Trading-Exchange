@@ -37,12 +37,12 @@ export function OpenOrdersTable({
   if (openOrders.length === 0) {
     return (
       <div
+        className="open-orders-empty"
         style={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          height: '100%',
           color: 'var(--text-muted)',
           fontSize: '0.8rem',
           gap: 6,
@@ -55,7 +55,7 @@ export function OpenOrdersTable({
   }
 
   return (
-    <div style={{ height: '100%', overflow: 'auto' }}>
+    <div className="open-orders-scroll">
       <table
         className="data-table"
         style={{

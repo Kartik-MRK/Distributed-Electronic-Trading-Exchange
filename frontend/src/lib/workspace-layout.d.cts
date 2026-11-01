@@ -37,6 +37,7 @@ export interface LayoutStorage {
 }
 
 export const DEFAULT_PANEL_LAYOUT: Readonly<PanelLayout>;
+export const MIN_PANEL_HEIGHTS: Readonly<Record<PanelId, number>>;
 export const DEFAULT_COLUMN_LAYOUT: Readonly<ColumnLayout>;
 export const COLUMN_LIMITS: Readonly<Record<ColumnId, { min: number; max: number }>>;
 export const PANEL_LIMITS: Readonly<

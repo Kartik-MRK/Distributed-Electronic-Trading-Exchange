@@ -33,7 +33,7 @@ export function MarketSimulationControl() {
   return (
     <section className="panel simulation-control" aria-label="Market simulation controls">
       <div className="panel-heading">
-        <div><span className="eyebrow">Shared across all traders</span><h2>Simulate market</h2></div>
+        <div><h2>Simulate market</h2></div>
         <span className="badge" role="status">{label}</span>
       </div>
       <div className="content-pad simulation-control-body">

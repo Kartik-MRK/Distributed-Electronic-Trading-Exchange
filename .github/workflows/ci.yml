@@ -48,6 +48,12 @@ jobs:
           npm run lint
           npm run build
 
+      - name: Dashboard browser layout regression tests
+        working-directory: ./frontend
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:layout
+
       - name: Set up Helm
         uses: azure/setup-helm@v4
         with:

@@ -414,6 +414,11 @@ h2 {
   min-width: 0;
   min-height: 0;
 }
+.workspace-left-stack,
+.workspace-right-group,
+.workspace-controls-stack {
+  display: contents;
+}
 .chart-region {
   grid-area: chart;
   min-width: 0;
@@ -435,6 +440,8 @@ h2 {
   min-height: 0;
 }
 .simulation-control {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -454,6 +461,12 @@ h2 {
 }
 .simulation-control-body {
   display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  grid-auto-rows: max-content;
+  align-content: start;
   gap: 8px;
   padding: 10px 12px 12px;
   min-width: 0;
@@ -471,6 +484,11 @@ h2 {
 }
 .simulation-control .button {
   min-width: 0;
+  min-height: 40px;
+  height: auto;
+  flex-shrink: 0;
+  line-height: 1.4;
+  padding: 10px 12px;
   white-space: normal;
 }
 .simulation-session-info {
@@ -486,6 +504,27 @@ h2 {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+.activity-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.activity-body > * {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.open-orders-scroll,
+.open-orders-empty {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.open-orders-empty {
+  padding: 12px;
+  text-align: center;
 }
 .balance-region {
   grid-area: balances;
@@ -560,6 +599,7 @@ h2 {
   background: transparent;
 }
 .workspace-footer {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
@@ -1277,11 +1317,45 @@ h2 {
       minmax(0, var(--workspace-left, 6fr))
       minmax(0, var(--workspace-middle, 3fr))
       minmax(0, var(--workspace-right, 3fr));
-    grid-template-rows: none;
+    grid-template-rows: minmax(0, 1fr);
     grid-template-areas: none;
-    grid-auto-rows: 100px;
-    grid-auto-flow: row;
-    align-content: start;
+  }
+  .workspace-left-stack,
+  .workspace-controls-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    min-width: 0;
+  }
+  .workspace-left-stack {
+    grid-column: 1;
+  }
+  .workspace-right-group {
+    display: grid;
+    grid-column: 2 / span 2;
+    grid-template-columns: subgrid;
+    grid-template-rows: minmax(0, 1fr);
+    gap: 12px;
+    min-height: 0;
+    min-width: 0;
+  }
+  .terminal-body--resizable .workspace-panel {
+    grid-area: auto;
+    min-height: var(--panel-min-height);
+  }
+  .workspace-left-stack .chart-region {
+    flex: 0 0 min(var(--panel-height), calc(100% - 112px));
+  }
+  .workspace-left-stack .activity-region {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .workspace-controls-stack > .workspace-panel {
+    flex: 0 1 var(--panel-height);
+  }
+  .workspace-controls-stack > .balance-region {
+    flex-grow: 1;
   }
 }
 @media (min-width: 1181px) and (max-height: 819px) {
@@ -1320,6 +1394,18 @@ h2 {
   .terminal-body--resizable .chart-region,
   .terminal-body--resizable .activity-region {
     grid-column: span 2 !important;
+  }
+  .terminal-body--resizable .activity-region {
+    order: 4;
+  }
+  .chart-region {
+    height: 420px;
+  }
+  .activity-region {
+    height: 300px;
+  }
+  .depth-region {
+    height: 450px;
   }
   .terminal-body--resizable .workspace-resize-controls {
     display: none;

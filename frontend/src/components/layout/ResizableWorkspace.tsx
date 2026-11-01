@@ -12,13 +12,13 @@ import {
 import {
   DEFAULT_COLUMN_LAYOUT,
   DEFAULT_PANEL_LAYOUT,
+  MIN_PANEL_HEIGHTS,
   getResizeDeltas,
   normalizeColumnLayout,
   normalizePanelLayout,
   readColumnLayout,
   readPanelLayout,
   resizeColumnBoundary,
-  resizePanelLayout,
   saveColumnLayout,
   savePanelLayout,
   type ColumnId,
@@ -51,14 +51,21 @@ interface DragState {
   rowStep: number;
   initialLayout: PanelLayout;
   initialColumns: ColumnLayout;
+  heights: Record<PanelId, number>;
 }
 
 const DESKTOP_BREAKPOINT = 1181;
 const ROW_UNIT = 100;
+const ROW_GAP = 12;
+// The outer bottom edges are fixed. Height handles move only internal dividers.
+const HEIGHT_NEIGHBORS: Partial<Record<PanelId, PanelId>> = {
+  chart: 'activity', simulation: 'orderEntry', orderEntry: 'balances',
+};
+const MIN_HEIGHTS = MIN_PANEL_HEIGHTS;
 const PANEL_BOUNDARIES: Partial<Record<PanelId, ColumnBoundary>> = {
   chart: { leftId: 'left', rightId: 'middle' },
   book: { leftId: 'middle', rightId: 'right' },
-  activity: { leftId: 'middle', rightId: 'right' },
+  activity: { leftId: 'left', rightId: 'middle' },
 };
 
 export function ResizableWorkspace({
@@ -116,6 +123,7 @@ export function ResizableWorkspace({
       rowStep: ROW_UNIT + rowGap,
       initialLayout: layoutRef.current,
       initialColumns: columnsRef.current,
+      heights: measureHeights(grid),
     };
   }
 
@@ -137,6 +145,7 @@ export function ResizableWorkspace({
       drag.id,
       drag.boundary,
       deltas,
+      drag.heights,
     );
     layoutRef.current = next.layout;
     columnsRef.current = next.columns;
@@ -172,8 +181,8 @@ export function ResizableWorkspace({
     const deltas = { columns: 0, rows: 0 };
     if (axis !== 'height' && event.key === 'ArrowRight') deltas.columns = 0.25;
     if (axis !== 'height' && event.key === 'ArrowLeft') deltas.columns = -0.25;
-    if (axis !== 'width' && event.key === 'ArrowDown') deltas.rows = 1;
-    if (axis !== 'width' && event.key === 'ArrowUp') deltas.rows = -1;
+    if (axis !== 'width' && event.key === 'ArrowDown') deltas.rows = 8 / (ROW_UNIT + ROW_GAP);
+    if (axis !== 'width' && event.key === 'ArrowUp') deltas.rows = -8 / (ROW_UNIT + ROW_GAP);
     if (deltas.columns === 0 && deltas.rows === 0) return;
 
     event.preventDefault();
@@ -183,6 +192,7 @@ export function ResizableWorkspace({
       id,
       axis === 'height' ? null : PANEL_BOUNDARIES[id] ?? null,
       deltas,
+      measureHeights(gridRef.current),
     );
     layoutRef.current = next.layout;
     columnsRef.current = next.columns;
@@ -193,7 +203,29 @@ export function ResizableWorkspace({
     saveColumnLayout(storage, next.columns);
   }
 
-  const activityStartRow = getActivityStartRow(layout);
+  function renderPanel(id: PanelId) {
+    const panel = panels.find((candidate) => candidate.id === id);
+    if (!panel) return null;
+    const boundary = PANEL_BOUNDARIES[id];
+    const heightResizable = Boolean(HEIGHT_NEIGHBORS[id]);
+    const edges: ResizeAxis[] = [
+      ...(boundary ? ['width' as const] : []),
+      ...(heightResizable ? ['height' as const] : []),
+      ...(boundary && heightResizable ? ['both' as const] : []),
+    ];
+    return (
+      <section key={id} data-panel-id={id}
+        className={`workspace-panel ${panel.className}`} aria-label={panel.label}
+        style={{ '--panel-height': `${panelHeight(layout, id)}px`, '--panel-min-height': `${MIN_HEIGHTS[id]}px` } as CSSProperties}>
+        {panel.content}
+        <div className="workspace-resize-controls">
+          {edges.map((edge) => <ResizeGrip key={edge} id={id} label={panel.label} edge={edge}
+            onPointerDown={beginResize} onPointerMove={moveResize} onPointerUp={finishResize}
+            onPointerCancel={cancelResize} onKeyDown={resizeFromKeyboard} />)}
+        </div>
+      </section>
+    );
+  }
   return (
     <main
       id="workspace"
@@ -208,57 +240,18 @@ export function ResizableWorkspace({
         } as CSSProperties
       }
     >
-      {panels.map((panel) => {
-        const boundary = PANEL_BOUNDARIES[panel.id];
-        const placement = getPanelGridPlacement(panel.id, layout, activityStartRow);
-        return (
-          <section
-            key={panel.id}
-            data-panel-id={panel.id}
-            className={`workspace-panel ${panel.className}`}
-            aria-label={panel.label}
-            style={placement}
-          >
-            {panel.content}
-            <div className="workspace-resize-controls">
-              {boundary && (
-                <ResizeGrip
-                  id={panel.id}
-                  label={panel.label}
-                  edge="width"
-                  onPointerDown={beginResize}
-                  onPointerMove={moveResize}
-                  onPointerUp={finishResize}
-                  onPointerCancel={cancelResize}
-                  onKeyDown={resizeFromKeyboard}
-                />
-              )}
-              <ResizeGrip
-                id={panel.id}
-                label={panel.label}
-                edge="height"
-                onPointerDown={beginResize}
-                onPointerMove={moveResize}
-                onPointerUp={finishResize}
-                onPointerCancel={cancelResize}
-                onKeyDown={resizeFromKeyboard}
-              />
-              {boundary && (
-                <ResizeGrip
-                  id={panel.id}
-                  label={panel.label}
-                  edge="both"
-                  onPointerDown={beginResize}
-                  onPointerMove={moveResize}
-                  onPointerUp={finishResize}
-                  onPointerCancel={cancelResize}
-                  onKeyDown={resizeFromKeyboard}
-                />
-              )}
-            </div>
-          </section>
-        );
-      })}
+      <div className="workspace-left-stack">
+        {renderPanel('chart')}
+        {renderPanel('activity')}
+      </div>
+      <div className="workspace-right-group">
+        {renderPanel('book')}
+        <div className="workspace-controls-stack">
+          {renderPanel('simulation')}
+          {renderPanel('orderEntry')}
+          {renderPanel('balances')}
+        </div>
+      </div>
     </main>
   );
 }
@@ -277,11 +270,22 @@ function applyResize(
   id: PanelId,
   boundary: ColumnBoundary | null,
   deltas: { columns: number; rows: number },
+  heights: Record<PanelId, number>,
 ): { layout: PanelLayout; columns: ColumnLayout } {
-  const nextLayout =
-    deltas.rows === 0
-      ? layout
-      : (resizePanelLayout(layout, id, { rows: deltas.rows }) as PanelLayout);
+  let nextLayout = layout;
+  const neighbor = HEIGHT_NEIGHBORS[id];
+  if (neighbor && deltas.rows !== 0) {
+    const pixels = Math.max(MIN_HEIGHTS[id] - heights[id],
+      Math.min(deltas.rows * (ROW_UNIT + ROW_GAP), heights[neighbor] - MIN_HEIGHTS[neighbor]));
+    // Start from rendered sizes, including any flex shrink after a window resize.
+    // Holding the pair total constant makes the divider follow the pointer exactly.
+    nextLayout = { ...layout };
+    const stack: PanelId[] = id === 'chart' ? ['chart', 'activity'] : ['simulation', 'orderEntry', 'balances'];
+    for (const panelId of stack) {
+      const height = heights[panelId] + (panelId === id ? pixels : panelId === neighbor ? -pixels : 0);
+      nextLayout[panelId] = { ...layout[panelId], rows: (height + ROW_GAP) / (ROW_UNIT + ROW_GAP) };
+    }
+  }
   const nextColumns =
     boundary && deltas.columns !== 0
       ? (resizeColumnBoundary(
@@ -295,44 +299,16 @@ function applyResize(
   return { layout: nextLayout, columns: nextColumns };
 }
 
-function getActivityStartRow(layout: PanelLayout): number {
-  return (
-    Math.max(
-      layout.chart.rows,
-      layout.book.rows,
-      layout.simulation.rows + layout.orderEntry.rows,
-    ) + 1
-  );
+function panelHeight(layout: PanelLayout, id: PanelId): number {
+  return layout[id].rows * (ROW_UNIT + ROW_GAP) - ROW_GAP;
 }
 
-function getPanelGridPlacement(
-  id: PanelId,
-  layout: PanelLayout,
-  activityStartRow: number,
-): CSSProperties {
-  if (id === 'activity') {
-    return {
-      gridColumn: '1 / span 2',
-      gridRow: `${activityStartRow} / span ${layout.activity.rows}`,
-    };
-  }
-
-  const gridColumns: Record<Exclude<PanelId, 'activity'>, string> = {
-    chart: '1',
-    book: '2',
-    simulation: '3',
-    orderEntry: '3',
-    balances: '3',
-  };
-  const gridRows: Record<Exclude<PanelId, 'activity'>, string> = {
-    chart: `1 / span ${layout.chart.rows}`,
-    book: `1 / span ${layout.book.rows}`,
-    simulation: `1 / span ${layout.simulation.rows}`,
-    orderEntry: `${layout.simulation.rows + 1} / span ${layout.orderEntry.rows}`,
-    balances: `${activityStartRow} / span ${layout.balances.rows}`,
-  };
-
-  return { gridColumn: gridColumns[id], gridRow: gridRows[id] };
+function measureHeights(grid: HTMLElement | null): Record<PanelId, number> {
+  const heights = { ...MIN_HEIGHTS };
+  grid?.querySelectorAll<HTMLElement>('[data-panel-id]').forEach((panel) => {
+    heights[panel.dataset.panelId as PanelId] = panel.getBoundingClientRect().height;
+  });
+  return heights;
 }
 
 function applyGridLayout(
@@ -344,15 +320,12 @@ function applyGridLayout(
   grid.style.setProperty('--workspace-left', `${columns.left}fr`);
   grid.style.setProperty('--workspace-middle', `${columns.middle}fr`);
   grid.style.setProperty('--workspace-right', `${columns.right}fr`);
-  const activityStartRow = getActivityStartRow(layout);
   for (const panel of Array.from(
     grid.querySelectorAll<HTMLElement>('[data-panel-id]'),
   )) {
     const id = panel.dataset.panelId as PanelId | undefined;
     if (!id) continue;
-    const placement = getPanelGridPlacement(id, layout, activityStartRow);
-    panel.style.gridColumn = placement.gridColumn as string;
-    panel.style.gridRow = placement.gridRow as string;
+    panel.style.setProperty('--panel-height', `${panelHeight(layout, id)}px`);
   }
 }
 

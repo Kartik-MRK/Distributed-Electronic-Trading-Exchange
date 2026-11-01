@@ -61,20 +61,20 @@ test('clamps spans to each panel minimum and maximum', () => {
   const layout = normalizePanelLayout({
     ...DEFAULT_PANEL_LAYOUT,
     chart: { columns: 99, rows: 0 },
-    balances: { columns: -4, rows: 99 },
+    balances: { columns: -4, rows: 999 },
   });
 
-  assert.deepEqual(layout.chart, { columns: 12, rows: 3 });
-  assert.deepEqual(layout.balances, { columns: 3, rows: 6 });
+  assert.deepEqual(layout.chart, { columns: 12, rows: 172 / 112 });
+  assert.deepEqual(layout.balances, { columns: 3, rows: 100 });
 });
 
-test('keeps the simulation controls tall enough for their content', () => {
+test('keeps a readable simulation panel minimum while allowing internal scrolling', () => {
   const layout = normalizePanelLayout({
     ...DEFAULT_PANEL_LAYOUT,
     simulation: { columns: 3, rows: 1 },
   });
 
-  assert.equal(layout.simulation.rows, 2);
+  assert.equal(layout.simulation.rows * 112 - 12, 140);
 });
 
 test('converts pointer movement into width, height, and corner grid deltas', () => {
@@ -94,13 +94,13 @@ test('converts pointer movement into width, height, and corner grid deltas', () 
 
 test('applies resize deltas without crossing per-panel span limits', () => {
   assert.deepEqual(
-    resizePanelLayout(DEFAULT_PANEL_LAYOUT, 'chart', { columns: 20, rows: 20 }).chart,
-    { columns: 12, rows: 8 },
+    resizePanelLayout(DEFAULT_PANEL_LAYOUT, 'chart', { columns: 20, rows: 200 }).chart,
+    { columns: 12, rows: 100 },
   );
   assert.deepEqual(
     resizePanelLayout(DEFAULT_PANEL_LAYOUT, 'balances', { columns: -20, rows: -20 })
       .balances,
-    { columns: 3, rows: 2 },
+    { columns: 3, rows: 92 / 112 },
   );
 });
 
@@ -144,8 +144,21 @@ test('preserves sub-track pointer movement for smooth width resizing', () => {
       columnStep: 100,
       rowStep: 112,
     }),
-    { columns: 0.01, rows: 1 },
+    { columns: 0.01, rows: 0.5 },
   );
+});
+
+test('preserves pixel-sized height changes through resize and storage', () => {
+  const delta = getResizeDeltas('height', {
+    startX: 0, startY: 0, currentX: 0, currentY: 1,
+    columnStep: 100, rowStep: 112,
+  });
+  const next = resizePanelLayout(DEFAULT_PANEL_LAYOUT, 'chart', delta);
+  assert.ok(Math.abs((next.chart.rows - 4) * 112 - 1) < 0.01);
+  let saved;
+  const storage = { setItem: (_key, value) => { saved = value; }, getItem: () => saved };
+  savePanelLayout(storage, next);
+  assert.equal(readPanelLayout(storage).chart.rows, next.chart.rows);
 });
 
 test('transfers fractional width between shared columns without changing total width', () => {

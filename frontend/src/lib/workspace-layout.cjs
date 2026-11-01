@@ -22,14 +22,16 @@ const DEFAULT_PANEL_LAYOUT = Object.freeze({
   balances: Object.freeze({ columns: 3, rows: 2 }),
 });
 
-const PANEL_LIMITS = Object.freeze({
-  chart: Object.freeze({ minColumns: 5, maxColumns: 12, minRows: 3, maxRows: 8 }),
-  book: Object.freeze({ minColumns: 2, maxColumns: 6, minRows: 2, maxRows: 6 }),
-  simulation: Object.freeze({ minColumns: 3, maxColumns: 6, minRows: 2, maxRows: 3 }),
-  orderEntry: Object.freeze({ minColumns: 3, maxColumns: 6, minRows: 2, maxRows: 6 }),
-  activity: Object.freeze({ minColumns: 6, maxColumns: 12, minRows: 2, maxRows: 6 }),
-  balances: Object.freeze({ minColumns: 3, maxColumns: 6, minRows: 2, maxRows: 6 }),
+const MIN_PANEL_HEIGHTS = Object.freeze({
+  chart: 160, activity: 100, book: 100, simulation: 140, orderEntry: 120, balances: 80,
 });
+const PANEL_LIMITS = Object.freeze(Object.fromEntries(
+  Object.entries({ chart: [5, 12], book: [2, 6], simulation: [3, 6],
+    orderEntry: [3, 6], activity: [6, 12], balances: [3, 6] })
+    .map(([id, [minColumns, maxColumns]]) => [id, Object.freeze({
+      minColumns, maxColumns, minRows: (MIN_PANEL_HEIGHTS[id] + 12) / 112, maxRows: 100,
+    })]),
+));
 
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -39,9 +41,9 @@ function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, Math.round(value)));
 }
 
-function normalizeDimension(value, fallback, minimum, maximum) {
+function normalizeDimension(value, fallback, minimum, maximum, round = true) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
-  return clamp(value, minimum, maximum);
+  return round ? clamp(value, minimum, maximum) : Math.max(minimum, Math.min(maximum, value));
 }
 
 function normalizePanelLayout(value) {
@@ -63,6 +65,7 @@ function normalizePanelLayout(value) {
         defaults.rows,
         limits.minRows,
         limits.maxRows,
+        false,
       ),
     };
   }
@@ -216,7 +219,7 @@ function getResizeDeltas(axis, drag) {
   const columnSteps = Number(
     ((drag.currentX - drag.startX) / drag.columnStep).toFixed(3),
   );
-  const rowSteps = Math.round((drag.currentY - drag.startY) / drag.rowStep);
+  const rowSteps = (drag.currentY - drag.startY) / drag.rowStep;
 
   return {
     columns: axis === 'width' || axis === 'both' ? columnSteps : 0,
@@ -262,6 +265,7 @@ module.exports = {
   DEFAULT_COLUMN_LAYOUT,
   DEFAULT_PANEL_LAYOUT,
   PANEL_LIMITS,
+  MIN_PANEL_HEIGHTS,
   getResizeDeltas,
   normalizeColumnLayout,
   normalizePanelLayout,
