@@ -27,7 +27,11 @@ jobs:
             echo " Running DETE Performance Benchmark & Regression Check"
             echo "=========================================================="
 
-            python3 /home/ubuntu/dete/scripts/run_benchmarks.py
+            SHA="$(cat /home/ubuntu/.local/state/dete/deployed-sha)"
+            echo "$SHA" | grep -Eq '^[0-9a-f]{40}$'
+            RELEASE="/home/ubuntu/dete-releases/$SHA"
+            test "$(git -C "$RELEASE" rev-parse HEAD)" = "$SHA"
+            python3 "$RELEASE/scripts/run_benchmarks.py"
 
       - name: Benchmark Completion Notification
         if: always()

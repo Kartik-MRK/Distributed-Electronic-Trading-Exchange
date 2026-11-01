@@ -63,6 +63,7 @@ jobs:
           python3 -m unittest discover -s scripts -p 'test_smoke_test.py'
           python3 -m unittest discover -s scripts -p 'test_simulation_validation.py'
           python3 -m unittest discover -s scripts -p 'test_reset_demo_market.py'
+          python3 -m unittest discover -s scripts -p 'test_benchmarks.py'
 
   test-and-compile:
     name: Compile & Test Suite

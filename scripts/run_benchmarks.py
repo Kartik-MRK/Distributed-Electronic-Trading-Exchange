@@ -92,6 +92,17 @@ def run_benchmark(pairs=10):
     token = login["data"]["accessToken"]
     user_id = login["data"]["userId"]
 
+    def clock():
+        status = http_call(f"{GATEWAY_URL}/market-simulation/status", headers={"Authorization": f"Bearer {token}"})
+        if status['status'] != 200:
+            raise RuntimeError('Cannot verify simulation authority for benchmark')
+        return status['data']['clock']
+
+    initial = clock()
+    if not initial['tradingAllowed'] or initial['remainingMs'] < 30000:
+        return {'skipped': 'Market is paused or too close to its deadline; no benchmark session was started'}
+    session_id = initial['sessionId']
+
     # 2. Login bot maker
     bot_login = http_call(f"{GATEWAY_URL}/auth/login", method="POST", data={"identifier": "bot_maker", "password": "BotMakerPass123!"})
     if bot_login["status"] != 200:
@@ -109,7 +120,15 @@ def run_benchmark(pairs=10):
 
     print(f"\nSubmitting {pairs} paired Maker/Taker orders ({total_orders} total requests)...")
     for i in range(1, pairs + 1):
-        price = 64900.0 + (i * 10.0)
+        current = clock()
+        if not current['tradingAllowed'] or current['sessionId'] != session_id:
+            return {'skipped': 'Simulation ended during benchmark; incomplete measurements discarded'}
+        quote = http_call(f"{GATEWAY_URL}/market-data/BTC_USD/price", headers={"Authorization": f"Bearer {token}"})
+        if quote['status'] != 200:
+            return None
+        price = quote['data']['lastTradedPrice']
+        if price <= 0:
+            return {'skipped': 'No traded price available in this simulation yet'}
         qty = 0.005
 
         # BUY order
@@ -117,7 +136,8 @@ def run_benchmark(pairs=10):
             "instrument": "BTC_USD",
             "side": "BUY",
             "orderType": "LIMIT",
-            "price": int(price * SCALE),
+            "price": price,
+            "sessionId": session_id,
             "quantity": int(qty * SCALE)
         }
         headers_buy = {
@@ -126,6 +146,8 @@ def run_benchmark(pairs=10):
             "X-User-Id": str(user_id)
         }
         res_buy = http_call(f"{GATEWAY_URL}/orders", method="POST", data=buy_data, headers=headers_buy)
+        if res_buy['status'] == 409 and res_buy.get('data', {}).get('code') == 'SIMULATION_NOT_ACTIVE':
+            return {'skipped': 'Simulation ended during benchmark; incomplete measurements discarded'}
         if res_buy["status"] in (200, 201, 202):
             latencies.append(res_buy["elapsed_ms"])
             successes += 1
@@ -135,7 +157,8 @@ def run_benchmark(pairs=10):
             "instrument": "BTC_USD",
             "side": "SELL",
             "orderType": "LIMIT",
-            "price": int(price * SCALE),
+            "price": price,
+            "sessionId": session_id,
             "quantity": int(qty * SCALE)
         }
         headers_sell = {
@@ -144,6 +167,8 @@ def run_benchmark(pairs=10):
             "X-User-Id": str(bot_id)
         }
         res_sell = http_call(f"{GATEWAY_URL}/orders", method="POST", data=sell_data, headers=headers_sell)
+        if res_sell['status'] == 409 and res_sell.get('data', {}).get('code') == 'SIMULATION_NOT_ACTIVE':
+            return {'skipped': 'Simulation ended during benchmark; incomplete measurements discarded'}
         if res_sell["status"] in (200, 201, 202):
             latencies.append(res_sell["elapsed_ms"])
             successes += 1
@@ -175,6 +200,9 @@ def run_benchmark(pairs=10):
     }
 
 def evaluate_regression(current, baseline):
+    if current['success_rate_pct'] < 99.0:
+        print('[FAIL] Benchmark order acceptance rate is below 99%; latency alone cannot pass')
+        return False
     base_m = baseline.get("baseline_metrics", {})
     sla = baseline.get("sla_thresholds", {})
     max_reg_pct = sla.get("max_allowed_regression_pct", 20.0)
@@ -230,6 +258,9 @@ def main():
     current = run_benchmark(pairs=10)
     if not current:
         sys.exit(1)
+    if 'skipped' in current:
+        print('[SKIP] ' + current['skipped'])
+        return
     passed = evaluate_regression(current, baseline)
     sys.exit(0 if passed else 1)
 
