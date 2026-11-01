@@ -68,6 +68,47 @@ class RiskIntegrationTest extends com.dete.common.test.FullStackTestBase {
   @Autowired private ObjectMapper objectMapper;
 
   @Test
+  void restoredMarketCloseOverridesRestartDefaultsAndStaleTradeCache() {
+    long close = 70_000L * FixedPoint.SCALE;
+    var epoch = control.snapshot().epochId();
+    simulationJdbc.update(
+        "INSERT INTO simulator.market_resume_price(epoch_id,instrument,price,sequence_number) VALUES (?,'BTC_USD',?,100) ON CONFLICT(epoch_id,instrument) DO UPDATE SET price=excluded.price,sequence_number=excluded.sequence_number",
+        epoch,
+        close);
+    try {
+      riskRuleEvaluator.updateLastTradePrice(Instrument.BTC_USD, 60_000L * FixedPoint.SCALE);
+      assertThat(riskRuleEvaluator.getLastTradePrice(Instrument.BTC_USD)).isEqualTo(close);
+      var nearClose =
+          admit(
+              new ValidateOrderRequest(
+                  UUID.randomUUID(),
+                  UUID.randomUUID(),
+                  Instrument.BTC_USD,
+                  OrderSide.BUY,
+                  OrderType.LIMIT,
+                  close,
+                  10000));
+      assertThat(riskRuleEvaluator.evaluate(nearClose).approved()).isTrue();
+      var outsideBand =
+          admit(
+              new ValidateOrderRequest(
+                  UUID.randomUUID(),
+                  UUID.randomUUID(),
+                  Instrument.BTC_USD,
+                  OrderSide.BUY,
+                  OrderType.LIMIT,
+                  80_000L * FixedPoint.SCALE,
+                  10000));
+      assertThat(riskRuleEvaluator.evaluate(outsideBand).approved()).isFalse();
+    } finally {
+      simulationJdbc.update(
+          "DELETE FROM simulator.market_resume_price WHERE epoch_id=? AND instrument='BTC_USD'",
+          epoch);
+      riskRuleEvaluator.updateLastTradePrice(Instrument.BTC_USD, 60_000L * FixedPoint.SCALE);
+    }
+  }
+
+  @Test
   @DisplayName("gRPC ValidateOrder RPC over live Netty channel validates orders correctly")
   void testGrpcValidateOrderLiveCall() throws InterruptedException {
     int grpcPort = riskGrpcServer.getPort();

@@ -24,6 +24,9 @@ public class RiskRuleEvaluator {
   @org.springframework.beans.factory.annotation.Autowired
   private com.dete.simulation.control.SimulationControlRepository simulationControl;
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
   private final RiskProperties properties;
 
   // Real-time last traded price per instrument (scaled fixed-point)
@@ -76,6 +79,7 @@ public class RiskRuleEvaluator {
     if (instrument == null) {
       return ValidateOrderResponse.reject("Instrument is required");
     }
+    long referencePrice = getLastTradePrice(instrument);
 
     long qty = request.quantity();
     if (qty <= 0) {
@@ -104,7 +108,7 @@ public class RiskRuleEvaluator {
     if (price != null && price > 0) {
       effectivePrice = price;
     } else {
-      effectivePrice = lastTradePrices.getOrDefault(instrument, 0L);
+      effectivePrice = referencePrice;
     }
 
     if (effectivePrice > 0) {
@@ -143,7 +147,7 @@ public class RiskRuleEvaluator {
         return ValidateOrderResponse.reject("Price must be strictly positive for limit orders");
       }
 
-      long lastPrice = lastTradePrices.getOrDefault(instrument, 0L);
+      long lastPrice = referencePrice;
       if (lastPrice > 0) {
         double maxDev = properties.getMaxPriceDeviationPct();
         long maxAllowedPrice = Math.round(lastPrice * (1.0 + maxDev));
@@ -169,7 +173,7 @@ public class RiskRuleEvaluator {
     // RULE 5: Market Order Guard
     // -------------------------------------------------------------
     if (request.orderType() == OrderType.MARKET) {
-      long lastPrice = lastTradePrices.getOrDefault(instrument, 0L);
+      long lastPrice = referencePrice;
       if (lastPrice <= 0) {
         return ValidateOrderResponse.reject(
             String.format(
@@ -227,6 +231,16 @@ public class RiskRuleEvaluator {
   }
 
   public long getLastTradePrice(Instrument instrument) {
+    // The durable projection survives risk restarts and ignores stale/reordered Kafka cache
+    // updates. It is shared with bot startup, keeping resumed quotes inside the same risk band.
+    if (jdbc != null && instrument != null) {
+      var prices =
+          jdbc.query(
+              "SELECT p.price FROM simulator.market_resume_price p JOIN simulator.market_clock c ON c.epoch_id=p.epoch_id WHERE c.singleton=true AND p.instrument=?",
+              (rs, n) -> rs.getLong(1),
+              instrument.name());
+      if (!prices.isEmpty()) return prices.getFirst();
+    }
     return lastTradePrices.getOrDefault(instrument, 0L);
   }
 

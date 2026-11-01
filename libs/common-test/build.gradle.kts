@@ -24,7 +24,9 @@ dependencies {
     api(libs.testcontainers.postgresql)
     api(libs.testcontainers.redis)
 
-    implementation(libs.spring.boot.starter.jdbc)
+    // Only JDBC-backed service tests call SimulationTestSupport. Do not add a datasource
+    // auto-configuration/pool to non-database consumers such as the reactive gateway.
+    compileOnly("org.springframework:spring-jdbc")
 
     // Spring test support
     api(libs.spring.boot.starter.test)

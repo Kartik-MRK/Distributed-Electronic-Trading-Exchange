@@ -14,6 +14,12 @@ SCALE = 100_000_000
 QUANTITY = 500_000
 
 
+class HTTPStatusError(RuntimeError):
+    def __init__(self, method, path, status, expected):
+        super().__init__(f'{method} {path}: HTTP {status}, expected {expected}')
+        self.status = status
+
+
 def call(path, method='GET', data=None, token=None, expected=(200,), key=None, base=BASE_URL):
     headers = {'Content-Type': 'application/json', 'User-Agent': 'DETE-Smoke/1.0'}
     if token:
@@ -29,7 +35,7 @@ def call(path, method='GET', data=None, token=None, expected=(200,), key=None, b
     with response:
         raw = response.read()
         if response.status not in expected:
-            raise RuntimeError(f'{method} {path}: HTTP {response.status}, expected {expected}')
+            raise HTTPStatusError(method, path, response.status, expected)
         try:
             return json.loads(raw) if raw else None
         except json.JSONDecodeError:
@@ -109,6 +115,18 @@ def verify_execution_delta(before,after,trades,side):
         available,reserved=before.get(asset,(0,0))
         if after.get(asset,(0,0))!=(available+delta,reserved): raise RuntimeError('Incorrect execution balance or reservation delta: '+asset)
 
+def start_smoke_session(token):
+    def attempt():
+        status=call('/market-simulation/status',token=token)['status']
+        if status not in ('IDLE','COMPLETED','FAILED','STOPPING'): return None
+        try:
+            return call('/market-simulation/start','POST',{'durationSeconds':60},token=token,expected=(202,))
+        except HTTPStatusError as error:
+            if error.status!=409: raise
+            return None  # Another session or its worker still owns cleanup; retry after polling.
+    return eventually(attempt,'start or recover smoke session',timeout=720)
+
+
 def run_smoke_test():
     created_orders=[]
     try:
@@ -130,8 +148,7 @@ def run_smoke_test():
             ip=subprocess.check_output(['kubectl','get','svc','account','-n',os.environ.get('DETE_NAMESPACE','dete'),'-o','jsonpath={.spec.clusterIP}'],text=True).strip()
             account_url='http://'+ip+':8082'
         call('/internal/accounts/deposit','POST',{'accountId':seller,'asset':'BTC','amount':SCALE,'referenceId':str(uuid.uuid4())},base=account_url)
-        eventually(lambda:call('/market-simulation/status',token=buyer_token)['status'] in ('IDLE','COMPLETED','FAILED'),'idle market before smoke session',timeout=720)
-        started=call('/market-simulation/start','POST',{'durationSeconds':60},token=buyer_token,expected=(202,))
+        started=start_smoke_session(buyer_token)
         session_id=started['clock']['sessionId']
         before_buyer=balances(buyer_token);before_seller=balances(seller_token)
         def liquid_book():

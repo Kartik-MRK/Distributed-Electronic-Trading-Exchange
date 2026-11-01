@@ -144,6 +144,73 @@ class SimulationControlIntegrationTest {
   }
 
   @Test
+  void reservationFenceIsHeldUntilTheAccountTransactionCommits() throws Exception {
+    var session = control.claim(UUID.randomUUID(), 60).snapshot();
+    control.activate(session.sessionId(), session.fence());
+    UUID order = UUID.randomUUID(), account = UUID.randomUUID();
+    control.recordOrderIntent(
+        order,
+        UUID.randomUUID(),
+        account,
+        "USD",
+        100,
+        "reservation",
+        control.requireActiveMutation());
+    var validated = new CountDownLatch(1);
+    var commit = new CountDownLatch(1);
+    var accountTx = new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource()));
+    try (var pool = Executors.newFixedThreadPool(2)) {
+      var reservation =
+          pool.submit(
+              () ->
+                  accountTx.execute(
+                      status -> {
+                        control.requireReservation(order, account, "USD", 100);
+                        validated.countDown();
+                        try {
+                          if (!commit.await(5, TimeUnit.SECONDS))
+                            throw new IllegalStateException("Test commit timed out");
+                        } catch (InterruptedException e) {
+                          throw new IllegalStateException(e);
+                        }
+                        return true;
+                      }));
+      try {
+        assertThat(validated.await(5, TimeUnit.SECONDS)).isTrue();
+        var cleanup =
+            pool.submit(
+                () ->
+                    control.locked(
+                        () ->
+                            jdbc.update(
+                                "UPDATE simulator.order_intent SET closed=true WHERE order_id=?",
+                                order)));
+        assertThatThrownBy(() -> cleanup.get(200, TimeUnit.MILLISECONDS))
+            .isInstanceOf(java.util.concurrent.TimeoutException.class);
+        commit.countDown();
+        assertThat(reservation.get(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(cleanup.get(5, TimeUnit.SECONDS)).isEqualTo(1);
+      } finally {
+        commit.countDown();
+      }
+    }
+  }
+
+  @Test
+  void expiredPreparationExposesRecoveryWithoutAdvancingMarketTime() {
+    var session = control.claim(UUID.randomUUID(), 60).snapshot();
+    jdbc.update(
+        "UPDATE simulator.simulation_session SET lease_until=clock_timestamp()-interval '1 second'");
+    var expired = control.snapshot();
+    assertThat(expired.status()).isEqualTo("STOPPING");
+    assertThat(expired.tradingAllowed()).isFalse();
+    assertThat(expired.elapsedMs()).isZero();
+    control.beginStopping(session.sessionId(), session.fence(), "RECOVERED_EXPIRED");
+    control.complete(session.sessionId(), session.fence());
+    assertThat(control.claim(UUID.randomUUID(), 60).started()).isTrue();
+  }
+
+  @Test
   void oldIntentCannotAdmitRiskInNewSession() {
     var first = control.claim(UUID.randomUUID(), 60).snapshot();
     control.activate(first.sessionId(), first.fence());

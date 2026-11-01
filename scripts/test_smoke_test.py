@@ -5,6 +5,23 @@ from smoke_test import new_account, select_price, verify_deltas, verify_simulato
 
 
 class SmokeAssertionsTest(unittest.TestCase):
+    @patch('smoke_test.time.sleep')
+    @patch('smoke_test.call')
+    def test_smoke_recovers_stopping_session_and_retries_busy_cleanup(self, request, sleep):
+        from smoke_test import start_smoke_session, HTTPStatusError
+        started={'status':'ACTIVE','clock':{'tradingAllowed':True,'sessionId':'new-session'}}
+        attempts=0
+        def endpoint(path,*args,**kwargs):
+            nonlocal attempts
+            if path.endswith('/status'):
+                if request.call_count>4: raise AssertionError('Waited instead of recovering expired session')
+                return {'status':'STOPPING'}
+            attempts+=1
+            if attempts==1: raise HTTPStatusError('POST',path,409,(202,))
+            return started
+        request.side_effect=endpoint
+        self.assertEqual(started,start_smoke_session('buyer-token'))
+
     @patch('smoke_test.call')
     def test_account_creation_recovers_when_registration_commits_before_503(self, request):
         request.side_effect = [

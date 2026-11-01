@@ -17,12 +17,15 @@ public class SimulationControlRepository {
   private static final long LOCK = 7_349_113_205L;
   private final JdbcTemplate jdbc;
   private final TransactionTemplate tx;
+  private final TransactionTemplate reservationTx;
 
   public SimulationControlRepository(JdbcTemplate jdbc, TransactionTemplate template) {
     this.jdbc = jdbc;
     this.tx = new TransactionTemplate(template.getTransactionManager());
     this.tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     this.tx.setTimeout(5);
+    this.reservationTx = new TransactionTemplate(template.getTransactionManager());
+    this.reservationTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_MANDATORY);
   }
 
   public <T> T locked(Supplier<T> action) {
@@ -67,6 +70,8 @@ public class SimulationControlRepository {
                       && lease != null
                       && now.isBefore(lease);
               if (active && !trading) state = "STOPPING";
+              if (state.equals("STARTING") && (lease == null || !now.isBefore(lease)))
+                state = "STOPPING";
               if (rs.getBoolean("maintenance")) state = "MAINTENANCE";
               return new MarketClockSnapshot(
                   rs.getObject("epoch_id", UUID.class),
@@ -448,8 +453,11 @@ public class SimulationControlRepository {
   }
 
   public void requireReservation(UUID orderId, UUID accountId, String asset, long amount) {
-    locked(
-        () -> {
+    // Hold the fence through the caller's balance/reservation/outbox commit. An independent
+    // admission transaction would let compensation finish before a delayed reservation exists.
+    reservationTx.executeWithoutResult(
+        status -> {
+          jdbc.execute("SELECT pg_advisory_xact_lock(" + LOCK + ")");
           var s = snapshotLocked();
           Integer valid =
               jdbc.queryForObject(
@@ -464,7 +472,6 @@ public class SimulationControlRepository {
                   s.fence());
           if (!s.tradingAllowed() || valid == null || valid != 1)
             throw new SimulationClosedException("Reservation requires a current order intent");
-          return null;
         });
   }
 
