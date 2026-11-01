@@ -1,7 +1,20 @@
 import unittest
+import tempfile
+from pathlib import Path
 from reset_demo_market import validate_manifest, reset_sql, MANIFEST
 
 class ResetGuards(unittest.TestCase):
+    def test_backup_rejects_shadowed_zookeeper_storage_before_stopping_writers(self):
+        from reset_demo_market import Operator
+        class LegacyStorage(Operator):
+            def json(self,*args):
+                return {'spec':{'template':{'spec':{'containers':[{'name':'zookeeper','volumeMounts':[{'name':'zookeeper-data','mountPath':'/var/lib/zookeeper'}]}],'volumes':[{'name':'zookeeper-data','persistentVolumeClaim':{'claimName':'zookeeper-data'}}]}}}}
+            def save(self,*args): pass
+            def k(self,*args,**kwargs): raise AssertionError('Reached cluster mutation before rejecting ephemeral storage')
+        with tempfile.TemporaryDirectory() as directory:
+            op=LegacyStorage('dete',Path(directory)/'backup')
+            with self.assertRaisesRegex(ValueError,'ZooKeeper'): op.backup_all()
+
     def test_manifest_cannot_reset_auth_or_broker_internals(self):
         validate_manifest(MANIFEST)
         for key,item in [('tables','auth.users'),('topics','__consumer_offsets'),('cache_prefixes','')]:

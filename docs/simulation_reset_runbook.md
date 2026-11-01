@@ -22,6 +22,8 @@ Run `python3 scripts/reset_demo_market.py --namespace dete --backup /home/ubuntu
 
 This stops all nine application writers, waits for their pods to disappear, dumps PostgreSQL, records row counts/identity digest and Kafka offsets, stops Kafka and ZooKeeper to archive their verified namespace-owned volumes, snapshots Redis, exports current application images, restarts only Kafka/ZooKeeper, and seals SHA-256 checksums. Application writers remain stopped. A failure leaves maintenance in place for inspection; never proceed with an incomplete backup.
 
+The backup preflight requires explicit PVC subPath mounts at both `/var/lib/zookeeper/data` and `/var/lib/zookeeper/log`. Mounting only their parent is unsafe: the image declares child volumes that can shadow the persistent mount. Do not restart a legacy ZooKeeper pod until its actual child-volume data has been captured. The restore rehearsal also mounts both child directories explicitly. Any rollback must retain this persistence fix even when restoring older application images or Helm values.
+
 Run `python3 scripts/rehearse_market_restore.py --namespace dete --backup /home/ubuntu/dete-backups/TIMESTAMP`.
 
 The rehearsal restores copies into an isolated Docker network without host ports. It compares all stored table counts, the complete authentication identity digest, command-log ends, consumer offsets and Redis key count. Only a successful rehearsal writes the proof required by the reset command. Original deployment images and configuration are retained in the sealed backup.

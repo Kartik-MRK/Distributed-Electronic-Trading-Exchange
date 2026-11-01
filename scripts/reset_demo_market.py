@@ -89,6 +89,15 @@ class Operator:
     def inventory(self):
         print(json.dumps({'namespace':self.namespace, 'manifest':MANIFEST,'preserve':['auth.*','account.accounts','Kafka broker internals','unlisted topics/groups/cache keys']},indent=2))
     def backup_all(self):
+        spec=self.json('get','deployment','zookeeper')['spec']['template']['spec']
+        mounts=next(c for c in spec['containers'] if c['name']=='zookeeper').get('volumeMounts',[])
+        volumes={v['name']:v for v in spec.get('volumes',[])}
+        for child in ('data','log'):
+            valid=any(m.get('mountPath')=='/var/lib/zookeeper/'+child
+                and m.get('subPath')==child and not m.get('readOnly',False)
+                and volumes.get(m['name'],{}).get('persistentVolumeClaim',{}).get('claimName')=='zookeeper-data'
+                for m in mounts)
+            if not valid: raise ValueError('ZooKeeper data and log must have explicit persistent subPath mounts before backup')
         self.backup.mkdir(parents=True,exist_ok=False)
         (self.backup/'reset-manifest.json').write_text(json.dumps(MANIFEST,indent=2))
         for resource in ('deployments','statefulsets','services','configmaps','secrets','pvc'):

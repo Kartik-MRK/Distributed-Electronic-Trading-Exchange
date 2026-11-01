@@ -54,7 +54,10 @@ def main():
     def start(name,image,env,mount=None,extra=()):
         command=['docker','run','-d','--name',project+'-'+name,'--network',project,'--network-alias',name]
         for key,value in env.items(): command+=['-e',key+'='+value]
-        if mount: command+=['-v',str(scratch/name)+':'+mount]
+        if name=='zookeeper':
+            for child in ('data','log'):
+                command+=['-v',str(scratch/name/child)+':/var/lib/zookeeper/'+child]
+        elif mount: command+=['-v',str(scratch/name)+':'+mount]
         command += [image,*extra]
         run(*command);created.append(project+'-'+name)
     try:

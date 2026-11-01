@@ -41,7 +41,11 @@ spec:
               memory: 512Mi
           volumeMounts:
             - name: zookeeper-data
-              mountPath: /var/lib/zookeeper
+              mountPath: /var/lib/zookeeper/data
+              subPath: data
+            - name: zookeeper-data
+              mountPath: /var/lib/zookeeper/log
+              subPath: log
       volumes:
         - name: zookeeper-data
           persistentVolumeClaim:
